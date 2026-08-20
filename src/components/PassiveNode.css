@@ -133,13 +133,13 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, calc(-50% - var(--label-offset)));
-  z-index: 6;
+  z-index: 30;
   max-width: min(11em, 148px);
   margin: 0;
   padding: 0;
   border: none;
   border-radius: 0;
-  background: transparent;
+  background: none;
   box-shadow: none;
   font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
   font-size: 0.72rem;
@@ -147,18 +147,25 @@
   letter-spacing: 0.04em;
   line-height: 1.25;
   text-align: center;
-  color: color-mix(in srgb, var(--icon-color) 72%, white);
+  color: color-mix(in srgb, var(--icon-color) 55%, white);
+  /* Dark outline for readability + neon bloom — no fill behind the glyphs */
   text-shadow:
-    0 0 2px color-mix(in srgb, var(--icon-color) 90%, white),
+    -1px 0 0 rgba(0, 0, 0, 0.92),
+    1px 0 0 rgba(0, 0, 0, 0.92),
+    0 -1px 0 rgba(0, 0, 0, 0.92),
+    0 1px 0 rgba(0, 0, 0, 0.92),
+    -1px -1px 0 rgba(0, 0, 0, 0.75),
+    1px 1px 0 rgba(0, 0, 0, 0.75),
+    0 0 2px color-mix(in srgb, var(--icon-color) 95%, white),
     0 0 8px var(--icon-color),
-    0 0 16px color-mix(in srgb, var(--icon-color) 80%, transparent),
-    0 0 28px color-mix(in srgb, var(--icon-color) 55%, transparent),
-    0 1px 2px rgba(0, 0, 0, 0.75);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--icon-color) 45%, transparent));
+    0 0 18px color-mix(in srgb, var(--icon-color) 85%, transparent),
+    0 0 32px color-mix(in srgb, var(--icon-color) 55%, transparent);
+  filter: none;
   pointer-events: none;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
+  mix-blend-mode: normal;
 }
 
 .passive-node--notable .passive-node__title {
@@ -174,15 +181,17 @@
 }
 
 .passive-node.is-selected .passive-node__title {
-  color: color-mix(in srgb, var(--icon-color) 45%, white);
+  color: color-mix(in srgb, var(--icon-color) 35%, white);
   text-shadow:
+    -1px 0 0 rgba(0, 0, 0, 0.95),
+    1px 0 0 rgba(0, 0, 0, 0.95),
+    0 -1px 0 rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(0, 0, 0, 0.95),
     0 0 3px #fff,
-    0 0 8px color-mix(in srgb, var(--icon-color) 95%, white),
-    0 0 18px var(--icon-color),
-    0 0 32px color-mix(in srgb, var(--icon-color) 75%, transparent),
-    0 0 48px color-mix(in srgb, var(--icon-color) 45%, transparent),
-    0 1px 2px rgba(0, 0, 0, 0.7);
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--icon-color) 65%, transparent));
+    0 0 10px color-mix(in srgb, var(--icon-color) 95%, white),
+    0 0 20px var(--icon-color),
+    0 0 36px color-mix(in srgb, var(--icon-color) 70%, transparent),
+    0 0 52px color-mix(in srgb, var(--icon-color) 40%, transparent);
 }
 
 .passive-node__tooltip {

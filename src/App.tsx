@@ -322,14 +322,26 @@ export default function App() {
 
   const stateRef = useRef({ nodes, edges })
   stateRef.current = { nodes, edges }
+  const selectedIdRef = useRef(selectedId)
+  selectedIdRef.current = selectedId
+
+  const stack = useCallback(
+    (nds: PassiveFlowNode[]) => withMasteryDragFlags(nds, selectedIdRef.current),
+    [],
+  )
 
   const { commit } = useGraphHistory({
     getState: () => stateRef.current,
     setState: (snap) => {
-      setNodes(withMasteryDragFlags(snap.nodes))
+      setNodes(stack(snap.nodes))
       setEdges(snap.edges)
     },
   })
+
+  // Keep title-bearing satellites above mastery orbits / elevate selection.
+  useEffect(() => {
+    setNodes((nds) => withMasteryDragFlags(nds, selectedId))
+  }, [selectedId, setNodes])
 
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChange>[0]) => {
@@ -340,7 +352,9 @@ export default function App() {
 
       commit()
       const removeIds = new Set(removals.map((c) => c.id))
-      setNodes((nds) => removeNodesAndRelayout(nds, removeIds))
+      setNodes((nds) =>
+        removeNodesAndRelayout(nds, removeIds, selectedIdRef.current),
+      )
       setEdges((eds) =>
         eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)),
       )
@@ -494,7 +508,7 @@ export default function App() {
       if (oldMasteryId) {
         next = layoutMasteryOrbit(next, oldMasteryId)
       }
-      return withMasteryDragFlags(next)
+      return stack(next)
     })
   }, [commit, setNodes])
 
@@ -560,8 +574,8 @@ export default function App() {
             },
           }
         })
-        if (!oldMasteryId) return withMasteryDragFlags(next)
-        return withMasteryDragFlags(layoutMasteryOrbit(next, oldMasteryId))
+        if (!oldMasteryId) return stack(next)
+        return stack(layoutMasteryOrbit(next, oldMasteryId))
       })
     },
     [commit, setNodes],
@@ -577,7 +591,7 @@ export default function App() {
           const data = node.data as PassiveNodeData
           return { ...node, data: { ...data, orbitRadius: clamped } }
         })
-        return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
+        return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
     [commit, setNodes],
@@ -593,7 +607,7 @@ export default function App() {
           const data = node.data as PassiveNodeData
           return { ...node, data: { ...data, orbitStartAngle: snapped } }
         })
-        return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
+        return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
     [commit, setNodes],
@@ -616,7 +630,7 @@ export default function App() {
             ? { ...node, data: { ...data, orbitOrder: without } }
             : node,
         )
-        return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
+        return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
     [commit, setNodes],
@@ -736,7 +750,7 @@ export default function App() {
           if (prev.kind === 'mastery' && kind !== 'mastery' && masteryId === nodeId) continue
           next = layoutMasteryOrbit(next, masteryId)
         }
-        return withMasteryDragFlags(next)
+        return stack(next)
       })
 
       setEdges((eds) =>
@@ -776,14 +790,16 @@ export default function App() {
       draggable: true,
       data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`, []),
     }
-    setNodes((nds) => withMasteryDragFlags([...nds, newNode]))
+    setNodes((nds) => stack([...nds, newNode]))
     setSelectedId(id)
   }, [addKind, commit, nodes.length, setNodes])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
       commit()
-      setNodes((nds) => removeNodesAndRelayout(nds, [nodeId]))
+      setNodes((nds) =>
+        removeNodesAndRelayout(nds, [nodeId], selectedIdRef.current),
+      )
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
       setSelectedId((cur) => (cur === nodeId ? null : cur))
     },
@@ -821,7 +837,7 @@ export default function App() {
         const synced = nds.map((n) =>
           n.id === node.id ? { ...n, position: node.position } : n,
         )
-        return withMasteryDragFlags(layoutMasteryOrbit(synced, node.id))
+        return stack(layoutMasteryOrbit(synced, node.id))
       })
     },
     [setNodes],
@@ -894,7 +910,7 @@ export default function App() {
                 next = layoutMasteryOrbit(next, other.mastery.id)
               }
 
-              return withMasteryDragFlags(next)
+              return stack(next)
             }
 
             const order = orbitOrderByDropAngle(next, currentMasteryId, satellite.id)
@@ -903,7 +919,7 @@ export default function App() {
               const d = n.data as PassiveNodeData
               return { ...n, data: { ...d, orbitOrder: order } }
             })
-            return withMasteryDragFlags(layoutMasteryOrbit(next, currentMasteryId))
+            return stack(layoutMasteryOrbit(next, currentMasteryId))
           }
         }
 
@@ -924,10 +940,10 @@ export default function App() {
             }
             return n
           })
-          return withMasteryDragFlags(layoutMasteryOrbit(next, nearest.mastery.id))
+          return stack(layoutMasteryOrbit(next, nearest.mastery.id))
         }
 
-        return withMasteryDragFlags(next)
+        return stack(next)
       })
     },
     [setNodes],
@@ -995,10 +1011,12 @@ export default function App() {
             connectionLineType={ConnectionLineType.Straight}
             connectionLineStyle={{ stroke: '#7f8fa0', strokeWidth: 2 }}
             fitView
+            elevateNodesOnSelect
             deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{
               type: 'center',
               style: { stroke: '#7f8fa0', strokeWidth: 2 },
+              zIndex: 0,
             }}
             proOptions={{ hideAttribution: true }}
           >

@@ -117,6 +117,15 @@
   overflow: visible !important;
 }
 
+/* Links stay under nodes so titles are never covered by edges. */
+.canvas-pane .react-flow__edges {
+  z-index: 1 !important;
+}
+
+.canvas-pane .react-flow__nodes {
+  z-index: 3 !important;
+}
+
 .canvas-hint {
   position: absolute;
   left: 14px;

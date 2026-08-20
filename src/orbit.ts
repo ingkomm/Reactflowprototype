@@ -157,11 +157,20 @@ export function layoutMasteryOrbit(
   })
 }
 
-export function withMasteryDragFlags(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
-  return nodes.map((node) => ({
-    ...node,
-    draggable: true,
-  }))
+export function withMasteryDragFlags(
+  nodes: PassiveFlowNode[],
+  selectedId: string | null = null,
+): PassiveFlowNode[] {
+  return nodes.map((node) => {
+    const data = node.data as PassiveNodeData
+    // Mastery orbits are large; keep them under satellite titles/links visually.
+    const baseZ = data.kind === 'mastery' ? 1 : 6
+    return {
+      ...node,
+      draggable: true,
+      zIndex: node.id === selectedId ? 40 : baseZ,
+    }
+  })
 }
 
 /**
@@ -171,9 +180,10 @@ export function withMasteryDragFlags(nodes: PassiveFlowNode[]): PassiveFlowNode[
 export function removeNodesAndRelayout(
   nodes: PassiveFlowNode[],
   removeIds: Iterable<string>,
+  selectedId: string | null = null,
 ): PassiveFlowNode[] {
   const ids = new Set(removeIds)
-  if (ids.size === 0) return nodes
+  if (ids.size === 0) return withMasteryDragFlags(nodes, selectedId)
 
   const affectedMasteries = new Set<string>()
 
@@ -210,7 +220,7 @@ export function removeNodesAndRelayout(
     next = layoutMasteryOrbit(next, masteryId)
   }
 
-  return withMasteryDragFlags(next)
+  return withMasteryDragFlags(next, selectedId)
 }
 
 export function totalTrainingCount(trainings: { count: number }[]) {
