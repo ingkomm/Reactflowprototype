@@ -13,7 +13,8 @@ type Props = {
 
 export const BAND_GAP = 7
 export const BAND_STROKE = 3.2
-export const BAND_BASE_PAD = 4
+/** Clearance past the node face / selection halo before the first (innermost) band. */
+export const BAND_BASE_PAD = 10
 export const COUNT_BAND_GAP = 12
 /** Angular gap between segment cells (radians). */
 const SEGMENT_GAP = 0.09

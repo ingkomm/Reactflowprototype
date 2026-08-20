@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import type {
   NodeIconColor,
   PassiveKind,
@@ -70,7 +70,7 @@ type Props = {
 }
 
 function reindexStages(stages: StageData[]): StageData[] {
-  return sortedStages(stages).map((stage, i) => ({
+  return stages.map((stage, i) => ({
     ...withNormalizedStage(stage),
     index: i + 1,
   }))
@@ -100,6 +100,15 @@ export function Inspector({
 }: Props) {
   const [addPeerId, setAddPeerId] = useState('')
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
+  const [expandedStageIds, setExpandedStageIds] = useState<string[]>([])
+  const [dragStageId, setDragStageId] = useState<string | null>(null)
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setExpandedStageIds([])
+    setDragStageId(null)
+    setDragOverStageId(null)
+  }, [nodeId])
 
   if (!nodeId || !data) {
     return (
@@ -174,6 +183,48 @@ export function Inspector({
         })
       }),
     )
+  }
+
+  const toggleStageExpanded = (stageId: string) => {
+    setExpandedStageIds((prev) =>
+      prev.includes(stageId) ? prev.filter((id) => id !== stageId) : [...prev, stageId],
+    )
+  }
+
+  const reorderStage = (fromId: string, toId: string) => {
+    if (fromId === toId) return
+    const list = [...stages]
+    const from = list.findIndex((s) => s.id === fromId)
+    const to = list.findIndex((s) => s.id === toId)
+    if (from < 0 || to < 0) return
+    const [moved] = list.splice(from, 1)
+    list.splice(to, 0, moved!)
+    patchStages(list)
+  }
+
+  const onStageDragStart = (event: DragEvent, stageId: string) => {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/stage-id', stageId)
+    setDragStageId(stageId)
+  }
+
+  const onStageDragOver = (event: DragEvent, stageId: string) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverStageId !== stageId) setDragOverStageId(stageId)
+  }
+
+  const onStageDrop = (event: DragEvent, targetId: string) => {
+    event.preventDefault()
+    const fromId = event.dataTransfer.getData('text/stage-id') || dragStageId
+    if (fromId) reorderStage(fromId, targetId)
+    setDragStageId(null)
+    setDragOverStageId(null)
+  }
+
+  const onStageDragEnd = () => {
+    setDragStageId(null)
+    setDragOverStageId(null)
   }
 
   return (
@@ -423,7 +474,7 @@ export function Inspector({
           </button>
         </div>
         <p className="inspector__empty">
-          안쪽 원 = 1단계. 띠 칸은 목표치까지 차오르며, 초과 로그는 유지됩니다.
+          안쪽 원 = 1단계. 핸들로 순서 변경 · 제목을 눌러 상세 펼침.
         </p>
 
         {stages.length === 0 ? (
@@ -434,12 +485,50 @@ export function Inspector({
               const logged = stageLoggedCount(stage)
               const rawLogged = stageRawLoggedCount(stage)
               const complete = isStageComplete(stage)
+              const expanded = expandedStageIds.includes(stage.id)
               return (
-                <li key={stage.id} className={`stage-card${complete ? ' is-complete' : ''}`}>
+                <li
+                  key={stage.id}
+                  className={`stage-card${complete ? ' is-complete' : ''}${
+                    dragStageId === stage.id ? ' is-dragging' : ''
+                  }${dragOverStageId === stage.id && dragStageId !== stage.id ? ' is-drop-target' : ''}`}
+                  onDragOver={(e) => onStageDragOver(e, stage.id)}
+                  onDrop={(e) => onStageDrop(e, stage.id)}
+                  onDragEnd={onStageDragEnd}
+                >
                   <div className="stage-card__head">
-                    <strong>
-                      #{stage.index} {stage.label}
-                    </strong>
+                    <button
+                      type="button"
+                      className="stage-card__drag"
+                      draggable
+                      aria-label={`${stage.label} 순서 변경`}
+                      title="드래그해서 순서 변경"
+                      onDragStart={(e) => onStageDragStart(e, stage.id)}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      ⋮⋮
+                    </button>
+                    <button
+                      type="button"
+                      className="stage-card__toggle"
+                      aria-expanded={expanded}
+                      onClick={() => toggleStageExpanded(stage.id)}
+                    >
+                      <span className="stage-card__chevron" aria-hidden>
+                        {expanded ? '▾' : '▸'}
+                      </span>
+                      <span className="stage-card__title">
+                        <strong>
+                          #{stage.index} {stage.label}
+                        </strong>
+                        <small>
+                          {rawLogged > stage.goal
+                            ? `${logged}/${stage.goal} · 로그 ${rawLogged}`
+                            : `${rawLogged}/${stage.goal}`}
+                          {complete ? ' · 완료' : ''}
+                        </small>
+                      </span>
+                    </button>
                     <button
                       type="button"
                       className="btn btn--icon"
@@ -450,116 +539,120 @@ export function Inspector({
                     </button>
                   </div>
 
-                  <label className="field">
-                    <span>이름</span>
-                    <input
-                      value={stage.label}
-                      onChange={(e) => updateStage(stage.id, { label: e.target.value })}
-                    />
-                  </label>
+                  {expanded && (
+                    <div className="stage-card__body">
+                      <label className="field">
+                        <span>이름</span>
+                        <input
+                          value={stage.label}
+                          onChange={(e) => updateStage(stage.id, { label: e.target.value })}
+                        />
+                      </label>
 
-                  <div className="stats-row">
-                    <label className="field">
-                      <span>목표 (칸)</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={stage.goal}
-                        onChange={(e) =>
-                          updateStage(stage.id, {
-                            goal: Math.max(1, Number(e.target.value) || 1),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      <span>진행 (띠)</span>
-                      <input
-                        type="text"
-                        readOnly
-                        value={
-                          rawLogged > stage.goal
-                            ? `${logged}/${stage.goal} · 로그 ${rawLogged}`
-                            : `${rawLogged} / ${stage.goal}`
-                        }
-                      />
-                    </label>
-                  </div>
-
-                  <label className="stage-complete">
-                    <input
-                      type="checkbox"
-                      checked={stage.completedManually || rawLogged >= stage.goal}
-                      onChange={(e) => {
-                        if (rawLogged >= stage.goal) return
-                        updateStage(stage.id, { completedManually: e.target.checked })
-                      }}
-                    />
-                    <span>
-                      {rawLogged >= stage.goal
-                        ? '목표 달성으로 완료'
-                        : stage.completedManually
-                          ? '수동 완료됨'
-                          : '수동 완료 표시'}
-                    </span>
-                  </label>
-
-                  <div className="inspector__section-head">
-                    <h3>트레이닝 로그</h3>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => addLog(stage.id)}
-                    >
-                      + 로그
-                    </button>
-                  </div>
-
-                  {stage.logs.length === 0 ? (
-                    <p className="inspector__empty">로그 없음</p>
-                  ) : (
-                    <ul className="training-list">
-                      {stage.logs.map((log) => (
-                        <li key={log.id} className="training-item">
+                      <div className="stats-row">
+                        <label className="field">
+                          <span>목표 (칸)</span>
                           <input
-                            className="training-item__label"
-                            value={log.label}
-                            onChange={(e) =>
-                              updateLog(stage.id, log.id, { label: e.target.value })
-                            }
-                            placeholder="로그 이름"
-                          />
-                          <input
-                            className="training-item__count"
                             type="number"
-                            min={0}
-                            value={log.count}
+                            min={1}
+                            value={stage.goal}
                             onChange={(e) =>
-                              updateLog(stage.id, log.id, {
-                                count: Number(e.target.value) || 0,
+                              updateStage(stage.id, {
+                                goal: Math.max(1, Number(e.target.value) || 1),
                               })
                             }
-                            aria-label="Training count"
                           />
+                        </label>
+                        <label className="field">
+                          <span>진행 (띠)</span>
                           <input
-                            className="training-item__note"
-                            value={log.note ?? ''}
-                            onChange={(e) =>
-                              updateLog(stage.id, log.id, { note: e.target.value })
+                            type="text"
+                            readOnly
+                            value={
+                              rawLogged > stage.goal
+                                ? `${logged}/${stage.goal} · 로그 ${rawLogged}`
+                                : `${rawLogged} / ${stage.goal}`
                             }
-                            placeholder="메모"
                           />
-                          <button
-                            type="button"
-                            className="btn btn--icon"
-                            onClick={() => removeLog(stage.id, log.id)}
-                            aria-label="로그 삭제"
-                          >
-                            ×
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                        </label>
+                      </div>
+
+                      <label className="stage-complete">
+                        <input
+                          type="checkbox"
+                          checked={stage.completedManually || rawLogged >= stage.goal}
+                          onChange={(e) => {
+                            if (rawLogged >= stage.goal) return
+                            updateStage(stage.id, { completedManually: e.target.checked })
+                          }}
+                        />
+                        <span>
+                          {rawLogged >= stage.goal
+                            ? '목표 달성으로 완료'
+                            : stage.completedManually
+                              ? '수동 완료됨'
+                              : '수동 완료 표시'}
+                        </span>
+                      </label>
+
+                      <div className="inspector__section-head">
+                        <h3>트레이닝 로그</h3>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() => addLog(stage.id)}
+                        >
+                          + 로그
+                        </button>
+                      </div>
+
+                      {stage.logs.length === 0 ? (
+                        <p className="inspector__empty">로그 없음</p>
+                      ) : (
+                        <ul className="training-list">
+                          {stage.logs.map((log) => (
+                            <li key={log.id} className="training-item">
+                              <input
+                                className="training-item__label"
+                                value={log.label}
+                                onChange={(e) =>
+                                  updateLog(stage.id, log.id, { label: e.target.value })
+                                }
+                                placeholder="로그 이름"
+                              />
+                              <input
+                                className="training-item__count"
+                                type="number"
+                                min={0}
+                                value={log.count}
+                                onChange={(e) =>
+                                  updateLog(stage.id, log.id, {
+                                    count: Number(e.target.value) || 0,
+                                  })
+                                }
+                                aria-label="Training count"
+                              />
+                              <input
+                                className="training-item__note"
+                                value={log.note ?? ''}
+                                onChange={(e) =>
+                                  updateLog(stage.id, log.id, { note: e.target.value })
+                                }
+                                placeholder="메모"
+                              />
+                              <button
+                                type="button"
+                                className="btn btn--icon"
+                                onClick={() => removeLog(stage.id, log.id)}
+                                aria-label="로그 삭제"
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   )}
                 </li>
               )
