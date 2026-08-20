@@ -132,27 +132,29 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, calc(-50% + var(--label-offset)));
+  transform: translate(-50%, calc(-50% - var(--label-offset)));
   z-index: 6;
   max-width: min(11em, 148px);
   margin: 0;
-  padding: 3px 9px;
-  border-radius: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
   font-size: 0.72rem;
   font-weight: 750;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.04em;
   line-height: 1.25;
   text-align: center;
-  color: #f7fafc;
-  background: color-mix(in srgb, #05080e 78%, transparent);
-  border: 1px solid color-mix(in srgb, #d7e2ee 16%, transparent);
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: color-mix(in srgb, var(--icon-color) 72%, white);
   text-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.85),
-    0 0 10px rgba(0, 0, 0, 0.35);
+    0 0 2px color-mix(in srgb, var(--icon-color) 90%, white),
+    0 0 8px var(--icon-color),
+    0 0 16px color-mix(in srgb, var(--icon-color) 80%, transparent),
+    0 0 28px color-mix(in srgb, var(--icon-color) 55%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.75);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--icon-color) 45%, transparent));
   pointer-events: none;
   white-space: nowrap;
   overflow: hidden;
@@ -167,21 +169,28 @@
 .passive-node--mastery .passive-node__title {
   font-size: 0.84rem;
   font-weight: 800;
+  letter-spacing: 0.06em;
   max-width: min(13em, 188px);
-  padding: 4px 10px;
 }
 
 .passive-node.is-selected .passive-node__title {
-  color: #ffffff;
-  border-color: color-mix(in srgb, var(--icon-color) 45%, #eef3f7);
-  background: color-mix(in srgb, #080d14 86%, var(--icon-color) 8%);
+  color: color-mix(in srgb, var(--icon-color) 45%, white);
+  text-shadow:
+    0 0 3px #fff,
+    0 0 8px color-mix(in srgb, var(--icon-color) 95%, white),
+    0 0 18px var(--icon-color),
+    0 0 32px color-mix(in srgb, var(--icon-color) 75%, transparent),
+    0 0 48px color-mix(in srgb, var(--icon-color) 45%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.7);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--icon-color) 65%, transparent));
 }
 
 .passive-node__tooltip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 14px);
-  transform: translateX(-50%) translateY(4px);
+  top: calc(100% + 12px);
+  bottom: auto;
+  transform: translateX(-50%) translateY(-4px);
   min-width: 148px;
   max-width: 220px;
   padding: 10px 12px;
