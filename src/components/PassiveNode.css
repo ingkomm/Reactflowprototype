@@ -57,26 +57,6 @@
   z-index: 0;
 }
 
-.passive-node__orbit-hit {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  overflow: visible;
-  pointer-events: none;
-  z-index: 4;
-}
-
-.passive-node__orbit-hit-ring {
-  pointer-events: stroke;
-  cursor: grab;
-  touch-action: none;
-}
-
-.passive-node__orbit-hit-ring:active {
-  cursor: grabbing;
-}
-
 .passive-node__halo {
   position: absolute;
   left: 50%;

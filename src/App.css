@@ -170,6 +170,14 @@ body.is-resizing-inspector .react-flow {
   z-index: 3 !important;
 }
 
+.canvas-pane .react-flow__pane.is-orbit-hover {
+  cursor: grab;
+}
+
+.canvas-pane .react-flow__pane.is-orbit-rotating {
+  cursor: grabbing;
+}
+
 .canvas-hint {
   position: absolute;
   left: 14px;

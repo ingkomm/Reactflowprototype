@@ -43,6 +43,46 @@ export function normalizeAngleDelta(degrees: number) {
   return n
 }
 
+/** Half-width (flow px) of the empty orbit ring drag target. */
+export const ORBIT_HIT_HALF_WIDTH = 20
+
+/**
+ * Hit-test empty mastery orbit ring space in flow coordinates.
+ * Returns null when the point is on any node face (so face drag/connect wins).
+ */
+export function findMasteryOrbitRingAt(
+  nodes: PassiveFlowNode[],
+  flowPoint: { x: number; y: number },
+): { masteryId: string; pointerDeg: number } | null {
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    const c = nodeCenter(node)
+    const faceR = NODE_SIZE[data.kind] / 2
+    if (Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y) <= faceR + 6) {
+      return null
+    }
+  }
+
+  let best: { masteryId: string; pointerDeg: number; err: number } | null = null
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (data.kind !== 'mastery') continue
+    const c = nodeCenter(node)
+    const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
+    const dist = Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y)
+    const err = Math.abs(dist - radius)
+    if (err > ORBIT_HIT_HALF_WIDTH) continue
+    if (!best || err < best.err) {
+      best = {
+        masteryId: node.id,
+        pointerDeg: pointerAngleDeg(c.x, c.y, flowPoint.x, flowPoint.y),
+        err,
+      }
+    }
+  }
+  return best ? { masteryId: best.masteryId, pointerDeg: best.pointerDeg } : null
+}
+
 export function nodeCenter(node: PassiveFlowNode) {
   const size = NODE_SIZE[(node.data as PassiveNodeData).kind]
   return {

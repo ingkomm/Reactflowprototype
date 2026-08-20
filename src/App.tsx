@@ -39,7 +39,7 @@ import {
   snapOrbitAngle,
   withMasteryDragFlags,
 } from './orbit'
-import { MASTERY_ORBIT_ROTATE_EVENT, type MasteryOrbitRotateDetail } from './orbitEvents'
+import { OrbitRotateController } from './components/OrbitRotateController'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
@@ -485,30 +485,6 @@ export default function App() {
       setEdges(snap.edges)
     },
   })
-
-  useEffect(() => {
-    const onOrbitRotate = (event: Event) => {
-      const { nodeId, angleDeg, phase } = (event as CustomEvent<MasteryOrbitRotateDetail>).detail
-      if (phase === 'start') commit()
-
-      setNodes((nds) => {
-        const mastery = nds.find((n) => n.id === nodeId)
-        if (!mastery || mastery.data.kind !== 'mastery') return nds
-        const snapped = snapOrbitAngle(angleDeg)
-        if ((mastery.data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) === snapped) {
-          return nds
-        }
-        const next = nds.map((n) =>
-          n.id === nodeId
-            ? { ...n, data: { ...n.data, orbitStartAngle: snapped } }
-            : n,
-        )
-        return stack(layoutMasteryOrbit(next, nodeId))
-      })
-    }
-    window.addEventListener(MASTERY_ORBIT_ROTATE_EVENT, onOrbitRotate)
-    return () => window.removeEventListener(MASTERY_ORBIT_ROTATE_EVENT, onOrbitRotate)
-  }, [commit, stack, setNodes])
 
   const copySelectedNode = useCallback(() => {
     const currentId = selectedIdRef.current
@@ -1252,6 +1228,7 @@ export default function App() {
             }}
             proOptions={{ hideAttribution: true }}
           >
+            <OrbitRotateController commit={commit} setNodes={setNodes} stack={stack} />
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
             <Controls position="top-left" />
             <MiniMap
@@ -1266,7 +1243,7 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            가운데 드래그 = 이동 · 가장자리 = 링크 · Ctrl+C/V = 복사/붙여넣기 · Ctrl+Z/Y = 실행 취소/다시 실행
+            가운데 드래그 = 이동 · 오르빗 빈 공간 드래그 = 회전(15°) · 가장자리 = 링크 · Ctrl+C/V · Ctrl+Z/Y
           </p>
         </section>
 
