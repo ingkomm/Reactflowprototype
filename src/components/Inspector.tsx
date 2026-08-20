@@ -9,13 +9,13 @@ import type {
 import { NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from '../types'
 import { getIconDef } from '../icons'
 import {
-  clampStageLogs,
   createStage,
   createTrainingLog,
   isStageComplete,
   sortedStages,
   stageLoggedCount,
-  withClampedStage,
+  stageRawLoggedCount,
+  withNormalizedStage,
 } from '../stage'
 import {
   DEFAULT_ORBIT_RADIUS,
@@ -71,7 +71,7 @@ type Props = {
 
 function reindexStages(stages: StageData[]): StageData[] {
   return sortedStages(stages).map((stage, i) => ({
-    ...withClampedStage(stage),
+    ...withNormalizedStage(stage),
     index: i + 1,
   }))
 }
@@ -124,8 +124,7 @@ export function Inspector({
     patchStages(
       stages.map((stage) => {
         if (stage.id !== stageId) return stage
-        const merged = withClampedStage({ ...stage, ...patch })
-        return merged
+        return withNormalizedStage({ ...stage, ...patch })
       }),
     )
   }
@@ -143,11 +142,8 @@ export function Inspector({
     patchStages(
       stages.map((stage) => {
         if (stage.id !== stageId) return stage
-        const used = stageLoggedCount(stage)
-        if (used >= stage.goal) return stage
-        const room = stage.goal - used
-        const log = createTrainingLog(`로그 ${stage.logs.length + 1}`, Math.min(1, room))
-        return withClampedStage({ ...stage, logs: [...stage.logs, log] })
+        const log = createTrainingLog(`로그 ${stage.logs.length + 1}`, 1)
+        return withNormalizedStage({ ...stage, logs: [...stage.logs, log] })
       }),
     )
   }
@@ -163,7 +159,7 @@ export function Inspector({
         const logs = stage.logs.map((log) =>
           log.id === logId ? { ...log, ...patch } : log,
         )
-        return withClampedStage({ ...stage, logs: clampStageLogs(logs, stage.goal) })
+        return withNormalizedStage({ ...stage, logs })
       }),
     )
   }
@@ -172,7 +168,7 @@ export function Inspector({
     patchStages(
       stages.map((stage) => {
         if (stage.id !== stageId) return stage
-        return withClampedStage({
+        return withNormalizedStage({
           ...stage,
           logs: stage.logs.filter((log) => log.id !== logId),
         })
@@ -427,7 +423,7 @@ export function Inspector({
           </button>
         </div>
         <p className="inspector__empty">
-          안쪽 원 = 1단계. 목표 칸만큼 분절되며, 목표 이상 로그는 기록되지 않습니다.
+          안쪽 원 = 1단계. 띠 칸은 목표치까지 차오르며, 초과 로그는 유지됩니다.
         </p>
 
         {stages.length === 0 ? (
@@ -436,8 +432,8 @@ export function Inspector({
           <ul className="stage-list">
             {stages.map((stage) => {
               const logged = stageLoggedCount(stage)
+              const rawLogged = stageRawLoggedCount(stage)
               const complete = isStageComplete(stage)
-              const atCap = logged >= stage.goal
               return (
                 <li key={stage.id} className={`stage-card${complete ? ' is-complete' : ''}`}>
                   <div className="stage-card__head">
@@ -477,22 +473,30 @@ export function Inspector({
                       />
                     </label>
                     <label className="field">
-                      <span>진행</span>
-                      <input type="text" readOnly value={`${logged} / ${stage.goal}`} />
+                      <span>진행 (띠)</span>
+                      <input
+                        type="text"
+                        readOnly
+                        value={
+                          rawLogged > stage.goal
+                            ? `${logged}/${stage.goal} · 로그 ${rawLogged}`
+                            : `${rawLogged} / ${stage.goal}`
+                        }
+                      />
                     </label>
                   </div>
 
                   <label className="stage-complete">
                     <input
                       type="checkbox"
-                      checked={stage.completedManually || logged >= stage.goal}
+                      checked={stage.completedManually || rawLogged >= stage.goal}
                       onChange={(e) => {
-                        if (logged >= stage.goal) return
+                        if (rawLogged >= stage.goal) return
                         updateStage(stage.id, { completedManually: e.target.checked })
                       }}
                     />
                     <span>
-                      {logged >= stage.goal
+                      {rawLogged >= stage.goal
                         ? '목표 달성으로 완료'
                         : stage.completedManually
                           ? '수동 완료됨'
@@ -505,9 +509,7 @@ export function Inspector({
                     <button
                       type="button"
                       className="btn btn--ghost"
-                      disabled={atCap}
                       onClick={() => addLog(stage.id)}
-                      title={atCap ? '목표치에 도달해 더 이상 기록할 수 없습니다' : undefined}
                     >
                       + 로그
                     </button>

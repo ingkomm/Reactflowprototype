@@ -370,11 +370,40 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
+  const [inspectorWidth, setInspectorWidth] = useState(360)
+  const resizingInspector = useRef(false)
 
   const stateRef = useRef({ nodes, edges })
   stateRef.current = { nodes, edges }
   const selectedIdRef = useRef(selectedId)
   selectedIdRef.current = selectedId
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      if (!resizingInspector.current) return
+      const min = 280
+      const max = Math.min(760, Math.floor(window.innerWidth * 0.72))
+      const next = window.innerWidth - event.clientX
+      setInspectorWidth(Math.min(max, Math.max(min, next)))
+    }
+    const onUp = () => {
+      if (!resizingInspector.current) return
+      resizingInspector.current = false
+      document.body.classList.remove('is-resizing-inspector')
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const onInspectorResizeStart = useCallback((event: ReactMouseEvent) => {
+    event.preventDefault()
+    resizingInspector.current = true
+    document.body.classList.add('is-resizing-inspector')
+  }, [])
 
   const stack = useCallback(
     (nds: PassiveFlowNode[]) => withMasteryDragFlags(nds, selectedIdRef.current),
@@ -1041,7 +1070,10 @@ export default function App() {
         </div>
       </header>
 
-      <main className="workspace">
+      <main
+        className="workspace"
+        style={{ gridTemplateColumns: `minmax(0, 1fr) ${inspectorWidth}px` }}
+      >
         <section className="canvas-pane" aria-label="Passive tree canvas">
           <ReactFlow
             nodes={nodes}
@@ -1091,34 +1123,43 @@ export default function App() {
           </p>
         </section>
 
-        <Inspector
-          nodeId={selectedNode?.id ?? null}
-          data={selectedData}
-          masteryLabel={selectedMasteryLabel}
-          orbitMembers={orbitMembers}
-          links={selectedLinks}
-          linkCandidates={linkCandidates}
-          onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
-          onChangeKind={changeKind}
-          onChangeIconColor={(nodeId, iconColor) =>
-            updateNodeData(nodeId, (d) => ({ ...d, iconColor }))
-          }
-          onChangeIconId={(nodeId, iconId) =>
-            updateNodeData(nodeId, (d) => ({ ...d, iconId }))
-          }
-          onChangeProficiency={(nodeId, proficiency) =>
-            updateNodeData(nodeId, (d) => ({ ...d, proficiency }))
-          }
-          onChangePower={(nodeId, power) => updateNodeData(nodeId, (d) => ({ ...d, power }))}
-          onChangeStages={(nodeId, stages) => updateNodeData(nodeId, (d) => ({ ...d, stages }))}
-          onChangeOrbitRadius={changeOrbitRadius}
-          onChangeOrbitStartAngle={changeOrbitStartAngle}
-          onChangeOrbitOrder={changeOrbitOrder}
-          onDetachFromMastery={detachFromMastery}
-          onRemoveLink={removeLink}
-          onAddLink={addLink}
-          onDeleteNode={deleteNode}
-        />
+        <div className="inspector-pane" style={{ width: inspectorWidth }}>
+          <button
+            type="button"
+            className="inspector-resizer"
+            aria-label="편집 창 너비 조절"
+            title="드래그해서 편집 창 너비 조절"
+            onMouseDown={onInspectorResizeStart}
+          />
+          <Inspector
+            nodeId={selectedNode?.id ?? null}
+            data={selectedData}
+            masteryLabel={selectedMasteryLabel}
+            orbitMembers={orbitMembers}
+            links={selectedLinks}
+            linkCandidates={linkCandidates}
+            onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
+            onChangeKind={changeKind}
+            onChangeIconColor={(nodeId, iconColor) =>
+              updateNodeData(nodeId, (d) => ({ ...d, iconColor }))
+            }
+            onChangeIconId={(nodeId, iconId) =>
+              updateNodeData(nodeId, (d) => ({ ...d, iconId }))
+            }
+            onChangeProficiency={(nodeId, proficiency) =>
+              updateNodeData(nodeId, (d) => ({ ...d, proficiency }))
+            }
+            onChangePower={(nodeId, power) => updateNodeData(nodeId, (d) => ({ ...d, power }))}
+            onChangeStages={(nodeId, stages) => updateNodeData(nodeId, (d) => ({ ...d, stages }))}
+            onChangeOrbitRadius={changeOrbitRadius}
+            onChangeOrbitStartAngle={changeOrbitStartAngle}
+            onChangeOrbitOrder={changeOrbitOrder}
+            onDetachFromMastery={detachFromMastery}
+            onRemoveLink={removeLink}
+            onAddLink={addLink}
+            onDeleteNode={deleteNode}
+          />
+        </div>
       </main>
     </div>
   )

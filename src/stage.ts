@@ -21,49 +21,46 @@ export function createStage(
     label: label ?? `단계 ${index}`,
     goal: Math.max(1, Math.floor(goal)),
     completedManually: false,
-    logs: clampStageLogs(logs, Math.max(1, Math.floor(goal))),
+    logs: logs.map((log) => ({
+      ...log,
+      count: Math.max(0, Number.isFinite(log.count) ? log.count : 0),
+    })),
   }
 }
 
-/** Sum of log counts, never exceeding the stage goal. */
-export function stageLoggedCount(stage: StageData): number {
-  const raw = stage.logs.reduce(
+/** Uncapped sum of all log counts (logs are never trimmed by the goal). */
+export function stageRawLoggedCount(stage: StageData): number {
+  return stage.logs.reduce(
     (sum, log) => sum + (Number.isFinite(log.count) ? Math.max(0, log.count) : 0),
     0,
   )
-  return Math.min(raw, Math.max(1, stage.goal))
+}
+
+/** Progress toward the band fill — capped at the stage goal. */
+export function stageLoggedCount(stage: StageData): number {
+  return Math.min(stageRawLoggedCount(stage), Math.max(1, stage.goal))
 }
 
 export function isStageComplete(stage: StageData): boolean {
-  return stage.completedManually || stageLoggedCount(stage) >= stage.goal
+  return stage.completedManually || stageRawLoggedCount(stage) >= stage.goal
 }
 
-/** Drop / trim logs so total recorded count never exceeds goal. */
-export function clampStageLogs(logs: TrainingLog[], goal: number): TrainingLog[] {
-  const cap = Math.max(1, goal)
-  const next: TrainingLog[] = []
-  let used = 0
-  for (const log of logs) {
-    if (used >= cap) break
-    const count = Math.max(0, Number.isFinite(log.count) ? log.count : 0)
-    if (count <= 0) {
-      next.push({ ...log, count: 0 })
-      continue
-    }
-    const allowed = Math.min(count, cap - used)
-    next.push({ ...log, count: allowed })
-    used += allowed
-  }
-  return next
-}
-
-export function withClampedStage(stage: StageData): StageData {
+/** Normalize goal only; keep every training log intact. */
+export function withNormalizedStage(stage: StageData): StageData {
   const goal = Math.max(1, Math.floor(stage.goal))
   return {
     ...stage,
     goal,
-    logs: clampStageLogs(stage.logs, goal),
+    logs: stage.logs.map((log) => ({
+      ...log,
+      count: Math.max(0, Number.isFinite(log.count) ? log.count : 0),
+    })),
   }
+}
+
+/** @deprecated Use withNormalizedStage — logs are no longer clamped away. */
+export function withClampedStage(stage: StageData): StageData {
+  return withNormalizedStage(stage)
 }
 
 export function sortedStages(stages: StageData[]): StageData[] {
@@ -97,7 +94,7 @@ export function defaultStagesForSeed(
 ): StageData[] {
   return entries.map((entry, i) => {
     const logs: TrainingLog[] = []
-    let remaining = Math.min(entry.logged, entry.goal)
+    let remaining = entry.logged
     let n = 1
     while (remaining > 0) {
       const chunk = Math.min(remaining, Math.max(1, Math.ceil(entry.goal / 3)))
@@ -105,10 +102,6 @@ export function defaultStagesForSeed(
       remaining -= chunk
       n += 1
     }
-    const stage = createStage(i + 1, entry.label, entry.goal, logs)
-    if (entry.logged >= entry.goal) {
-      return { ...stage, completedManually: false }
-    }
-    return stage
+    return createStage(i + 1, entry.label, entry.goal, logs)
   })
 }
