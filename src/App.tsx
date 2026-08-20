@@ -1211,7 +1211,7 @@ export default function App() {
             connectionRadius={36}
             connectionLineType={ConnectionLineType.Straight}
             connectionLineStyle={{
-              stroke: 'color-mix(in srgb, #3db8a8 55%, transparent)',
+              stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
               strokeWidth: 1,
             }}
             fitView
@@ -1220,7 +1220,7 @@ export default function App() {
             defaultEdgeOptions={{
               type: 'center',
               style: {
-                stroke: 'color-mix(in srgb, #3db8a8 55%, transparent)',
+                stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
                 strokeWidth: 1,
               },
               zIndex: 0,

@@ -8,9 +8,9 @@ import {
 
 export type CenterFlowEdge = Edge<Record<string, never>, 'center'>
 
-/** Match mastery orbit: 1px teal at 55% opacity. */
-const LINK_STROKE = 'color-mix(in srgb, #3db8a8 55%, transparent)'
-const LINK_STROKE_SELECTED = 'color-mix(in srgb, #3db8a8 78%, transparent)'
+/** Match quiet node/orbit edge: cool gray at low contrast. */
+const LINK_STROKE = 'color-mix(in srgb, #9aa8b5 22%, transparent)'
+const LINK_STROKE_SELECTED = 'color-mix(in srgb, #9aa8b5 38%, transparent)'
 const LINK_WIDTH = 1
 /** Half-gap between the two parallel solid strokes. */
 const DOUBLE_OFFSET = 2
