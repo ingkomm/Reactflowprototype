@@ -46,6 +46,7 @@ const initialNodes: PassiveFlowNode[] = [
     id: 'root',
     type: 'passive',
     position: { x: 360, y: 260 },
+    dragHandle: '.node-drag-handle',
     data: createPassiveData('notable', 'Core Focus', [
       createTraining('Baseline', 3),
       createTraining('Review', 1),
@@ -55,18 +56,21 @@ const initialNodes: PassiveFlowNode[] = [
     id: 'small-a',
     type: 'passive',
     position: { x: 180, y: 140 },
+    dragHandle: '.node-drag-handle',
     data: createPassiveData('small', 'Footwork', [createTraining('Drill', 5)]),
   },
   {
     id: 'small-b',
     type: 'passive',
     position: { x: 540, y: 140 },
+    dragHandle: '.node-drag-handle',
     data: createPassiveData('small', 'Timing', [createTraining('Metronome', 2)]),
   },
   {
     id: 'mastery-a',
     type: 'passive',
     position: { x: 360, y: 430 },
+    dragHandle: '.node-drag-handle',
     data: createPassiveData('mastery', 'Combo Mastery', [
       createTraining('Slow reps', 4),
       createTraining('Live pace', 2),
@@ -155,6 +159,7 @@ export default function App() {
       id,
       type: 'passive',
       position: { x: 280 + (offset % 220), y: 180 + (offset % 160) },
+      dragHandle: '.node-drag-handle',
       data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`, [
         createTraining('Session 1', 1),
       ]),
@@ -235,6 +240,7 @@ export default function App() {
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             connectionMode={ConnectionMode.Loose}
+            connectionRadius={28}
             fitView
             deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{
@@ -258,8 +264,8 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            Drag from a node center to connect. Select a node to manage trainings. Delete / Backspace
-            removes selected nodes.
+            Drag the node label to move. Drag from the ring/center to connect. Select a node to manage
+            trainings. Delete / Backspace removes selected nodes.
           </p>
         </section>
 

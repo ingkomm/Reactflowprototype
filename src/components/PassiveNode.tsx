@@ -17,6 +17,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}`}
       title={`${data.label} · ${PASSIVE_KIND_LABEL[data.kind]}`}
     >
+      {/* Full-node target/source so edges always meet at the geometric center */}
       <Handle
         id="center"
         type="source"
@@ -33,11 +34,12 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       />
 
       <div className="passive-node__ring" aria-hidden />
-      <div className="passive-node__core">
+      <div className="passive-node__core node-drag-handle">
         <span className="passive-node__kind">{PASSIVE_KIND_LABEL[data.kind]}</span>
         <strong className="passive-node__label">{data.label}</strong>
         <span className="passive-node__trainings">{total}× training</span>
       </div>
+      <span className="passive-node__connect-dot" aria-hidden />
     </div>
   )
 }

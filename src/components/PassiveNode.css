@@ -64,7 +64,7 @@
 
 .passive-node__core {
   position: relative;
-  z-index: 1;
+  z-index: 4;
   width: 78%;
   height: 78%;
   border-radius: 50%;
@@ -75,7 +75,6 @@
   gap: 2px;
   text-align: center;
   padding: 6px;
-  pointer-events: none;
 }
 
 .passive-node__kind {
@@ -110,11 +109,12 @@
 }
 
 .passive-node__handle {
-  width: 10px !important;
-  height: 10px !important;
-  min-width: 10px !important;
-  min-height: 10px !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
   border: none !important;
+  border-radius: 50% !important;
   background: transparent !important;
   top: 50% !important;
   left: 50% !important;
@@ -122,4 +122,36 @@
   bottom: auto !important;
   transform: translate(-50%, -50%) !important;
   opacity: 0;
+  z-index: 2;
+}
+
+.passive-node__connect-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--ring) 80%, white);
+  box-shadow: 0 0 8px var(--glow);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity 0.15s ease;
+}
+
+.passive-node:hover .passive-node__connect-dot,
+.passive-node.is-selected .passive-node__connect-dot {
+  opacity: 0.9;
+}
+
+.node-drag-handle {
+  pointer-events: all;
+  cursor: grab;
+  z-index: 4;
+}
+
+.node-drag-handle:active {
+  cursor: grabbing;
 }
