@@ -10,7 +10,7 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
 export const DEFAULT_ORBIT_RADIUS = 180
 /** Degrees. -90 = top of the circle; layout advances clockwise. */
 export const DEFAULT_ORBIT_START_ANGLE = -90
-export const ORBIT_ANGLE_STEP = 30
+export const ORBIT_ANGLE_STEP = 15
 
 export function isSatelliteKind(kind: PassiveKind) {
   return kind === 'small' || kind === 'notable'
@@ -26,10 +26,21 @@ export function snapOrbitAngle(degrees: number) {
 
 export function orbitAngleOptions() {
   const options: number[] = []
-  for (let deg = -180; deg <= 150; deg += ORBIT_ANGLE_STEP) {
+  for (let deg = -180; deg < 180; deg += ORBIT_ANGLE_STEP) {
     options.push(deg)
   }
   return options
+}
+
+/** Screen/flow atan2 degrees; Y grows downward (clockwise from +X). */
+export function pointerAngleDeg(cx: number, cy: number, x: number, y: number) {
+  return (Math.atan2(y - cy, x - cx) * 180) / Math.PI
+}
+
+export function normalizeAngleDelta(degrees: number) {
+  let n = ((degrees + 180) % 360 + 360) % 360 - 180
+  if (n === -180) n = 180
+  return n
 }
 
 export function nodeCenter(node: PassiveFlowNode) {

@@ -66,7 +66,7 @@ export type PassiveNodeData = {
   orbitRadius?: number
   /**
    * Mastery only: starting angle in degrees for orbit slot #1.
-   * Snapped to 30° steps. Default -90 (top). Clockwise from there.
+   * Snapped to 15° steps. Default -90 (top). Clockwise from there.
    */
   orbitStartAngle?: number
   /** Mastery only: satellite node ids in clockwise orbit order (1-based UI). */

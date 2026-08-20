@@ -39,6 +39,7 @@ import {
   snapOrbitAngle,
   withMasteryDragFlags,
 } from './orbit'
+import { MASTERY_ORBIT_ROTATE_EVENT, type MasteryOrbitRotateDetail } from './orbitEvents'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
@@ -484,6 +485,30 @@ export default function App() {
       setEdges(snap.edges)
     },
   })
+
+  useEffect(() => {
+    const onOrbitRotate = (event: Event) => {
+      const { nodeId, angleDeg, phase } = (event as CustomEvent<MasteryOrbitRotateDetail>).detail
+      if (phase === 'start') commit()
+
+      setNodes((nds) => {
+        const mastery = nds.find((n) => n.id === nodeId)
+        if (!mastery || mastery.data.kind !== 'mastery') return nds
+        const snapped = snapOrbitAngle(angleDeg)
+        if ((mastery.data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) === snapped) {
+          return nds
+        }
+        const next = nds.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, orbitStartAngle: snapped } }
+            : n,
+        )
+        return stack(layoutMasteryOrbit(next, nodeId))
+      })
+    }
+    window.addEventListener(MASTERY_ORBIT_ROTATE_EVENT, onOrbitRotate)
+    return () => window.removeEventListener(MASTERY_ORBIT_ROTATE_EVENT, onOrbitRotate)
+  }, [commit, stack, setNodes])
 
   const copySelectedNode = useCallback(() => {
     const currentId = selectedIdRef.current
