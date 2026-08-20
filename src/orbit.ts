@@ -2,9 +2,9 @@ import type { PassiveKind, PassiveNodeData } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
-  small: 72,
-  notable: 104,
-  mastery: 112,
+  small: 48,
+  notable: 68,
+  mastery: 76,
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180

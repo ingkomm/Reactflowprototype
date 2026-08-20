@@ -1,5 +1,5 @@
 .passive-node {
-  --node-size: 88px;
+  --node-size: 56px;
   --ring: #7a8694;
   --core: #1f2a33;
   --accent: #c9d2db;
@@ -23,14 +23,14 @@
 }
 
 .passive-node--small {
-  --node-size: 72px;
+  --node-size: 48px;
   --ring: #8b9aa8;
   --core: #24313b;
   --accent: #d5dde5;
 }
 
 .passive-node--notable {
-  --node-size: 104px;
+  --node-size: 68px;
   --ring: #d4a24c;
   --core: #2a2418;
   --accent: #f0d59a;
@@ -38,7 +38,7 @@
 }
 
 .passive-node--mastery {
-  --node-size: 112px;
+  --node-size: 76px;
   --ring: #3db8a8;
   --core: #142528;
   --accent: #9fe8dd;
