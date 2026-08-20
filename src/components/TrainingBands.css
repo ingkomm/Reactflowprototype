@@ -1,0 +1,20 @@
+.training-bands {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
+.training-bands__full {
+  stroke: color-mix(in srgb, var(--accent) 75%, white);
+  opacity: 0.85;
+}
+
+.training-bands__partial {
+  stroke: color-mix(in srgb, var(--accent) 90%, white);
+  opacity: 0.95;
+  stroke-linecap: round;
+}
