@@ -33,6 +33,7 @@ import {
   ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
   orbitOrderByDropAngle,
+  removeNodesAndRelayout,
   shareSameOrbit,
   snapOrbitAngle,
   withMasteryDragFlags,
@@ -332,12 +333,20 @@ export default function App() {
 
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChange>[0]) => {
-      if (changes.some((c) => c.type === 'remove')) {
-        commit()
-      }
-      onNodesChange(changes)
+      const removals = changes.filter((c) => c.type === 'remove')
+      const rest = changes.filter((c) => c.type !== 'remove')
+      if (rest.length > 0) onNodesChange(rest)
+      if (removals.length === 0) return
+
+      commit()
+      const removeIds = new Set(removals.map((c) => c.id))
+      setNodes((nds) => removeNodesAndRelayout(nds, removeIds))
+      setEdges((eds) =>
+        eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)),
+      )
+      setSelectedId((cur) => (cur && removeIds.has(cur) ? null : cur))
     },
-    [commit, onNodesChange],
+    [commit, onNodesChange, setEdges, setNodes],
   )
 
   const handleEdgesChange = useCallback(
@@ -774,39 +783,7 @@ export default function App() {
   const deleteNode = useCallback(
     (nodeId: string) => {
       commit()
-      setNodes((nds) => {
-        const target = nds.find((n) => n.id === nodeId)
-        if (!target) return nds
-        const data = target.data as PassiveNodeData
-        const affected = new Set<string>()
-        if (data.kind === 'mastery') affected.add(nodeId)
-        if (data.masteryId) affected.add(data.masteryId)
-
-        let next = nds
-          .filter((n) => n.id !== nodeId)
-          .map((node) => {
-            const d = node.data as PassiveNodeData
-            if (d.masteryId === nodeId) {
-              return { ...node, data: { ...d, masteryId: null }, draggable: true }
-            }
-            if (d.kind === 'mastery' && (d.orbitOrder ?? []).includes(nodeId)) {
-              return {
-                ...node,
-                data: {
-                  ...d,
-                  orbitOrder: (d.orbitOrder ?? []).filter((id) => id !== nodeId),
-                },
-              }
-            }
-            return node
-          })
-
-        for (const masteryId of affected) {
-          if (masteryId === nodeId) continue
-          next = layoutMasteryOrbit(next, masteryId)
-        }
-        return withMasteryDragFlags(next)
-      })
+      setNodes((nds) => removeNodesAndRelayout(nds, [nodeId]))
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
       setSelectedId((cur) => (cur === nodeId ? null : cur))
     },

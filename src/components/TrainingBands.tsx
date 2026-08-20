@@ -27,10 +27,15 @@ export function outermostBandRadius(total: number, nodeSize: number) {
   return baseR + (bandCount - 1) * BAND_GAP
 }
 
-/** Distance from node center to place the training count below the bands. */
-export function trainingCountOffset(total: number, nodeSize: number) {
+/** Distance from node center to place labels below the outermost training band. */
+export function labelBelowBandOffset(total: number, nodeSize: number) {
   if (total <= 0) return nodeSize / 2 + COUNT_BAND_GAP
   return outermostBandRadius(total, nodeSize) + BAND_STROKE / 2 + COUNT_BAND_GAP
+}
+
+/** @deprecated Use labelBelowBandOffset */
+export function trainingCountOffset(total: number, nodeSize: number) {
+  return labelBelowBandOffset(total, nodeSize)
 }
 
 /** Outer progress bands: 1 full ring per 3 trainings; remainder fills the next ring. */

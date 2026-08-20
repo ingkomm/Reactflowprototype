@@ -10,7 +10,7 @@ import {
   trainingBandLevel,
 } from '../orbit'
 import { IconGlyph } from './IconGlyph'
-import { TrainingBands, trainingCountOffset } from './TrainingBands'
+import { TrainingBands, labelBelowBandOffset } from './TrainingBands'
 import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
@@ -22,7 +22,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = data.iconColor ?? DEFAULT_ICON_BY_KIND[data.kind]
   const iconId = data.iconId ?? DEFAULT_ICON_ID_BY_KIND[data.kind]
-  const countOffset = trainingCountOffset(total, nodeSize)
+  const labelOffset = labelBelowBandOffset(total, nodeSize)
 
   const glowBlur = 16 + bandLevel * 14
   const glowAlpha = Math.min(0.92, 0.22 + bandLevel * 0.2)
@@ -45,7 +45,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--halo-strength': String(haloStrength),
           '--band-level': String(bandLevel),
           '--icon-color': iconColor,
-          '--count-offset': `${countOffset}px`,
+          '--label-offset': `${labelOffset}px`,
         } as CSSProperties
       }
     >
@@ -60,7 +60,6 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       <div className="passive-node__halo" aria-hidden />
       <TrainingBands total={total} nodeSize={nodeSize} />
 
-      {/* Rim handles: connections start/end on the node edge */}
       <Handle
         id="center"
         type="source"
@@ -80,8 +79,9 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
         <IconGlyph iconId={iconId} className="passive-node__glyph" />
       </div>
 
-      {/* Center disc: node drag only */}
       <div className="passive-node__hit node-drag-handle" />
+
+      <p className="passive-node__title">{data.label}</p>
 
       <div className="passive-node__tooltip" role="tooltip">
         <p className="passive-node__tooltip-title">{data.label}</p>
@@ -97,8 +97,6 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           </ul>
         )}
       </div>
-
-      <span className="passive-node__trainings">{total}</span>
     </div>
   )
 }

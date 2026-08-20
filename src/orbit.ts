@@ -164,6 +164,55 @@ export function withMasteryDragFlags(nodes: PassiveFlowNode[]): PassiveFlowNode[
   }))
 }
 
+/**
+ * Remove nodes, detach orphans from deleted masteries, prune orbitOrder,
+ * then evenly re-layout every affected mastery orbit.
+ */
+export function removeNodesAndRelayout(
+  nodes: PassiveFlowNode[],
+  removeIds: Iterable<string>,
+): PassiveFlowNode[] {
+  const ids = new Set(removeIds)
+  if (ids.size === 0) return nodes
+
+  const affectedMasteries = new Set<string>()
+
+  for (const node of nodes) {
+    if (!ids.has(node.id)) continue
+    const data = node.data as PassiveNodeData
+    if (data.masteryId) affectedMasteries.add(data.masteryId)
+    if (data.kind === 'mastery') affectedMasteries.add(node.id)
+  }
+
+  let next = nodes
+    .filter((n) => !ids.has(n.id))
+    .map((node) => {
+      const data = node.data as PassiveNodeData
+      if (data.masteryId && ids.has(data.masteryId)) {
+        return {
+          ...node,
+          data: { ...data, masteryId: null },
+          draggable: true,
+        }
+      }
+      if (data.kind === 'mastery') {
+        const pruned = (data.orbitOrder ?? []).filter((id) => !ids.has(id))
+        if (pruned.length !== (data.orbitOrder ?? []).length) {
+          affectedMasteries.add(node.id)
+          return { ...node, data: { ...data, orbitOrder: pruned } }
+        }
+      }
+      return node
+    })
+
+  for (const masteryId of affectedMasteries) {
+    if (ids.has(masteryId)) continue
+    next = layoutMasteryOrbit(next, masteryId)
+  }
+
+  return withMasteryDragFlags(next)
+}
+
 export function totalTrainingCount(trainings: { count: number }[]) {
   return trainings.reduce((sum, t) => sum + (Number.isFinite(t.count) ? t.count : 0), 0)
 }
