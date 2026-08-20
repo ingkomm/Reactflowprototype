@@ -20,9 +20,10 @@ import '@xyflow/react/dist/style.css'
 import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
-import type { PassiveKind, PassiveNodeData, TrainingEntry } from './types'
+import type { PassiveKind, PassiveNodeData } from './types'
 import { DEFAULT_ICON_BY_KIND, NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from './types'
 import { DEFAULT_ICON_ID_BY_KIND } from './icons'
+import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
@@ -45,28 +46,33 @@ const nodeTypes = { passive: PassiveNode }
 const edgeTypes = { center: CenterEdge }
 
 function uid(prefix: string) {
-  return `${prefix}-${crypto.randomUUID().slice(0, 8)}`
-}
-
-function createTraining(label = 'Session', count = 1): TrainingEntry {
-  return { id: uid('tr'), label, count }
+  return stageUid(prefix)
 }
 
 function createPassiveData(
   kind: PassiveKind,
   label: string,
-  trainings: TrainingEntry[] = [],
   extras: Partial<
     Pick<
       PassiveNodeData,
-      'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId' | 'iconColor' | 'iconId'
+      | 'orbitRadius'
+      | 'orbitStartAngle'
+      | 'orbitOrder'
+      | 'masteryId'
+      | 'iconColor'
+      | 'iconId'
+      | 'proficiency'
+      | 'power'
+      | 'stages'
     >
   > = {},
 ): PassiveNodeData {
   return {
     label,
     kind,
-    trainings,
+    proficiency: extras.proficiency ?? 0,
+    power: extras.power ?? 0,
+    stages: extras.stages ?? [createStage(1)],
     iconColor: extras.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
     iconId: extras.iconId ?? DEFAULT_ICON_ID_BY_KIND[kind],
     ...(kind === 'mastery'
@@ -144,49 +150,64 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 260, y: 300 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData(
-        'mastery',
-        '댄스',
-        [createTraining('안무 리허설', 3), createTraining('공연 연습', 2)],
-        {
-          orbitRadius: 170,
-          orbitStartAngle: -90,
-          orbitOrder: danceOrbitOrder,
-          iconColor: NODE_ICON_COLORS[7],
-          iconId: 'da-disco',
-        },
-      ),
+      data: createPassiveData('mastery', '댄스', {
+        proficiency: 42,
+        power: 18,
+        stages: defaultStagesForSeed([
+          { label: '기초 그루브', goal: 4, logged: 4 },
+          { label: '안무 리허설', goal: 5, logged: 3 },
+          { label: '공연', goal: 3, logged: 1 },
+        ]),
+        orbitRadius: 170,
+        orbitStartAngle: -90,
+        orbitOrder: danceOrbitOrder,
+        iconColor: NODE_ICON_COLORS[7],
+        iconId: 'da-disco',
+      }),
     },
     {
       id: 'notable-hiphop',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData(
-        'notable',
-        '힙합',
-        [createTraining('기초 스텝', 4), createTraining('프리스타일', 2)],
-        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[5], iconId: 'da-headphones' },
-      ),
+      data: createPassiveData('notable', '힙합', {
+        proficiency: 28,
+        power: 12,
+        stages: defaultStagesForSeed([
+          { label: '기초 스텝', goal: 5, logged: 4 },
+          { label: '프리스타일', goal: 4, logged: 2 },
+        ]),
+        masteryId: danceMasteryId,
+        iconColor: NODE_ICON_COLORS[5],
+        iconId: 'da-headphones',
+      }),
     },
     {
       id: 'notable-kpop',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData(
-        'notable',
-        'K-pop',
-        [createTraining('안무 암기', 5), createTraining('포인트 안무', 3)],
-        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[4], iconId: 'da-note' },
-      ),
+      data: createPassiveData('notable', 'K-pop', {
+        proficiency: 35,
+        power: 14,
+        stages: defaultStagesForSeed([
+          { label: '안무 암기', goal: 6, logged: 5 },
+          { label: '포인트 안무', goal: 3, logged: 3 },
+        ]),
+        masteryId: danceMasteryId,
+        iconColor: NODE_ICON_COLORS[4],
+        iconId: 'da-note',
+      }),
     },
     {
       id: 'small-basic',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '기본기', [createTraining('아이솔레이션', 3)], {
+      data: createPassiveData('small', '기본기', {
+        proficiency: 10,
+        power: 4,
+        stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 3 }]),
         masteryId: danceMasteryId,
         iconColor: NODE_ICON_COLORS[2],
         iconId: 'da-spark',
@@ -197,7 +218,10 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '풋워크', [createTraining('그루브', 2)], {
+      data: createPassiveData('small', '풋워크', {
+        proficiency: 8,
+        power: 5,
+        stages: defaultStagesForSeed([{ label: '그루브', goal: 3, logged: 2 }]),
         masteryId: danceMasteryId,
         iconColor: NODE_ICON_COLORS[8],
         iconId: 'da-shoe',
@@ -208,7 +232,10 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '스트레칭', [createTraining('유연성', 1)], {
+      data: createPassiveData('small', '스트레칭', {
+        proficiency: 6,
+        power: 2,
+        stages: defaultStagesForSeed([{ label: '유연성', goal: 3, logged: 1 }]),
         masteryId: danceMasteryId,
         iconColor: NODE_ICON_COLORS[11],
         iconId: 'da-wave',
@@ -219,49 +246,64 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 760, y: 300 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData(
-        'mastery',
-        '운동',
-        [createTraining('워밍업', 4), createTraining('쿨다운', 2)],
-        {
-          orbitRadius: 170,
-          orbitStartAngle: -90,
-          orbitOrder: gymOrbitOrder,
-          iconColor: NODE_ICON_COLORS[0],
-          iconId: 'fi-dumbbell',
-        },
-      ),
+      data: createPassiveData('mastery', '운동', {
+        proficiency: 50,
+        power: 22,
+        stages: defaultStagesForSeed([
+          { label: '워밍업', goal: 4, logged: 4 },
+          { label: '메인', goal: 5, logged: 2 },
+          { label: '쿨다운', goal: 3, logged: 0 },
+        ]),
+        orbitRadius: 170,
+        orbitStartAngle: -90,
+        orbitOrder: gymOrbitOrder,
+        iconColor: NODE_ICON_COLORS[0],
+        iconId: 'fi-dumbbell',
+      }),
     },
     {
       id: 'notable-strength',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData(
-        'notable',
-        '근력',
-        [createTraining('스쿼트', 6), createTraining('데드리프트', 4)],
-        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[8], iconId: 'fi-kettle' },
-      ),
+      data: createPassiveData('notable', '근력', {
+        proficiency: 40,
+        power: 20,
+        stages: defaultStagesForSeed([
+          { label: '스쿼트', goal: 6, logged: 6 },
+          { label: '데드리프트', goal: 5, logged: 4 },
+        ]),
+        masteryId: gymMasteryId,
+        iconColor: NODE_ICON_COLORS[8],
+        iconId: 'fi-kettle',
+      }),
     },
     {
       id: 'notable-cardio',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData(
-        'notable',
-        '유산소',
-        [createTraining('러닝', 5), createTraining('사이클', 2)],
-        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[6], iconId: 'fi-runner' },
-      ),
+      data: createPassiveData('notable', '유산소', {
+        proficiency: 30,
+        power: 11,
+        stages: defaultStagesForSeed([
+          { label: '러닝', goal: 5, logged: 5 },
+          { label: '사이클', goal: 4, logged: 2 },
+        ]),
+        masteryId: gymMasteryId,
+        iconColor: NODE_ICON_COLORS[6],
+        iconId: 'fi-runner',
+      }),
     },
     {
       id: 'small-legs',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '하체', [createTraining('런지', 3)], {
+      data: createPassiveData('small', '하체', {
+        proficiency: 12,
+        power: 7,
+        stages: defaultStagesForSeed([{ label: '런지', goal: 4, logged: 3 }]),
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[1],
         iconId: 'fi-stretch',
@@ -272,7 +314,10 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '등', [createTraining('풀업', 4)], {
+      data: createPassiveData('small', '등', {
+        proficiency: 14,
+        power: 8,
+        stages: defaultStagesForSeed([{ label: '풀업', goal: 5, logged: 4 }]),
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[14],
         iconId: 'fi-heart',
@@ -283,7 +328,10 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '러닝', [createTraining('인터벌', 2)], {
+      data: createPassiveData('small', '러닝', {
+        proficiency: 9,
+        power: 6,
+        stages: defaultStagesForSeed([{ label: '인터벌', goal: 3, logged: 2 }]),
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[9],
         iconId: 'fi-timer',
@@ -294,7 +342,10 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '코어', [createTraining('플랭크', 3)], {
+      data: createPassiveData('small', '코어', {
+        proficiency: 11,
+        power: 5,
+        stages: defaultStagesForSeed([{ label: '플랭크', goal: 4, logged: 3 }]),
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[3],
         iconId: 'tr-flame',
@@ -704,7 +755,9 @@ export default function App() {
             const nextData: PassiveNodeData = {
               label: data.label,
               kind,
-              trainings: data.trainings,
+              proficiency: data.proficiency,
+              power: data.power,
+              stages: data.stages,
               iconColor: data.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
               iconId: data.iconId ?? DEFAULT_ICON_ID_BY_KIND[kind],
               ...(kind === 'mastery'
@@ -788,7 +841,7 @@ export default function App() {
       position: { x: 280 + (offset % 220), y: 180 + (offset % 160) },
       dragHandle: '.node-drag-handle',
       draggable: true,
-      data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`, []),
+      data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`),
     }
     setNodes((nds) => stack([...nds, newNode]))
     setSelectedId(id)
@@ -1053,32 +1106,17 @@ export default function App() {
           onChangeIconId={(nodeId, iconId) =>
             updateNodeData(nodeId, (d) => ({ ...d, iconId }))
           }
+          onChangeProficiency={(nodeId, proficiency) =>
+            updateNodeData(nodeId, (d) => ({ ...d, proficiency }))
+          }
+          onChangePower={(nodeId, power) => updateNodeData(nodeId, (d) => ({ ...d, power }))}
+          onChangeStages={(nodeId, stages) => updateNodeData(nodeId, (d) => ({ ...d, stages }))}
           onChangeOrbitRadius={changeOrbitRadius}
           onChangeOrbitStartAngle={changeOrbitStartAngle}
           onChangeOrbitOrder={changeOrbitOrder}
           onDetachFromMastery={detachFromMastery}
           onRemoveLink={removeLink}
           onAddLink={addLink}
-          onAddTraining={(nodeId) =>
-            updateNodeData(nodeId, (d) => ({
-              ...d,
-              trainings: [...d.trainings, createTraining(`Session ${d.trainings.length + 1}`, 1)],
-            }))
-          }
-          onUpdateTraining={(nodeId, trainingId, patch) =>
-            updateNodeData(nodeId, (d) => ({
-              ...d,
-              trainings: d.trainings.map((t) =>
-                t.id === trainingId ? { ...t, ...patch } : t,
-              ),
-            }))
-          }
-          onRemoveTraining={(nodeId, trainingId) =>
-            updateNodeData(nodeId, (d) => ({
-              ...d,
-              trainings: d.trainings.filter((t) => t.id !== trainingId),
-            }))
-          }
           onDeleteNode={deleteNode}
         />
       </main>

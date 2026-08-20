@@ -1,10 +1,24 @@
 export type PassiveKind = 'small' | 'notable' | 'mastery'
 
-export type TrainingEntry = {
+/** One training log entry within a stage. Counts are capped by the stage goal. */
+export type TrainingLog = {
   id: string
   label: string
   count: number
   note?: string
+}
+
+/** A progression stage with its own band, goal, and training log. */
+export type StageData = {
+  id: string
+  /** 1-based stage number; band order is inner (1) → outer (n). */
+  index: number
+  label: string
+  /** Target training count (= segment count on the ring). */
+  goal: number
+  /** Manual completion override (also completes when logged ≥ goal). */
+  completedManually: boolean
+  logs: TrainingLog[]
 }
 
 /** Notion-like solid icon palette (16). */
@@ -38,7 +52,12 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
 export type PassiveNodeData = {
   label: string
   kind: PassiveKind
-  trainings: TrainingEntry[]
+  /** 숙련도 — node-level rating the user can customize. */
+  proficiency: number
+  /** 파워 — node-level power rating. */
+  power: number
+  /** Ordered stages; each owns a ring and its training log. */
+  stages: StageData[]
   /** Solid tint for the vector icon face. */
   iconColor: NodeIconColor
   /** Monochrome vector infographic id from the icon sets. */
@@ -62,5 +81,4 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   mastery: 'Mastery',
 }
 
-/** Trainings needed to complete one outer band. */
-export const TRAININGS_PER_BAND = 3
+export const DEFAULT_STAGE_GOAL = 3

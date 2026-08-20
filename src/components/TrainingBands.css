@@ -8,15 +8,19 @@
   overflow: visible;
 }
 
-.training-bands__full {
-  stroke: color-mix(in srgb, var(--accent) 55%, white);
-  opacity: calc(0.55 + min(0.4, var(--band-level) * 0.12));
-  filter: drop-shadow(0 0 calc(2px + var(--band-level) * 1.5px) color-mix(in srgb, var(--accent) 80%, white));
+.training-bands__cell {
+  stroke: color-mix(in srgb, var(--icon-color) 28%, #1a222c);
+  opacity: 0.72;
 }
 
-.training-bands__partial {
-  stroke: color-mix(in srgb, var(--accent) 40%, white);
-  opacity: calc(0.7 + min(0.3, var(--band-level) * 0.1));
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 calc(3px + var(--band-level) * 2px) color-mix(in srgb, var(--accent) 90%, white));
+.training-bands__cell.is-filled {
+  stroke: color-mix(in srgb, var(--icon-color) 55%, white);
+  opacity: 0.95;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--icon-color) 70%, transparent));
+}
+
+.training-bands__complete {
+  stroke: color-mix(in srgb, var(--icon-color) 60%, white);
+  opacity: 0.92;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--icon-color) 75%, transparent));
 }
