@@ -39,8 +39,10 @@ export type PassiveNodeData = {
   label: string
   kind: PassiveKind
   trainings: TrainingEntry[]
-  /** Solid color that fills the circular node face. */
+  /** Solid tint for the vector icon face. */
   iconColor: NodeIconColor
+  /** Monochrome vector infographic id from the icon sets. */
+  iconId: string
   /** Mastery only: radius of the circular orbit for attached passives. */
   orbitRadius?: number
   /**

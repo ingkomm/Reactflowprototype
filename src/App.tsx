@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -22,6 +22,7 @@ import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
 import type { PassiveKind, PassiveNodeData, TrainingEntry } from './types'
 import { DEFAULT_ICON_BY_KIND, NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from './types'
+import { DEFAULT_ICON_ID_BY_KIND } from './icons'
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
@@ -36,6 +37,7 @@ import {
   snapOrbitAngle,
   withMasteryDragFlags,
 } from './orbit'
+import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
 const nodeTypes = { passive: PassiveNode }
@@ -56,7 +58,7 @@ function createPassiveData(
   extras: Partial<
     Pick<
       PassiveNodeData,
-      'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId' | 'iconColor'
+      'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId' | 'iconColor' | 'iconId'
     >
   > = {},
 ): PassiveNodeData {
@@ -65,6 +67,7 @@ function createPassiveData(
     kind,
     trainings,
     iconColor: extras.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
+    iconId: extras.iconId ?? DEFAULT_ICON_ID_BY_KIND[kind],
     ...(kind === 'mastery'
       ? {
           orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -149,6 +152,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           orbitStartAngle: -90,
           orbitOrder: danceOrbitOrder,
           iconColor: NODE_ICON_COLORS[7],
+          iconId: 'da-disco',
         },
       ),
     },
@@ -161,7 +165,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         'notable',
         '힙합',
         [createTraining('기초 스텝', 4), createTraining('프리스타일', 2)],
-        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[5] },
+        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[5], iconId: 'da-headphones' },
       ),
     },
     {
@@ -173,7 +177,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         'notable',
         'K-pop',
         [createTraining('안무 암기', 5), createTraining('포인트 안무', 3)],
-        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[4] },
+        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[4], iconId: 'da-note' },
       ),
     },
     {
@@ -184,6 +188,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '기본기', [createTraining('아이솔레이션', 3)], {
         masteryId: danceMasteryId,
         iconColor: NODE_ICON_COLORS[2],
+        iconId: 'da-spark',
       }),
     },
     {
@@ -194,6 +199,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '풋워크', [createTraining('그루브', 2)], {
         masteryId: danceMasteryId,
         iconColor: NODE_ICON_COLORS[8],
+        iconId: 'da-shoe',
       }),
     },
     {
@@ -204,6 +210,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '스트레칭', [createTraining('유연성', 1)], {
         masteryId: danceMasteryId,
         iconColor: NODE_ICON_COLORS[11],
+        iconId: 'da-wave',
       }),
     },
     {
@@ -220,6 +227,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           orbitStartAngle: -90,
           orbitOrder: gymOrbitOrder,
           iconColor: NODE_ICON_COLORS[0],
+          iconId: 'fi-dumbbell',
         },
       ),
     },
@@ -232,7 +240,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         'notable',
         '근력',
         [createTraining('스쿼트', 6), createTraining('데드리프트', 4)],
-        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[8] },
+        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[8], iconId: 'fi-kettle' },
       ),
     },
     {
@@ -244,7 +252,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         'notable',
         '유산소',
         [createTraining('러닝', 5), createTraining('사이클', 2)],
-        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[6] },
+        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[6], iconId: 'fi-runner' },
       ),
     },
     {
@@ -255,6 +263,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '하체', [createTraining('런지', 3)], {
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[1],
+        iconId: 'fi-stretch',
       }),
     },
     {
@@ -265,6 +274,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '등', [createTraining('풀업', 4)], {
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[14],
+        iconId: 'fi-heart',
       }),
     },
     {
@@ -275,6 +285,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '러닝', [createTraining('인터벌', 2)], {
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[9],
+        iconId: 'fi-timer',
       }),
     },
     {
@@ -285,6 +296,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '코어', [createTraining('플랭크', 3)], {
         masteryId: gymMasteryId,
         iconColor: NODE_ICON_COLORS[3],
+        iconId: 'tr-flame',
       }),
     },
   ]
@@ -306,6 +318,37 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
+
+  const stateRef = useRef({ nodes, edges })
+  stateRef.current = { nodes, edges }
+
+  const { commit } = useGraphHistory({
+    getState: () => stateRef.current,
+    setState: (snap) => {
+      setNodes(withMasteryDragFlags(snap.nodes))
+      setEdges(snap.edges)
+    },
+  })
+
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      if (changes.some((c) => c.type === 'remove')) {
+        commit()
+      }
+      onNodesChange(changes)
+    },
+    [commit, onNodesChange],
+  )
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      if (changes.some((c) => c.type === 'remove')) {
+        commit()
+      }
+      onEdgesChange(changes)
+    },
+    [commit, onEdgesChange],
+  )
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
@@ -402,6 +445,7 @@ export default function App() {
   )
 
   const attachSatellite = useCallback((masteryId: string, satelliteId: string) => {
+    commit()
     setNodes((nds) => {
       const current = nds.find((n) => n.id === satelliteId)
       const prevMasteryId = (current?.data as PassiveNodeData | undefined)?.masteryId ?? null
@@ -443,7 +487,7 @@ export default function App() {
       }
       return withMasteryDragFlags(next)
     })
-  }, [setNodes])
+  }, [commit, setNodes])
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -468,6 +512,7 @@ export default function App() {
         return
       }
 
+      commit()
       setEdges((eds) => {
         const existing = findLinkEdge(eds, source.id, target.id)
         if (existing) {
@@ -476,11 +521,12 @@ export default function App() {
         return [...eds, passiveLinkEdge(source.id, target.id)]
       })
     },
-    [attachSatellite, nodes, setEdges],
+    [attachSatellite, commit, nodes, setEdges],
   )
 
   const detachFromMastery = useCallback(
     (satelliteId: string) => {
+      commit()
       setNodes((nds) => {
         let oldMasteryId: string | null = null
         const next = nds.map((node) => {
@@ -509,12 +555,13 @@ export default function App() {
         return withMasteryDragFlags(layoutMasteryOrbit(next, oldMasteryId))
       })
     },
-    [setNodes],
+    [commit, setNodes],
   )
 
   const changeOrbitRadius = useCallback(
     (masteryId: string, radius: number) => {
       const clamped = Math.min(480, Math.max(80, radius))
+      commit()
       setNodes((nds) => {
         const next = nds.map((node) => {
           if (node.id !== masteryId) return node
@@ -524,12 +571,13 @@ export default function App() {
         return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
       })
     },
-    [setNodes],
+    [commit, setNodes],
   )
 
   const changeOrbitStartAngle = useCallback(
     (masteryId: string, degrees: number) => {
       const snapped = snapOrbitAngle(degrees)
+      commit()
       setNodes((nds) => {
         const next = nds.map((node) => {
           if (node.id !== masteryId) return node
@@ -539,11 +587,12 @@ export default function App() {
         return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
       })
     },
-    [setNodes],
+    [commit, setNodes],
   )
 
   const changeOrbitOrder = useCallback(
     (masteryId: string, satelliteId: string, order1Based: number) => {
+      commit()
       setNodes((nds) => {
         const mastery = nds.find((n) => n.id === masteryId)
         if (!mastery) return nds
@@ -561,14 +610,15 @@ export default function App() {
         return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
       })
     },
-    [setNodes],
+    [commit, setNodes],
   )
 
   const removeLink = useCallback(
     (edgeId: string) => {
+      commit()
       setEdges((eds) => eds.filter((e) => e.id !== edgeId))
     },
-    [setEdges],
+    [commit, setEdges],
   )
 
   const addLink = useCallback(
@@ -585,12 +635,13 @@ export default function App() {
       ) {
         return
       }
+      commit()
       setEdges((eds) => {
         if (findLinkEdge(eds, source.id, target.id)) return eds
         return [...eds, passiveLinkEdge(source.id, target.id)]
       })
     },
-    [nodes, selectedId, setEdges],
+    [commit, nodes, selectedId, setEdges],
   )
 
   const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
@@ -599,6 +650,7 @@ export default function App() {
 
   const updateNodeData = useCallback(
     (nodeId: string, updater: (data: PassiveNodeData) => PassiveNodeData) => {
+      commit()
       setNodes((nds) =>
         nds.map((node) =>
           node.id === nodeId
@@ -607,7 +659,7 @@ export default function App() {
         ),
       )
     },
-    [setNodes],
+    [commit, setNodes],
   )
 
   const changeKind = useCallback(
@@ -620,6 +672,7 @@ export default function App() {
       if (prev.masteryId) affectedMasteries.add(prev.masteryId)
       if (prev.kind === 'mastery' && kind !== 'mastery') affectedMasteries.add(nodeId)
 
+      commit()
       setNodes((nds) => {
         let next = nds.map((node) => {
           const data = node.data as PassiveNodeData
@@ -630,6 +683,7 @@ export default function App() {
               kind,
               trainings: data.trainings,
               iconColor: data.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
+              iconId: data.iconId ?? DEFAULT_ICON_ID_BY_KIND[kind],
               ...(kind === 'mastery'
                 ? {
                     orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -698,12 +752,13 @@ export default function App() {
         }),
       )
     },
-    [nodes, setEdges, setNodes],
+    [commit, nodes, setEdges, setNodes],
   )
 
   const addNode = useCallback(() => {
     const id = uid(addKind)
     const offset = nodes.length * 18
+    commit()
     const newNode: PassiveFlowNode = {
       id,
       type: 'passive',
@@ -714,10 +769,11 @@ export default function App() {
     }
     setNodes((nds) => withMasteryDragFlags([...nds, newNode]))
     setSelectedId(id)
-  }, [addKind, nodes.length, setNodes])
+  }, [addKind, commit, nodes.length, setNodes])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
+      commit()
       setNodes((nds) => {
         const target = nds.find((n) => n.id === nodeId)
         if (!target) return nds
@@ -754,7 +810,7 @@ export default function App() {
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
       setSelectedId((cur) => (cur === nodeId ? null : cur))
     },
-    [setEdges, setNodes],
+    [commit, setEdges, setNodes],
   )
 
   const deleteSelected = useCallback(() => {
@@ -767,6 +823,18 @@ export default function App() {
   const onNodeClick = useCallback((_: ReactMouseEvent, node: Node) => {
     setSelectedId(node.id)
   }, [])
+
+  const onNodeDragStart = useCallback(() => {
+    commit()
+  }, [commit])
+
+  const onEdgeDoubleClick = useCallback(
+    (_event: ReactMouseEvent, edge: Edge) => {
+      commit()
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id))
+    },
+    [commit, setEdges],
+  )
 
   const onNodeDrag = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
@@ -787,6 +855,7 @@ export default function App() {
       const data = node.data as PassiveNodeData
       if (!isSatelliteKind(data.kind)) return
 
+      // Drag start already committed; snap/attach/detach here without a second commit.
       setNodes((nds) => {
         let next = nds.map((n) =>
           n.id === node.id ? { ...n, position: node.position } : n,
@@ -931,15 +1000,17 @@ export default function App() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             onSelectionChange={onSelectionChange}
             onPaneClick={onPaneClick}
             onNodeClick={onNodeClick}
+            onNodeDragStart={onNodeDragStart}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
+            onEdgeDoubleClick={onEdgeDoubleClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
@@ -968,8 +1039,7 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            노드를 드래그해 오르빗 근처에 놓으면 포함되고, 바깥으로 빼면 해제됩니다.
-            같은 오르빗끼리는 링크 없음 · 호버 시 요약 툴팁.
+            가운데 드래그 = 이동 · 가장자리 = 링크 · 링크 더블클릭 = 삭제 · Ctrl+Z/Y = 실행 취소/다시 실행
           </p>
         </section>
 
@@ -984,6 +1054,9 @@ export default function App() {
           onChangeKind={changeKind}
           onChangeIconColor={(nodeId, iconColor) =>
             updateNodeData(nodeId, (d) => ({ ...d, iconColor }))
+          }
+          onChangeIconId={(nodeId, iconId) =>
+            updateNodeData(nodeId, (d) => ({ ...d, iconId }))
           }
           onChangeOrbitRadius={changeOrbitRadius}
           onChangeOrbitStartAngle={changeOrbitStartAngle}

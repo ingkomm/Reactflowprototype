@@ -9,6 +9,7 @@
   --glow-alpha: 0.25;
   --halo-strength: 0;
   --band-level: 0;
+  --count-offset: 48px;
 
   position: relative;
   width: var(--node-size);
@@ -16,13 +17,9 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  cursor: grab;
+  cursor: default;
   user-select: none;
   overflow: visible;
-}
-
-.passive-node:active {
-  cursor: grabbing;
 }
 
 .passive-node--small {
@@ -91,8 +88,20 @@
     0 0 var(--glow-blur) rgba(255, 255, 255, calc(var(--glow-alpha) * 0.35)),
     0 0 calc(var(--glow-blur) * 1.4) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 100%), transparent);
   background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.22), transparent 42%),
-    var(--icon-color);
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.1), transparent 42%),
+    color-mix(in srgb, var(--icon-color) 28%, #0d1218);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--icon-color);
+}
+
+.passive-node__glyph {
+  width: 78%;
+  height: 78%;
+  display: block;
 }
 
 .passive-node.has-bands .passive-node__ring {
@@ -106,11 +115,12 @@
     0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 100%), transparent);
 }
 
+/* Center drag zone */
 .passive-node__hit {
   position: absolute;
-  inset: 0;
+  inset: 22%;
   border-radius: 50%;
-  z-index: 4;
+  z-index: 5;
   cursor: grab;
 }
 
@@ -120,9 +130,9 @@
 
 .passive-node__trainings {
   position: absolute;
-  top: calc(100% + 8px);
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, calc(-50% + var(--count-offset)));
   z-index: 5;
   font-size: 11px;
   font-weight: 650;
@@ -152,10 +162,16 @@
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
 }
 
+/* Unselected hover: softer tooltip */
 .passive-node:hover .passive-node__tooltip {
-  opacity: 1;
+  opacity: 0.48;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Selected hover: full-strength tooltip */
+.passive-node.is-selected:hover .passive-node__tooltip {
+  opacity: 1;
 }
 
 .passive-node__tooltip-title {
@@ -182,9 +198,10 @@
   color: #d5dde5;
 }
 
+/* Full-node invisible handles; center hit sits above so rim = connect */
 .passive-node__handle {
-  width: 2px !important;
-  height: 2px !important;
+  width: 100% !important;
+  height: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
   border: none !important;
@@ -196,40 +213,13 @@
   bottom: auto !important;
   transform: translate(-50%, -50%) !important;
   opacity: 1;
-  z-index: 2;
+  z-index: 3;
   pointer-events: all;
+  cursor: crosshair;
 }
 
 .passive-node__handle::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 18px;
-  height: 18px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-}
-
-.passive-node__connect-dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 0 8px var(--glow);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 3;
-  transition: opacity 0.15s ease;
-}
-
-.passive-node:hover .passive-node__connect-dot,
-.passive-node.is-selected .passive-node__connect-dot {
-  opacity: 0.85;
+  content: none;
 }
 
 .node-drag-handle {

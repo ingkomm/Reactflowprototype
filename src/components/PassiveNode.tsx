@@ -2,13 +2,15 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import type { CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
 import { DEFAULT_ICON_BY_KIND, PASSIVE_KIND_LABEL } from '../types'
+import { DEFAULT_ICON_ID_BY_KIND } from '../icons'
 import {
   DEFAULT_ORBIT_RADIUS,
   NODE_SIZE,
   totalTrainingCount,
   trainingBandLevel,
 } from '../orbit'
-import { TrainingBands } from './TrainingBands'
+import { IconGlyph } from './IconGlyph'
+import { TrainingBands, trainingCountOffset } from './TrainingBands'
 import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
@@ -19,6 +21,8 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = data.iconColor ?? DEFAULT_ICON_BY_KIND[data.kind]
+  const iconId = data.iconId ?? DEFAULT_ICON_ID_BY_KIND[data.kind]
+  const countOffset = trainingCountOffset(total, nodeSize)
 
   const glowBlur = 16 + bandLevel * 14
   const glowAlpha = Math.min(0.92, 0.22 + bandLevel * 0.2)
@@ -41,6 +45,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--halo-strength': String(haloStrength),
           '--band-level': String(bandLevel),
           '--icon-color': iconColor,
+          '--count-offset': `${countOffset}px`,
         } as CSSProperties
       }
     >
@@ -55,6 +60,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       <div className="passive-node__halo" aria-hidden />
       <TrainingBands total={total} nodeSize={nodeSize} />
 
+      {/* Rim handles: connections start/end on the node edge */}
       <Handle
         id="center"
         type="source"
@@ -70,7 +76,11 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
         isConnectable
       />
 
-      <div className="passive-node__ring" aria-hidden />
+      <div className="passive-node__ring" aria-hidden>
+        <IconGlyph iconId={iconId} className="passive-node__glyph" />
+      </div>
+
+      {/* Center disc: node drag only */}
       <div className="passive-node__hit node-drag-handle" />
 
       <div className="passive-node__tooltip" role="tooltip">
@@ -89,7 +99,6 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       </div>
 
       <span className="passive-node__trainings">{total}</span>
-      <span className="passive-node__connect-dot" aria-hidden />
     </div>
   )
 }

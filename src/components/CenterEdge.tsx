@@ -9,7 +9,14 @@ import {
 export type CenterFlowEdge = Edge<Record<string, never>, 'center'>
 
 /** Straight edge that always meets each node's geometric center. */
-export function CenterEdge({ id, source, target, style, interactionWidth }: EdgeProps) {
+export function CenterEdge({
+  id,
+  source,
+  target,
+  style,
+  interactionWidth = 24,
+  selected,
+}: EdgeProps) {
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
 
@@ -32,7 +39,11 @@ export function CenterEdge({ id, source, target, style, interactionWidth }: Edge
     <BaseEdge
       id={id}
       path={path}
-      style={style}
+      style={{
+        ...style,
+        strokeWidth: selected ? 3 : (style?.strokeWidth as number | undefined) ?? 2,
+        cursor: 'pointer',
+      }}
       interactionWidth={interactionWidth}
     />
   )

@@ -112,6 +112,56 @@
     0 0 0 2px color-mix(in srgb, #d4a24c 70%, white);
 }
 
+.icon-open-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #8fa0b0 28%, transparent);
+  background: #0f151c;
+  color: #eef3f7;
+  cursor: pointer;
+  text-align: left;
+}
+
+.icon-open-btn__preview {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, currentColor 22%, #0d1218);
+  flex: 0 0 auto;
+}
+
+.icon-open-btn__preview svg {
+  width: 72%;
+  height: 72%;
+}
+
+.icon-open-btn__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.icon-open-btn__meta strong {
+  font-size: 0.88rem;
+  font-weight: 650;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.icon-open-btn__meta small {
+  font-size: 0.72rem;
+  color: #9aa8b5;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .training-list {
   list-style: none;
   margin: 0;

@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import type { NodeIconColor, PassiveKind, PassiveNodeData, TrainingEntry } from '../types'
 import { NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from '../types'
+import { getIconDef } from '../icons'
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   orbitAngleOptions,
 } from '../orbit'
+import { IconGlyph } from './IconGlyph'
+import { IconPicker } from './IconPicker'
 import './Inspector.css'
 
 export type OrbitMember = {
@@ -38,6 +41,7 @@ type Props = {
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeIconColor: (nodeId: string, color: NodeIconColor) => void
+  onChangeIconId: (nodeId: string, iconId: string) => void
   onChangeOrbitRadius: (nodeId: string, radius: number) => void
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
@@ -64,6 +68,7 @@ export function Inspector({
   onRename,
   onChangeKind,
   onChangeIconColor,
+  onChangeIconId,
   onChangeOrbitRadius,
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
@@ -76,6 +81,7 @@ export function Inspector({
   onDeleteNode,
 }: Props) {
   const [addPeerId, setAddPeerId] = useState('')
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
   if (!nodeId || !data) {
     return (
@@ -125,6 +131,23 @@ export function Inspector({
           ))}
         </select>
       </label>
+
+      <div className="field">
+        <span>Icon</span>
+        <button
+          type="button"
+          className="icon-open-btn"
+          onClick={() => setIconPickerOpen(true)}
+        >
+          <span className="icon-open-btn__preview" style={{ color: data.iconColor }}>
+            <IconGlyph iconId={data.iconId} />
+          </span>
+          <span className="icon-open-btn__meta">
+            <strong>{getIconDef(data.iconId).label}</strong>
+            <small>아이콘 셋 열기</small>
+          </span>
+        </button>
+      </div>
 
       <div className="field">
         <span>Icon color</span>
@@ -348,6 +371,13 @@ export function Inspector({
           </ul>
         )}
       </div>
+
+      <IconPicker
+        open={iconPickerOpen}
+        value={data.iconId}
+        onClose={() => setIconPickerOpen(false)}
+        onSelect={(iconId) => onChangeIconId(nodeId, iconId)}
+      />
     </aside>
   )
 }
