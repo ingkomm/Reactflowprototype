@@ -26,12 +26,10 @@ import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   getOrderedOrbitSatellites,
-  isOrbitSequentialEdgeId,
   isSatelliteKind,
   layoutMasteryOrbit,
-  orbitEdgesFingerprint,
+  shareSameOrbit,
   snapOrbitAngle,
-  syncAllOrbitSequentialEdges,
   withMasteryDragFlags,
 } from './orbit'
 import './App.css'
@@ -162,7 +160,7 @@ const seedNodes: PassiveFlowNode[] = withMasteryDragFlags(
   ),
 )
 
-const initialEdges: Edge[] = syncAllOrbitSequentialEdges(seedNodes, [])
+const initialEdges: Edge[] = []
 
 const kindAccent: Record<PassiveKind, string> = {
   small: '#8b9aa8',
@@ -217,17 +215,23 @@ export default function App() {
           peerId,
           peerLabel: peerData?.label ?? peerId,
           peerKind: peerData?.kind ?? 'small',
-          managed: isOrbitSequentialEdgeId(e.id),
         }
       })
   }, [edges, nodes, selectedData, selectedNode])
 
-  // Keep Notable↔Small orbit-neighbor links in sync with clockwise orbit order.
+  // Drop any leftover same-orbit links (orbit membership is visual only).
   useEffect(() => {
     setEdges((eds) => {
-      const synced = syncAllOrbitSequentialEdges(nodes, eds)
-      if (orbitEdgesFingerprint(synced) === orbitEdgesFingerprint(eds)) return eds
-      return synced
+      const next = eds.filter((e) => {
+        const source = nodes.find((n) => n.id === e.source)
+        const target = nodes.find((n) => n.id === e.target)
+        if (!source || !target) return true
+        return !shareSameOrbit(
+          { data: source.data as PassiveNodeData },
+          { data: target.data as PassiveNodeData },
+        )
+      })
+      return next.length === eds.length ? eds : next
     })
   }, [nodes, setEdges])
 
@@ -239,7 +243,10 @@ export default function App() {
     return nodes
       .filter((n) => {
         const d = n.data as PassiveNodeData
-        return n.id !== selectedNode.id && d.kind === wantKind && !linked.has(n.id)
+        if (n.id === selectedNode.id || d.kind !== wantKind || linked.has(n.id)) return false
+        // No links inside the same mastery orbit.
+        if (shareSameOrbit({ data: selectedData }, { data: d })) return false
+        return true
       })
       .map((n) => {
         const d = n.data as PassiveNodeData
@@ -252,8 +259,11 @@ export default function App() {
       const source = nodes.find((n) => n.id === connection.source)
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
-      return (
-        resolveMasteryPair(source, target) !== null || isNotableSmallPair(source, target)
+      if (resolveMasteryPair(source, target) !== null) return true
+      if (!isNotableSmallPair(source, target)) return false
+      return !shareSameOrbit(
+        { data: source.data as PassiveNodeData },
+        { data: target.data as PassiveNodeData },
       )
     },
     [nodes],
@@ -316,17 +326,18 @@ export default function App() {
 
       if (!isNotableSmallPair(source, target)) return
 
-      // Same-orbit consecutive links are auto-managed from orbit order.
-      const sourceMastery = (source.data as PassiveNodeData).masteryId
-      const targetMastery = (target.data as PassiveNodeData).masteryId
-      if (sourceMastery && sourceMastery === targetMastery) {
+      if (
+        shareSameOrbit(
+          { data: source.data as PassiveNodeData },
+          { data: target.data as PassiveNodeData },
+        )
+      ) {
         return
       }
 
       setEdges((eds) => {
         const existing = findLinkEdge(eds, source.id, target.id)
         if (existing) {
-          if (isOrbitSequentialEdgeId(existing.id)) return eds
           return eds.filter((e) => e.id !== existing.id)
         }
         return [...eds, passiveLinkEdge(source.id, target.id)]
@@ -422,7 +433,6 @@ export default function App() {
 
   const removeLink = useCallback(
     (edgeId: string) => {
-      if (isOrbitSequentialEdgeId(edgeId)) return
       setEdges((eds) => eds.filter((e) => e.id !== edgeId))
     },
     [setEdges],
@@ -434,6 +444,14 @@ export default function App() {
       const source = nodes.find((n) => n.id === selectedId)
       const target = nodes.find((n) => n.id === peerId)
       if (!source || !target || !isNotableSmallPair(source, target)) return
+      if (
+        shareSameOrbit(
+          { data: source.data as PassiveNodeData },
+          { data: target.data as PassiveNodeData },
+        )
+      ) {
+        return
+      }
       setEdges((eds) => {
         if (findLinkEdge(eds, source.id, target.id)) return eds
         return [...eds, passiveLinkEdge(source.id, target.id)]
@@ -714,8 +732,8 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            Same-orbit Notable↔Small nodes auto-link clockwise in order. Extra manual links work
-            off-orbit. More training bands → brighter glow.
+            Same-orbit passives have no links — orbit only. Notable↔Small links work between
+            different orbits. More training bands → brighter glow.
           </p>
         </section>
 

@@ -20,7 +20,6 @@ export type LinkItem = {
   peerId: string
   peerLabel: string
   peerKind: PassiveKind
-  managed?: boolean
 }
 
 export type LinkCandidate = {
@@ -224,23 +223,16 @@ export function Inspector({
                   <li key={link.edgeId} className="link-item">
                     <span>
                       {link.peerLabel}
-                      <small>
-                        {PASSIVE_KIND_LABEL[link.peerKind]}
-                        {link.managed ? ' · orbit' : ''}
-                      </small>
+                      <small>{PASSIVE_KIND_LABEL[link.peerKind]}</small>
                     </span>
-                    {link.managed ? (
-                      <span className="link-item__badge">auto</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn--icon"
-                        onClick={() => onRemoveLink(link.edgeId)}
-                        aria-label={`Remove link to ${link.peerLabel}`}
-                      >
-                        ×
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="btn btn--icon"
+                      onClick={() => onRemoveLink(link.edgeId)}
+                      aria-label={`Remove link to ${link.peerLabel}`}
+                    >
+                      ×
+                    </button>
                   </li>
                 ))}
               </ul>

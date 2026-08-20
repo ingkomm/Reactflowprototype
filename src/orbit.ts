@@ -183,76 +183,12 @@ export function trainingBandLevel(total: number) {
   return Math.max(0, total) / 3
 }
 
-export function isOrbitSequentialEdgeId(edgeId: string, masteryId?: string) {
-  if (masteryId) return edgeId.startsWith(`orbit-seq-${masteryId}-`)
-  return edgeId.startsWith('orbit-seq-')
-}
-
-function isNotableSmallKinds(a: PassiveKind, b: PassiveKind) {
-  return (a === 'notable' && b === 'small') || (a === 'small' && b === 'notable')
-}
-
-type OrbitEdge = {
-  id: string
-  type: 'center'
-  source: string
-  target: string
-  sourceHandle: string
-  targetHandle: string
-}
-
-/** Consecutive clockwise Notable↔Small pairs on a mastery orbit (closed ring when n≥3). */
-export function buildOrbitSequentialEdges(
-  nodes: PassiveFlowNode[],
-  masteryId: string,
-): OrbitEdge[] {
-  const ordered = getOrderedOrbitSatellites(nodes, masteryId)
-  if (ordered.length < 2) return []
-
-  const pairCount = ordered.length === 2 ? 1 : ordered.length
-  const built = new Map<string, OrbitEdge>()
-
-  for (let i = 0; i < pairCount; i += 1) {
-    const a = ordered[i]
-    const b = ordered[(i + 1) % ordered.length]
-    const ka = (a.data as PassiveNodeData).kind
-    const kb = (b.data as PassiveNodeData).kind
-    if (!isNotableSmallKinds(ka, kb)) continue
-
-    const [left, right] = a.id < b.id ? [a.id, b.id] : [b.id, a.id]
-    const id = `orbit-seq-${masteryId}-${left}-${right}`
-    built.set(id, {
-      id,
-      type: 'center',
-      source: a.id,
-      target: b.id,
-      sourceHandle: 'center',
-      targetHandle: 'center-target',
-    })
-  }
-
-  return [...built.values()]
-}
-
-export function syncAllOrbitSequentialEdges<E extends { id: string }>(
-  nodes: PassiveFlowNode[],
-  edges: E[],
-): E[] {
-  const preserved = edges.filter((e) => !isOrbitSequentialEdgeId(e.id))
-  const generated: OrbitEdge[] = []
-
-  for (const node of nodes) {
-    const data = node.data as PassiveNodeData
-    if (data.kind !== 'mastery') continue
-    generated.push(...buildOrbitSequentialEdges(nodes, node.id))
-  }
-
-  return [...preserved, ...(generated as unknown as E[])]
-}
-
-export function orbitEdgesFingerprint(edges: { id: string; source: string; target: string }[]) {
-  return edges
-    .map((e) => `${e.id}:${e.source}:${e.target}`)
-    .sort()
-    .join('|')
+/** True when both satellites belong to the same Mastery orbit. */
+export function shareSameOrbit(
+  a: { data: PassiveNodeData },
+  b: { data: PassiveNodeData },
+) {
+  const am = a.data.masteryId
+  const bm = b.data.masteryId
+  return Boolean(am && bm && am === bm)
 }
