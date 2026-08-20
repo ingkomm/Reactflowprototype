@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { PassiveKind, PassiveNodeData, TrainingEntry } from '../types'
-import { PASSIVE_KIND_LABEL } from '../types'
+import type { NodeIconColor, PassiveKind, PassiveNodeData, TrainingEntry } from '../types'
+import { NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from '../types'
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
@@ -37,6 +37,7 @@ type Props = {
   linkCandidates?: LinkCandidate[]
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
+  onChangeIconColor: (nodeId: string, color: NodeIconColor) => void
   onChangeOrbitRadius: (nodeId: string, radius: number) => void
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
@@ -62,6 +63,7 @@ export function Inspector({
   linkCandidates = [],
   onRename,
   onChangeKind,
+  onChangeIconColor,
   onChangeOrbitRadius,
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
@@ -123,6 +125,24 @@ export function Inspector({
           ))}
         </select>
       </label>
+
+      <div className="field">
+        <span>Icon color</span>
+        <div className="icon-swatches" role="listbox" aria-label="Icon color">
+          {NODE_ICON_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              role="option"
+              aria-selected={data.iconColor === color}
+              className={`icon-swatch${data.iconColor === color ? ' is-active' : ''}`}
+              style={{ backgroundColor: color }}
+              onClick={() => onChangeIconColor(nodeId, color)}
+              title={color}
+            />
+          ))}
+        </div>
+      </div>
 
       {data.kind === 'mastery' && (
         <>

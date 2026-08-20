@@ -1,13 +1,12 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import type { CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
-import { PASSIVE_KIND_LABEL } from '../types'
+import { DEFAULT_ICON_BY_KIND } from '../types'
 import {
   DEFAULT_ORBIT_RADIUS,
   NODE_SIZE,
   totalTrainingCount,
   trainingBandLevel,
-  trainingProgressLabel,
 } from '../orbit'
 import { TrainingBands } from './TrainingBands'
 import './PassiveNode.css'
@@ -19,6 +18,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const bandLevel = trainingBandLevel(total)
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
+  const iconColor = data.iconColor ?? DEFAULT_ICON_BY_KIND[data.kind]
 
   const glowBlur = 16 + bandLevel * 14
   const glowAlpha = Math.min(0.92, 0.22 + bandLevel * 0.2)
@@ -35,9 +35,10 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--glow-alpha': String(glowAlpha),
           '--halo-strength': String(haloStrength),
           '--band-level': String(bandLevel),
+          '--icon-color': iconColor,
         } as CSSProperties
       }
-      title={`${data.label} · ${PASSIVE_KIND_LABEL[data.kind]}`}
+      title={data.label}
     >
       {data.kind === 'mastery' && (
         <div
@@ -67,11 +68,9 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
 
       <div className="passive-node__ring" aria-hidden />
       <div className="passive-node__core node-drag-handle">
-        <span className="passive-node__kind">{PASSIVE_KIND_LABEL[data.kind]}</span>
+        <span className="passive-node__icon" style={{ backgroundColor: iconColor }} aria-hidden />
         <strong className="passive-node__label">{data.label}</strong>
-        <span className="passive-node__trainings">
-          {total}× · {trainingProgressLabel(total)}
-        </span>
+        <span className="passive-node__trainings">{total}</span>
       </div>
       <span className="passive-node__connect-dot" aria-hidden />
     </div>
