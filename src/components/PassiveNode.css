@@ -90,8 +90,8 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  /* Match mastery orbit stroke color/opacity (inside first band). */
-  border: 1px solid color-mix(in srgb, #3db8a8 55%, transparent);
+  /* Quiet edge — stay below icon/bands, not orbit teal. */
+  border: 1px solid color-mix(in srgb, #9aa8b5 22%, transparent);
   box-shadow: 0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
   background:
     radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.1), transparent 42%),
@@ -111,10 +111,10 @@
 }
 
 .passive-node.is-selected .passive-node__ring {
-  border-color: color-mix(in srgb, #3db8a8 78%, transparent);
+  border-color: color-mix(in srgb, #c5d0da 38%, transparent);
   box-shadow:
     0 0 0 2px #f4f7fa,
-    0 0 0 5px color-mix(in srgb, #3db8a8 35%, transparent),
+    0 0 0 5px color-mix(in srgb, #8b9aa8 28%, transparent),
     0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
 }
 
