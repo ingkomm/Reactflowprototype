@@ -1,0 +1,181 @@
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, #101720 86%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topbar__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--amber);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 230, 170, 0.55), transparent 45%),
+    radial-gradient(circle at 50% 55%, #2a2418, #16120c 70%);
+  box-shadow: 0 0 16px rgba(212, 162, 76, 0.28);
+  flex: 0 0 auto;
+}
+
+.topbar__eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.topbar h1 {
+  margin: 2px 0 0;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.topbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topbar__kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.topbar__kind select {
+  border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
+  background: #0f151c;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, #e0b25d, #c69036);
+  color: #1a1408;
+}
+
+.btn--danger {
+  background: color-mix(in srgb, #e07070 22%, transparent);
+  color: #ffc2c2;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 320px);
+  min-height: 0;
+}
+
+.canvas-pane {
+  position: relative;
+  min-height: 0;
+}
+
+.canvas-pane .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-hint {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 5;
+  margin: 0;
+  max-width: min(420px, calc(100% - 28px));
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  color: #c5d0da;
+  background: color-mix(in srgb, #101820 82%, transparent);
+  border: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.react-flow__controls-button {
+  background: #121820;
+  border-bottom-color: var(--line);
+  fill: #d7e0e8;
+}
+
+.react-flow__minimap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0f151c !important;
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar__actions {
+    justify-content: stretch;
+  }
+
+  .topbar__kind {
+    flex: 1;
+  }
+
+  .topbar__kind select,
+  .btn {
+    flex: 1;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(52vh, 1fr) auto;
+  }
+
+  .inspector {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 42vh;
+  }
+}

@@ -1,0 +1,125 @@
+.passive-node {
+  --node-size: 88px;
+  --ring: #7a8694;
+  --core: #1f2a33;
+  --accent: #c9d2db;
+  --glow: rgba(201, 210, 219, 0.25);
+
+  position: relative;
+  width: var(--node-size);
+  height: var(--node-size);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.passive-node:active {
+  cursor: grabbing;
+}
+
+.passive-node--small {
+  --node-size: 72px;
+  --ring: #8b9aa8;
+  --core: #24313b;
+  --accent: #d5dde5;
+}
+
+.passive-node--notable {
+  --node-size: 104px;
+  --ring: #d4a24c;
+  --core: #2a2418;
+  --accent: #f0d59a;
+  --glow: rgba(212, 162, 76, 0.35);
+}
+
+.passive-node--mastery {
+  --node-size: 112px;
+  --ring: #3db8a8;
+  --core: #142528;
+  --accent: #9fe8dd;
+  --glow: rgba(61, 184, 168, 0.35);
+}
+
+.passive-node__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--ring);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent),
+    0 0 18px var(--glow);
+  background:
+    radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+    var(--core);
+}
+
+.passive-node.is-selected .passive-node__ring {
+  box-shadow:
+    0 0 0 2px #f4f7fa,
+    0 0 0 5px color-mix(in srgb, var(--ring) 70%, white),
+    0 0 22px var(--glow);
+}
+
+.passive-node__core {
+  position: relative;
+  z-index: 1;
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  padding: 6px;
+  pointer-events: none;
+}
+
+.passive-node__kind {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 70%, white);
+  line-height: 1.1;
+}
+
+.passive-node__label {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #f5f7f9;
+  max-width: 100%;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.passive-node--notable .passive-node__label,
+.passive-node--mastery .passive-node__label {
+  font-size: 12px;
+}
+
+.passive-node__trainings {
+  font-size: 9px;
+  color: color-mix(in srgb, var(--accent) 85%, #fff);
+  opacity: 0.9;
+}
+
+.passive-node__handle {
+  width: 10px !important;
+  height: 10px !important;
+  min-width: 10px !important;
+  min-height: 10px !important;
+  border: none !important;
+  background: transparent !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  opacity: 0;
+}

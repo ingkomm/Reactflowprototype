@@ -1,0 +1,158 @@
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 16px;
+  background: color-mix(in srgb, #121820 88%, transparent);
+  border-left: 1px solid color-mix(in srgb, #9eb0c2 22%, transparent);
+  backdrop-filter: blur(10px);
+  overflow: auto;
+}
+
+.inspector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspector__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #eef3f7;
+}
+
+.inspector__empty {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #9aa8b5;
+}
+
+.inspector__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.inspector__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inspector__section-head h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b7c4d0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a8b6c4;
+}
+
+.field input,
+.field select,
+.training-item input {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
+  background: #0f151c;
+  color: #eef3f7;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.9rem;
+}
+
+.field input:focus,
+.field select:focus,
+.training-item input:focus {
+  outline: 2px solid color-mix(in srgb, #d4a24c 55%, transparent);
+  outline-offset: 1px;
+}
+
+.training-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.training-item {
+  display: grid;
+  grid-template-columns: 1fr 64px auto;
+  grid-template-areas:
+    'label count remove'
+    'note note note';
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #1a2430 80%, transparent);
+  border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+}
+
+.training-item__label {
+  grid-area: label;
+}
+
+.training-item__count {
+  grid-area: count;
+}
+
+.training-item__note {
+  grid-area: note;
+}
+
+.training-item .btn--icon {
+  grid-area: remove;
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn--ghost {
+  background: color-mix(in srgb, #3db8a8 18%, transparent);
+  color: #9fe8dd;
+}
+
+.btn--danger {
+  background: color-mix(in srgb, #e07070 22%, transparent);
+  color: #ffc2c2;
+}
+
+.btn--icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: color-mix(in srgb, #e07070 18%, transparent);
+  color: #ffc2c2;
+  font-size: 1.1rem;
+  line-height: 1;
+}
