@@ -20,7 +20,7 @@ import '@xyflow/react/dist/style.css'
 import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
-import type { PassiveKind, PassiveNodeData } from './types'
+import type { PassiveKind, PassiveNodeData, StageData } from './types'
 import { DEFAULT_ICON_BY_KIND, NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from './types'
 import { DEFAULT_ICON_ID_BY_KIND } from './icons'
 import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
@@ -93,6 +93,69 @@ function passiveLinkEdge(sourceId: string, targetId: string): Edge {
     target: targetId,
     sourceHandle: 'center',
     targetHandle: 'center-target',
+  }
+}
+
+type NodeClipboard = {
+  data: PassiveNodeData
+  position: { x: number; y: number }
+}
+
+function cloneStagesWithNewIds(stages: StageData[]): StageData[] {
+  return stages.map((stage) => ({
+    ...stage,
+    id: uid('stage'),
+    logs: stage.logs.map((log) => ({ ...log, id: uid('log') })),
+  }))
+}
+
+/** Append `_N` using the next free number for this exact title stem. */
+function nextCopyLabel(baseLabel: string, existingLabels: Iterable<string>): string {
+  const escaped = baseLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`^${escaped}_(\\d+)$`)
+  let max = 0
+  for (const label of existingLabels) {
+    const match = label.match(re)
+    if (match) max = Math.max(max, Number(match[1]))
+  }
+  return `${baseLabel}_${max + 1}`
+}
+
+function buildPastedNode(
+  clipboard: NodeClipboard,
+  label: string,
+  offsetIndex: number,
+): PassiveFlowNode {
+  const source = clipboard.data
+  const kind = source.kind
+  const stages = cloneStagesWithNewIds(source.stages ?? [])
+  const data: PassiveNodeData = {
+    label,
+    kind,
+    proficiency: source.proficiency,
+    power: source.power,
+    stages,
+    iconColor: source.iconColor,
+    iconId: source.iconId,
+    ...(kind === 'mastery'
+      ? {
+          orbitRadius: source.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
+          orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+          orbitOrder: [],
+        }
+      : { masteryId: null }),
+  }
+
+  return {
+    id: uid(kind),
+    type: 'passive',
+    position: {
+      x: clipboard.position.x + offsetIndex * 36,
+      y: clipboard.position.y + offsetIndex * 36,
+    },
+    dragHandle: '.node-drag-handle',
+    draggable: true,
+    data,
   }
 }
 
@@ -372,11 +435,15 @@ export default function App() {
   const [addKind, setAddKind] = useState<PassiveKind>('small')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const resizingInspector = useRef(false)
+  const clipboardRef = useRef<NodeClipboard | null>(null)
+  const pasteSerialRef = useRef(0)
 
   const stateRef = useRef({ nodes, edges })
   stateRef.current = { nodes, edges }
   const selectedIdRef = useRef(selectedId)
   selectedIdRef.current = selectedId
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
 
   useEffect(() => {
     const onMove = (event: MouseEvent) => {
@@ -417,6 +484,55 @@ export default function App() {
       setEdges(snap.edges)
     },
   })
+
+  const copySelectedNode = useCallback(() => {
+    const currentId = selectedIdRef.current
+    if (!currentId) return false
+    const node = nodesRef.current.find((n) => n.id === currentId)
+    if (!node) return false
+    clipboardRef.current = {
+      data: structuredClone(node.data as PassiveNodeData),
+      position: { ...node.position },
+    }
+    pasteSerialRef.current = 0
+    return true
+  }, [])
+
+  const pasteClipboardNode = useCallback(() => {
+    const clip = clipboardRef.current
+    if (!clip) return false
+    commit()
+    pasteSerialRef.current += 1
+    const labels = nodesRef.current.map((n) => (n.data as PassiveNodeData).label)
+    const label = nextCopyLabel(clip.data.label, labels)
+    const pasted = buildPastedNode(clip, label, pasteSerialRef.current)
+    setNodes((nds) => stack([...nds, pasted]))
+    setSelectedId(pasted.id)
+    return true
+  }, [commit, setNodes, stack])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+
+      const mod = event.ctrlKey || event.metaKey
+      if (!mod) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'c') {
+        if (copySelectedNode()) event.preventDefault()
+        return
+      }
+      if (key === 'v') {
+        if (pasteClipboardNode()) event.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [copySelectedNode, pasteClipboardNode])
 
   // Keep title-bearing satellites above mastery orbits / elevate selection.
   useEffect(() => {
@@ -1119,7 +1235,7 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            가운데 드래그 = 이동 · 가장자리 = 링크 · 링크 더블클릭 = 삭제 · Ctrl+Z/Y = 실행 취소/다시 실행
+            가운데 드래그 = 이동 · 가장자리 = 링크 · Ctrl+C/V = 복사/붙여넣기 · Ctrl+Z/Y = 실행 취소/다시 실행
           </p>
         </section>
 
