@@ -1210,13 +1210,21 @@ export default function App() {
             connectionMode={ConnectionMode.Loose}
             connectionRadius={36}
             connectionLineType={ConnectionLineType.Straight}
-            connectionLineStyle={{ stroke: '#7f8fa0', strokeWidth: 2 }}
+            connectionLineStyle={{
+              stroke: 'color-mix(in srgb, #3db8a8 55%, transparent)',
+              strokeWidth: 1.25,
+              strokeDasharray: '5 5',
+            }}
             fitView
             elevateNodesOnSelect
             deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{
               type: 'center',
-              style: { stroke: '#7f8fa0', strokeWidth: 2 },
+              style: {
+                stroke: 'color-mix(in srgb, #3db8a8 55%, transparent)',
+                strokeWidth: 1.25,
+                strokeDasharray: '5 5',
+              },
               zIndex: 0,
             }}
             proOptions={{ hideAttribution: true }}

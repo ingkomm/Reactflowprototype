@@ -8,13 +8,20 @@ import {
 
 export type CenterFlowEdge = Edge<Record<string, never>, 'center'>
 
-/** Straight edge that always meets each node's geometric center. */
+/** Match mastery orbit: teal at ~55% opacity. */
+const LINK_STROKE = 'color-mix(in srgb, #3db8a8 55%, transparent)'
+const LINK_STROKE_SELECTED = 'color-mix(in srgb, #3db8a8 78%, transparent)'
+const LINK_WIDTH = 1.25
+const LINK_DASH = '5 5'
+/** Half-gap between the two parallel strokes (px in flow space). */
+const DOUBLE_OFFSET = 2.2
+
+/** Straight double-line edge through each node's geometric center. */
 export function CenterEdge({
   id,
   source,
   target,
-  style,
-  interactionWidth = 24,
+  interactionWidth = 28,
   selected,
 }: EdgeProps) {
   const sourceNode = useInternalNode(source)
@@ -33,18 +40,44 @@ export function CenterEdge({
   const targetY =
     targetNode.internals.positionAbsolute.y + (targetNode.measured.height ?? 0) / 2
 
-  const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const len = Math.hypot(dx, dy) || 1
+  const ox = (-dy / len) * DOUBLE_OFFSET
+  const oy = (dx / len) * DOUBLE_OFFSET
+
+  const [pathA] = getStraightPath({
+    sourceX: sourceX + ox,
+    sourceY: sourceY + oy,
+    targetX: targetX + ox,
+    targetY: targetY + oy,
+  })
+  const [pathB] = getStraightPath({
+    sourceX: sourceX - ox,
+    sourceY: sourceY - oy,
+    targetX: targetX - ox,
+    targetY: targetY - oy,
+  })
+
+  const stroke = selected ? LINK_STROKE_SELECTED : LINK_STROKE
+  const lineStyle = {
+    stroke,
+    strokeWidth: LINK_WIDTH,
+    strokeDasharray: LINK_DASH,
+    cursor: 'pointer' as const,
+  }
 
   return (
-    <BaseEdge
-      id={id}
-      path={path}
-      style={{
-        ...style,
-        strokeWidth: selected ? 3 : (style?.strokeWidth as number | undefined) ?? 2,
-        cursor: 'pointer',
-      }}
-      interactionWidth={interactionWidth}
-    />
+    <>
+      {/* Invisible hit target along the center line */}
+      <BaseEdge
+        id={`${id}-hit`}
+        path={getStraightPath({ sourceX, sourceY, targetX, targetY })[0]}
+        style={{ stroke: 'transparent', strokeWidth: 1 }}
+        interactionWidth={interactionWidth}
+      />
+      <BaseEdge id={`${id}-a`} path={pathA} style={lineStyle} interactionWidth={0} />
+      <BaseEdge id={`${id}-b`} path={pathB} style={lineStyle} interactionWidth={0} />
+    </>
   )
 }
