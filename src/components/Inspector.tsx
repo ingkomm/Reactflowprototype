@@ -80,8 +80,8 @@ export function Inspector({
       <aside className="inspector">
         <h2 className="inspector__title">Node Inspector</h2>
         <p className="inspector__empty">
-          Select a Mastery to edit orbit order/angle. Notable↔Small links toggle on reconnect and
-          can be managed here.
+          Select a Mastery to edit orbit order/angle. Passive links toggle on reconnect and
+          can be managed here (not within the same orbit).
         </p>
       </aside>
     )
@@ -216,7 +216,7 @@ export function Inspector({
               <h3>Links</h3>
             </div>
             {links.length === 0 ? (
-              <p className="inspector__empty">No Notable↔Small links yet.</p>
+              <p className="inspector__empty">No passive links yet.</p>
             ) : (
               <ul className="link-list">
                 {links.map((link) => (

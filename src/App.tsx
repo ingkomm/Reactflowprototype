@@ -94,10 +94,10 @@ function resolveMasteryPair(
   return null
 }
 
-function isNotableSmallPair(source: PassiveFlowNode, target: PassiveFlowNode) {
+function isPassiveLinkPair(source: PassiveFlowNode, target: PassiveFlowNode) {
   const a = (source.data as PassiveNodeData).kind
   const b = (target.data as PassiveNodeData).kind
-  return (a === 'notable' && b === 'small') || (a === 'small' && b === 'notable')
+  return isSatelliteKind(a) && isSatelliteKind(b)
 }
 
 function findLinkEdge(edges: Edge[], a: string, b: string) {
@@ -238,12 +238,11 @@ export default function App() {
   const linkCandidates = useMemo(() => {
     if (!selectedNode || !selectedData) return []
     if (!isSatelliteKind(selectedData.kind)) return []
-    const wantKind: PassiveKind = selectedData.kind === 'notable' ? 'small' : 'notable'
     const linked = new Set(selectedLinks.map((l) => l.peerId))
     return nodes
       .filter((n) => {
         const d = n.data as PassiveNodeData
-        if (n.id === selectedNode.id || d.kind !== wantKind || linked.has(n.id)) return false
+        if (n.id === selectedNode.id || linked.has(n.id) || !isSatelliteKind(d.kind)) return false
         // No links inside the same mastery orbit.
         if (shareSameOrbit({ data: selectedData }, { data: d })) return false
         return true
@@ -260,7 +259,7 @@ export default function App() {
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
       if (resolveMasteryPair(source, target) !== null) return true
-      if (!isNotableSmallPair(source, target)) return false
+      if (!isPassiveLinkPair(source, target)) return false
       return !shareSameOrbit(
         { data: source.data as PassiveNodeData },
         { data: target.data as PassiveNodeData },
@@ -324,7 +323,7 @@ export default function App() {
         return
       }
 
-      if (!isNotableSmallPair(source, target)) return
+      if (!isPassiveLinkPair(source, target)) return
 
       if (
         shareSameOrbit(
@@ -443,7 +442,7 @@ export default function App() {
       if (!selectedId) return
       const source = nodes.find((n) => n.id === selectedId)
       const target = nodes.find((n) => n.id === peerId)
-      if (!source || !target || !isNotableSmallPair(source, target)) return
+      if (!source || !target || !isPassiveLinkPair(source, target)) return
       if (
         shareSameOrbit(
           { data: source.data as PassiveNodeData },
@@ -560,9 +559,7 @@ export default function App() {
             e.source === nodeId ? kind : (sourceNode.data as PassiveNodeData).kind
           const tk =
             e.target === nodeId ? kind : (targetNode.data as PassiveNodeData).kind
-          return (
-            (sk === 'notable' && tk === 'small') || (sk === 'small' && tk === 'notable')
-          )
+          return isSatelliteKind(sk) && isSatelliteKind(tk)
         }),
       )
     },
@@ -732,8 +729,8 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            Same-orbit passives have no links — orbit only. Notable↔Small links work between
-            different orbits. More training bands → brighter glow.
+            Same-orbit passives have no links — orbit only. Off-orbit links work for
+            Notable↔Small, Notable↔Notable, and Small↔Small.
           </p>
         </section>
 
