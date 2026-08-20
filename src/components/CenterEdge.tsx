@@ -8,15 +8,14 @@ import {
 
 export type CenterFlowEdge = Edge<Record<string, never>, 'center'>
 
-/** Match mastery orbit: teal at ~55% opacity. */
+/** Match mastery orbit: 1px teal at 55% opacity. */
 const LINK_STROKE = 'color-mix(in srgb, #3db8a8 55%, transparent)'
 const LINK_STROKE_SELECTED = 'color-mix(in srgb, #3db8a8 78%, transparent)'
-const LINK_WIDTH = 1.25
-const LINK_DASH = '5 5'
-/** Half-gap between the two parallel strokes (px in flow space). */
-const DOUBLE_OFFSET = 2.2
+const LINK_WIDTH = 1
+/** Half-gap between the two parallel solid strokes. */
+const DOUBLE_OFFSET = 2
 
-/** Straight double-line edge through each node's geometric center. */
+/** Straight solid double-line edge through each node's geometric center. */
 export function CenterEdge({
   id,
   source,
@@ -63,13 +62,11 @@ export function CenterEdge({
   const lineStyle = {
     stroke,
     strokeWidth: LINK_WIDTH,
-    strokeDasharray: LINK_DASH,
     cursor: 'pointer' as const,
   }
 
   return (
     <>
-      {/* Invisible hit target along the center line */}
       <BaseEdge
         id={`${id}-hit`}
         path={getStraightPath({ sourceX, sourceY, targetX, targetY })[0]}

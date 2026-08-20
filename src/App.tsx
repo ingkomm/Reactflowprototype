@@ -1212,8 +1212,7 @@ export default function App() {
             connectionLineType={ConnectionLineType.Straight}
             connectionLineStyle={{
               stroke: 'color-mix(in srgb, #3db8a8 55%, transparent)',
-              strokeWidth: 1.25,
-              strokeDasharray: '5 5',
+              strokeWidth: 1,
             }}
             fitView
             elevateNodesOnSelect
@@ -1222,8 +1221,7 @@ export default function App() {
               type: 'center',
               style: {
                 stroke: 'color-mix(in srgb, #3db8a8 55%, transparent)',
-                strokeWidth: 1.25,
-                strokeDasharray: '5 5',
+                strokeWidth: 1,
               },
               zIndex: 0,
             }}
