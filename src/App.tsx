@@ -21,8 +21,15 @@ import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
 import type { PassiveKind, PassiveNodeData, StageData } from './types'
-import { DEFAULT_ICON_BY_KIND, NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from './types'
-import { DEFAULT_ICON_ID_BY_KIND } from './icons'
+import { PASSIVE_KIND_LABEL } from './types'
+import {
+  buildSeedClasses,
+  DEFAULT_CLASS_ID_BY_KIND,
+  resolvePassiveClass,
+  type PassiveClass,
+} from './passiveClass'
+import { PassiveClassProvider } from './PassiveClassContext'
+import { ClassManager } from './components/ClassManager'
 import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
 import {
   DEFAULT_ORBIT_RADIUS,
@@ -60,8 +67,7 @@ function createPassiveData(
       | 'orbitStartAngle'
       | 'orbitOrder'
       | 'masteryId'
-      | 'iconColor'
-      | 'iconId'
+      | 'classId'
       | 'proficiency'
       | 'power'
       | 'stages'
@@ -74,8 +80,7 @@ function createPassiveData(
     proficiency: extras.proficiency ?? 0,
     power: extras.power ?? 0,
     stages: extras.stages ?? [createStage(1)],
-    iconColor: extras.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
-    iconId: extras.iconId ?? DEFAULT_ICON_ID_BY_KIND[kind],
+    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
     ...(kind === 'mastery'
       ? {
           orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -136,8 +141,7 @@ function buildPastedNode(
     proficiency: source.proficiency,
     power: source.power,
     stages,
-    iconColor: source.iconColor,
-    iconId: source.iconId,
+    classId: source.classId,
     ...(kind === 'mastery'
       ? {
           orbitRadius: source.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -225,8 +229,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         orbitRadius: 170,
         orbitStartAngle: -90,
         orbitOrder: danceOrbitOrder,
-        iconColor: NODE_ICON_COLORS[7],
-        iconId: 'da-disco',
+        classId: 'm-dance',
       }),
     },
     {
@@ -242,8 +245,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '프리스타일', goal: 4, logged: 2 },
         ]),
         masteryId: danceMasteryId,
-        iconColor: NODE_ICON_COLORS[5],
-        iconId: 'da-headphones',
+        classId: 'n-hiphop',
       }),
     },
     {
@@ -259,8 +261,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '포인트 안무', goal: 3, logged: 3 },
         ]),
         masteryId: danceMasteryId,
-        iconColor: NODE_ICON_COLORS[4],
-        iconId: 'da-note',
+        classId: 'n-kpop',
       }),
     },
     {
@@ -273,8 +274,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 4,
         stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 3 }]),
         masteryId: danceMasteryId,
-        iconColor: NODE_ICON_COLORS[2],
-        iconId: 'da-spark',
+        classId: 's-basic',
       }),
     },
     {
@@ -287,8 +287,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 5,
         stages: defaultStagesForSeed([{ label: '그루브', goal: 3, logged: 2 }]),
         masteryId: danceMasteryId,
-        iconColor: NODE_ICON_COLORS[8],
-        iconId: 'da-shoe',
+        classId: 's-footwork',
       }),
     },
     {
@@ -301,8 +300,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 2,
         stages: defaultStagesForSeed([{ label: '유연성', goal: 3, logged: 1 }]),
         masteryId: danceMasteryId,
-        iconColor: NODE_ICON_COLORS[11],
-        iconId: 'da-wave',
+        classId: 's-stretch',
       }),
     },
     {
@@ -321,8 +319,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         orbitRadius: 170,
         orbitStartAngle: -90,
         orbitOrder: gymOrbitOrder,
-        iconColor: NODE_ICON_COLORS[0],
-        iconId: 'fi-dumbbell',
+        classId: 'm-gym',
       }),
     },
     {
@@ -338,8 +335,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '데드리프트', goal: 5, logged: 4 },
         ]),
         masteryId: gymMasteryId,
-        iconColor: NODE_ICON_COLORS[8],
-        iconId: 'fi-kettle',
+        classId: 'n-strength',
       }),
     },
     {
@@ -355,8 +351,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '사이클', goal: 4, logged: 2 },
         ]),
         masteryId: gymMasteryId,
-        iconColor: NODE_ICON_COLORS[6],
-        iconId: 'fi-runner',
+        classId: 'n-cardio',
       }),
     },
     {
@@ -369,8 +364,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 7,
         stages: defaultStagesForSeed([{ label: '런지', goal: 4, logged: 3 }]),
         masteryId: gymMasteryId,
-        iconColor: NODE_ICON_COLORS[1],
-        iconId: 'fi-stretch',
+        classId: 's-legs',
       }),
     },
     {
@@ -383,8 +377,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 8,
         stages: defaultStagesForSeed([{ label: '풀업', goal: 5, logged: 4 }]),
         masteryId: gymMasteryId,
-        iconColor: NODE_ICON_COLORS[14],
-        iconId: 'fi-heart',
+        classId: 's-back',
       }),
     },
     {
@@ -397,8 +390,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 6,
         stages: defaultStagesForSeed([{ label: '인터벌', goal: 3, logged: 2 }]),
         masteryId: gymMasteryId,
-        iconColor: NODE_ICON_COLORS[9],
-        iconId: 'fi-timer',
+        classId: 's-run',
       }),
     },
     {
@@ -411,8 +403,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         power: 5,
         stages: defaultStagesForSeed([{ label: '플랭크', goal: 4, logged: 3 }]),
         masteryId: gymMasteryId,
-        iconColor: NODE_ICON_COLORS[3],
-        iconId: 'tr-flame',
+        classId: 's-core',
       }),
     },
   ]
@@ -435,6 +426,8 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
   const [inspectorWidth, setInspectorWidth] = useState(360)
+  const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
+  const [classManagerOpen, setClassManagerOpen] = useState(false)
   const resizingInspector = useRef(false)
   const clipboardRef = useRef<NodeClipboard | null>(null)
   const pasteSerialRef = useRef(0)
@@ -904,8 +897,7 @@ export default function App() {
               proficiency: data.proficiency,
               power: data.power,
               stages: data.stages,
-              iconColor: data.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
-              iconId: data.iconId ?? DEFAULT_ICON_ID_BY_KIND[kind],
+              classId: resolvePassiveClass(classes, data.classId, kind).id,
               ...(kind === 'mastery'
                 ? {
                     orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -974,7 +966,28 @@ export default function App() {
         }),
       )
     },
-    [commit, nodes, setEdges, setNodes],
+    [commit, nodes, setEdges, setNodes, classes, stack],
+  )
+
+  const handleClassesChange = useCallback(
+    (next: PassiveClass[]) => {
+      const removedIds = new Set(
+        classes.filter((c) => !next.some((n) => n.id === c.id)).map((c) => c.id),
+      )
+      setClasses(next)
+      if (removedIds.size === 0) return
+      setNodes((nds) =>
+        stack(
+          nds.map((node) => {
+            const data = node.data as PassiveNodeData
+            if (!removedIds.has(data.classId)) return node
+            const fallback = resolvePassiveClass(next, null, data.kind)
+            return { ...node, data: { ...data, classId: fallback.id } }
+          }),
+        ),
+      )
+    },
+    [classes, setNodes, stack],
   )
 
   const addNode = useCallback(() => {
@@ -991,7 +1004,7 @@ export default function App() {
     }
     setNodes((nds) => stack([...nds, newNode]))
     setSelectedId(id)
-  }, [addKind, commit, nodes.length, setNodes])
+  }, [addKind, commit, nodes.length, setNodes, stack])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -1149,6 +1162,7 @@ export default function App() {
   )
 
   return (
+    <PassiveClassProvider classes={classes}>
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar__brand">
@@ -1183,6 +1197,13 @@ export default function App() {
             disabled={!selectedId}
           >
             Delete Selected
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setClassManagerOpen(true)}
+          >
+            클래스
           </button>
         </div>
       </header>
@@ -1236,7 +1257,8 @@ export default function App() {
               zoomable
               nodeColor={(node) => {
                 const d = node.data as PassiveNodeData | undefined
-                return d?.iconColor ?? DEFAULT_ICON_BY_KIND[d?.kind ?? 'small']
+                if (!d) return '#9B9A97'
+                return resolvePassiveClass(classes, d.classId, d.kind).iconColor
               }}
               maskColor="rgba(8, 12, 16, 0.7)"
             />
@@ -1264,11 +1286,8 @@ export default function App() {
             linkCandidates={linkCandidates}
             onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
             onChangeKind={changeKind}
-            onChangeIconColor={(nodeId, iconColor) =>
-              updateNodeData(nodeId, (d) => ({ ...d, iconColor }))
-            }
-            onChangeIconId={(nodeId, iconId) =>
-              updateNodeData(nodeId, (d) => ({ ...d, iconId }))
+            onChangeClassId={(nodeId, classId) =>
+              updateNodeData(nodeId, (d) => ({ ...d, classId }))
             }
             onChangeProficiency={(nodeId, proficiency) =>
               updateNodeData(nodeId, (d) => ({ ...d, proficiency }))
@@ -1285,6 +1304,14 @@ export default function App() {
           />
         </div>
       </main>
+
+      <ClassManager
+        open={classManagerOpen}
+        classes={classes}
+        onClose={() => setClassManagerOpen(false)}
+        onChange={handleClassesChange}
+      />
     </div>
+    </PassiveClassProvider>
   )
 }

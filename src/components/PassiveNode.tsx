@@ -1,8 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { type CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
-import { DEFAULT_ICON_BY_KIND, PASSIVE_KIND_LABEL } from '../types'
-import { DEFAULT_ICON_ID_BY_KIND } from '../icons'
+import { PASSIVE_KIND_LABEL } from '../types'
 import {
   completedStageCount,
   isStageComplete,
@@ -11,6 +10,7 @@ import {
   stageLoggedCount,
 } from '../stage'
 import { DEFAULT_ORBIT_RADIUS, NODE_SIZE } from '../orbit'
+import { usePassiveClasses } from '../PassiveClassContext'
 import { IconGlyph } from './IconGlyph'
 import {
   TrainingBands,
@@ -22,13 +22,15 @@ import './PassiveNode.css'
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 
 export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
+  const { resolve } = usePassiveClasses()
+  const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
   const bandLevel = stageBandLevel(stages)
   const bandCount = stages.length
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
-  const iconColor = data.iconColor ?? DEFAULT_ICON_BY_KIND[data.kind]
-  const iconId = data.iconId ?? DEFAULT_ICON_ID_BY_KIND[data.kind]
+  const iconColor = passiveClass.iconColor
+  const iconId = passiveClass.iconId
   const outerBandR = outermostBandRadius(bandCount, nodeSize)
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
 
@@ -98,6 +100,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       <div className="passive-node__tooltip" role="tooltip">
         <p className="passive-node__tooltip-title">{data.label}</p>
         <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
+        <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
         <p className="passive-node__tooltip-meta">
           숙련도 {data.proficiency} · 파워 {data.power}
         </p>

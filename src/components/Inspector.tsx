@@ -1,13 +1,11 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import type {
-  NodeIconColor,
   PassiveKind,
   PassiveNodeData,
   StageData,
   TrainingLog,
 } from '../types'
-import { NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from '../types'
-import { getIconDef } from '../icons'
+import { PASSIVE_KIND_LABEL } from '../types'
 import {
   createStage,
   createTrainingLog,
@@ -22,8 +20,9 @@ import {
   DEFAULT_ORBIT_START_ANGLE,
   orbitAngleOptions,
 } from '../orbit'
+import { classesForKind } from '../passiveClass'
+import { usePassiveClasses } from '../PassiveClassContext'
 import { IconGlyph } from './IconGlyph'
-import { IconPicker } from './IconPicker'
 import './Inspector.css'
 
 export type OrbitMember = {
@@ -55,8 +54,7 @@ type Props = {
   linkCandidates?: LinkCandidate[]
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
-  onChangeIconColor: (nodeId: string, color: NodeIconColor) => void
-  onChangeIconId: (nodeId: string, iconId: string) => void
+  onChangeClassId: (nodeId: string, classId: string) => void
   onChangeProficiency: (nodeId: string, proficiency: number) => void
   onChangePower: (nodeId: string, power: number) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
@@ -85,8 +83,7 @@ export function Inspector({
   linkCandidates = [],
   onRename,
   onChangeKind,
-  onChangeIconColor,
-  onChangeIconId,
+  onChangeClassId,
   onChangeProficiency,
   onChangePower,
   onChangeStages,
@@ -98,8 +95,8 @@ export function Inspector({
   onAddLink,
   onDeleteNode,
 }: Props) {
+  const { classes, resolve } = usePassiveClasses()
   const [addPeerId, setAddPeerId] = useState('')
-  const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [expandedStageIds, setExpandedStageIds] = useState<string[]>([])
   const [dragStageId, setDragStageId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
@@ -124,6 +121,8 @@ export function Inspector({
   const angleOptions = orbitAngleOptions()
   const startAngle = data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
   const stages = sortedStages(data.stages ?? [])
+  const kindClasses = classesForKind(classes, data.kind)
+  const currentClass = resolve(data.classId, data.kind)
 
   const patchStages = (next: StageData[]) => {
     onChangeStages(nodeId, reindexStages(next))
@@ -283,41 +282,29 @@ export function Inspector({
       </div>
 
       <div className="field">
-        <span>Icon</span>
-        <button
-          type="button"
-          className="icon-open-btn"
-          onClick={() => setIconPickerOpen(true)}
-        >
-          <span className="icon-open-btn__preview" style={{ color: data.iconColor }}>
-            <IconGlyph iconId={data.iconId} />
-          </span>
-          <span className="icon-open-btn__meta">
-            <strong>{getIconDef(data.iconId).label}</strong>
-            <small>아이콘 셋 열기</small>
-          </span>
-        </button>
-      </div>
-
-      <div className="field">
-        <span>Icon color</span>
-        <div className="color-grid" role="listbox" aria-label="Node icon color">
-          {NODE_ICON_COLORS.map((color) => {
-            const selected = data.iconColor === color
+        <span>클래스</span>
+        <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
+          {kindClasses.map((cls) => {
+            const selected = currentClass.id === cls.id
             return (
               <button
-                key={color}
+                key={cls.id}
                 type="button"
                 role="option"
                 aria-selected={selected}
-                className={`color-swatch${selected ? ' is-selected' : ''}`}
-                style={{ background: color }}
-                title={color}
-                onClick={() => onChangeIconColor(nodeId, color)}
-              />
+                className={`class-pick${selected ? ' is-selected' : ''}`}
+                title={cls.label}
+                onClick={() => onChangeClassId(nodeId, cls.id)}
+              >
+                <span className="class-pick__icon" style={{ color: cls.iconColor }}>
+                  <IconGlyph iconId={cls.iconId} />
+                </span>
+                <span className="class-pick__label">{cls.label}</span>
+              </button>
             )
           })}
         </div>
+        <p className="field-hint">아이콘·색상은 우측 상단 클래스 관리에서 편집합니다.</p>
       </div>
 
       {data.kind === 'mastery' && (
@@ -660,13 +647,6 @@ export function Inspector({
           </ul>
         )}
       </div>
-
-      <IconPicker
-        open={iconPickerOpen}
-        value={data.iconId}
-        onClose={() => setIconPickerOpen(false)}
-        onSelect={(iconId) => onChangeIconId(nodeId, iconId)}
-      />
     </aside>
   )
 }

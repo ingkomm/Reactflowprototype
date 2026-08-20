@@ -58,10 +58,11 @@ export type PassiveNodeData = {
   power: number
   /** Ordered stages; each owns a ring and its training log. */
   stages: StageData[]
-  /** Solid tint for the vector icon face. */
-  iconColor: NodeIconColor
-  /** Monochrome vector infographic id from the icon sets. */
-  iconId: string
+  /**
+   * Passive class id for this node's kind.
+   * Icon + color come from the class catalog (not stored per-node).
+   */
+  classId: string
   /** Mastery only: radius of the circular orbit for attached passives. */
   orbitRadius?: number
   /**
