@@ -12,7 +12,11 @@ import {
 } from '../stage'
 import { DEFAULT_ORBIT_RADIUS, NODE_SIZE } from '../orbit'
 import { IconGlyph } from './IconGlyph'
-import { TrainingBands, labelBelowBandOffset } from './TrainingBands'
+import {
+  TrainingBands,
+  labelBelowBandOffset,
+  outermostBandRadius,
+} from './TrainingBands'
 import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
@@ -20,15 +24,20 @@ export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const stages = data.stages ?? []
   const bandLevel = stageBandLevel(stages)
+  const bandCount = stages.length
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = data.iconColor ?? DEFAULT_ICON_BY_KIND[data.kind]
   const iconId = data.iconId ?? DEFAULT_ICON_ID_BY_KIND[data.kind]
-  const labelOffset = labelBelowBandOffset(stages.length, nodeSize)
+  const outerBandR = outermostBandRadius(bandCount, nodeSize)
+  const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
 
-  const glowBlur = 16 + bandLevel * 10
-  const glowAlpha = Math.min(0.92, 0.22 + bandLevel * 0.14)
-  const haloStrength = Math.min(0.85, bandLevel * 0.16)
+  // Outer glow scales with band count + in-progress fill.
+  const glowBlur = bandCount === 0 ? 0 : 12 + bandLevel * 10
+  const glowAlpha =
+    bandCount === 0 ? 0 : Math.min(0.95, 0.28 + bandLevel * 0.16)
+  const haloStrength =
+    bandCount === 0 ? 0 : Math.min(0.92, 0.28 + bandLevel * 0.18)
 
   const ordered = sortedStages(stages)
   const done = completedStageCount(stages)
@@ -37,7 +46,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   return (
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
-        stages.length > 0 ? ' has-bands' : ''
+        bandCount > 0 ? ' has-bands' : ''
       }`}
       style={
         {
@@ -45,6 +54,8 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--glow-alpha': String(glowAlpha),
           '--halo-strength': String(haloStrength),
           '--band-level': String(bandLevel),
+          '--band-count': String(bandCount),
+          '--outer-band-r': `${outerBandR}px`,
           '--icon-color': iconColor,
           '--label-offset': `${labelOffset}px`,
         } as CSSProperties

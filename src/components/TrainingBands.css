@@ -6,6 +6,10 @@
   pointer-events: none;
   z-index: 1;
   overflow: visible;
+  filter: drop-shadow(
+    0 0 calc(2px + var(--band-level) * 2.5px)
+      color-mix(in srgb, var(--icon-color) calc(28% + var(--band-level) * 12%), transparent)
+  );
 }
 
 .training-bands__cell {
@@ -22,5 +26,8 @@
 .training-bands__complete {
   stroke: color-mix(in srgb, var(--icon-color) 60%, white);
   opacity: 0.92;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--icon-color) 75%, transparent));
+  filter: drop-shadow(
+    0 0 calc(4px + var(--band-level) * 1.5px)
+      color-mix(in srgb, var(--icon-color) calc(65% + var(--band-level) * 8%), transparent)
+  );
 }
