@@ -8,7 +8,7 @@ import {
   useNodesState,
   useEdgesState,
   ConnectionMode,
-  MarkerType,
+  ConnectionLineType,
   type Connection,
   type Edge,
   type Node,
@@ -18,12 +18,14 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
+import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
 import type { PassiveKind, PassiveNodeData, TrainingEntry } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
 import './App.css'
 
 const nodeTypes = { passive: PassiveNode }
+const edgeTypes = { center: CenterEdge }
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`
@@ -81,6 +83,7 @@ const initialNodes: PassiveFlowNode[] = [
 const initialEdges: Edge[] = [
   {
     id: 'e-root-a',
+    type: 'center',
     source: 'root',
     target: 'small-a',
     sourceHandle: 'center',
@@ -88,6 +91,7 @@ const initialEdges: Edge[] = [
   },
   {
     id: 'e-root-b',
+    type: 'center',
     source: 'root',
     target: 'small-b',
     sourceHandle: 'center',
@@ -95,6 +99,7 @@ const initialEdges: Edge[] = [
   },
   {
     id: 'e-root-m',
+    type: 'center',
     source: 'root',
     target: 'mastery-a',
     sourceHandle: 'center',
@@ -125,6 +130,7 @@ export default function App() {
         addEdge(
           {
             ...connection,
+            type: 'center',
             sourceHandle: connection.sourceHandle ?? 'center',
             targetHandle: connection.targetHandle ?? 'center-target',
           },
@@ -239,14 +245,16 @@ export default function App() {
             onPaneClick={onPaneClick}
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
             connectionRadius={28}
+            connectionLineType={ConnectionLineType.Straight}
+            connectionLineStyle={{ stroke: '#7f8fa0', strokeWidth: 2 }}
             fitView
             deleteKeyCode={['Backspace', 'Delete']}
             defaultEdgeOptions={{
-              type: 'straight',
+              type: 'center',
               style: { stroke: '#7f8fa0', strokeWidth: 2 },
-              markerEnd: { type: MarkerType.ArrowClosed, color: '#7f8fa0', width: 16, height: 16 },
             }}
             proOptions={{ hideAttribution: true }}
           >

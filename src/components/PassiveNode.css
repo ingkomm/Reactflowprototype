@@ -109,8 +109,8 @@
 }
 
 .passive-node__handle {
-  width: 100% !important;
-  height: 100% !important;
+  width: 2px !important;
+  height: 2px !important;
   min-width: 0 !important;
   min-height: 0 !important;
   border: none !important;
@@ -121,8 +121,21 @@
   right: auto !important;
   bottom: auto !important;
   transform: translate(-50%, -50%) !important;
-  opacity: 0;
+  opacity: 1;
   z-index: 2;
+  pointer-events: all;
+}
+
+/* Expand click/drag hit area without moving the measured center point */
+.passive-node__handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--node-size);
+  height: var(--node-size);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
 .passive-node__connect-dot {
