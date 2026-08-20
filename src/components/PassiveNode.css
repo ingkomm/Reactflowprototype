@@ -4,6 +4,10 @@
   --core: #1f2a33;
   --accent: #c9d2db;
   --glow: rgba(201, 210, 219, 0.25);
+  --glow-blur: 16px;
+  --glow-alpha: 0.25;
+  --halo-strength: 0;
+  --band-level: 0;
 
   position: relative;
   width: var(--node-size);
@@ -55,6 +59,27 @@
   z-index: 0;
 }
 
+.passive-node__halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% + 28px + var(--band-level) * 18px);
+  height: calc(100% + 28px + var(--band-level) * 18px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--halo-strength);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 70%, white) 0%,
+    color-mix(in srgb, var(--accent) 35%, transparent) 42%,
+    transparent 72%
+  );
+  filter: blur(calc(6px + var(--band-level) * 4px));
+  transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease;
+}
+
 .passive-node__ring {
   position: absolute;
   inset: 0;
@@ -62,17 +87,22 @@
   border: 3px solid var(--ring);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent),
-    0 0 18px var(--glow);
+    0 0 var(--glow-blur) rgba(255, 255, 255, calc(var(--glow-alpha) * 0.35)),
+    0 0 calc(var(--glow-blur) * 1.4) color-mix(in srgb, var(--accent) calc(var(--glow-alpha) * 100%), transparent);
   background:
     radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
     var(--core);
+}
+
+.passive-node.has-bands .passive-node__ring {
+  border-color: color-mix(in srgb, var(--ring) 55%, white);
 }
 
 .passive-node.is-selected .passive-node__ring {
   box-shadow:
     0 0 0 2px #f4f7fa,
     0 0 0 5px color-mix(in srgb, var(--ring) 70%, white),
-    0 0 22px var(--glow);
+    0 0 var(--glow-blur) color-mix(in srgb, var(--accent) calc(var(--glow-alpha) * 100%), transparent);
 }
 
 .passive-node__core {

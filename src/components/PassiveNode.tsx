@@ -1,7 +1,14 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import type { CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
-import { DEFAULT_ORBIT_RADIUS, NODE_SIZE, totalTrainingCount, trainingProgressLabel } from '../orbit'
+import {
+  DEFAULT_ORBIT_RADIUS,
+  NODE_SIZE,
+  totalTrainingCount,
+  trainingBandLevel,
+  trainingProgressLabel,
+} from '../orbit'
 import { TrainingBands } from './TrainingBands'
 import './PassiveNode.css'
 
@@ -9,12 +16,27 @@ export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 
 export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const total = totalTrainingCount(data.trainings)
+  const bandLevel = trainingBandLevel(total)
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
 
+  const glowBlur = 16 + bandLevel * 14
+  const glowAlpha = Math.min(0.92, 0.22 + bandLevel * 0.2)
+  const haloStrength = Math.min(0.85, bandLevel * 0.22)
+
   return (
     <div
-      className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}`}
+      className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
+        bandLevel > 0 ? ' has-bands' : ''
+      }`}
+      style={
+        {
+          '--glow-blur': `${glowBlur}px`,
+          '--glow-alpha': String(glowAlpha),
+          '--halo-strength': String(haloStrength),
+          '--band-level': String(bandLevel),
+        } as CSSProperties
+      }
       title={`${data.label} · ${PASSIVE_KIND_LABEL[data.kind]}`}
     >
       {data.kind === 'mastery' && (
@@ -25,6 +47,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
         />
       )}
 
+      <div className="passive-node__halo" aria-hidden />
       <TrainingBands total={total} nodeSize={nodeSize} />
 
       <Handle

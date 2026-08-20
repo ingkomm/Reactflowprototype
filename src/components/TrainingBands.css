@@ -9,12 +9,14 @@
 }
 
 .training-bands__full {
-  stroke: color-mix(in srgb, var(--accent) 75%, white);
-  opacity: 0.85;
+  stroke: color-mix(in srgb, var(--accent) 55%, white);
+  opacity: calc(0.55 + min(0.4, var(--band-level) * 0.12));
+  filter: drop-shadow(0 0 calc(2px + var(--band-level) * 1.5px) color-mix(in srgb, var(--accent) 80%, white));
 }
 
 .training-bands__partial {
-  stroke: color-mix(in srgb, var(--accent) 90%, white);
-  opacity: 0.95;
+  stroke: color-mix(in srgb, var(--accent) 40%, white);
+  opacity: calc(0.7 + min(0.3, var(--band-level) * 0.1));
   stroke-linecap: round;
+  filter: drop-shadow(0 0 calc(3px + var(--band-level) * 2px) color-mix(in srgb, var(--accent) 90%, white));
 }

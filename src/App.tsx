@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -26,9 +26,12 @@ import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   getOrderedOrbitSatellites,
+  isOrbitSequentialEdgeId,
   isSatelliteKind,
   layoutMasteryOrbit,
+  orbitEdgesFingerprint,
   snapOrbitAngle,
+  syncAllOrbitSequentialEdges,
   withMasteryDragFlags,
 } from './orbit'
 import './App.css'
@@ -159,10 +162,7 @@ const seedNodes: PassiveFlowNode[] = withMasteryDragFlags(
   ),
 )
 
-const initialEdges: Edge[] = [
-  passiveLinkEdge('notable-a', 'small-a'),
-  passiveLinkEdge('notable-a', 'small-b'),
-]
+const initialEdges: Edge[] = syncAllOrbitSequentialEdges(seedNodes, [])
 
 const kindAccent: Record<PassiveKind, string> = {
   small: '#8b9aa8',
@@ -217,9 +217,19 @@ export default function App() {
           peerId,
           peerLabel: peerData?.label ?? peerId,
           peerKind: peerData?.kind ?? 'small',
+          managed: isOrbitSequentialEdgeId(e.id),
         }
       })
   }, [edges, nodes, selectedData, selectedNode])
+
+  // Keep Notable↔Small orbit-neighbor links in sync with clockwise orbit order.
+  useEffect(() => {
+    setEdges((eds) => {
+      const synced = syncAllOrbitSequentialEdges(nodes, eds)
+      if (orbitEdgesFingerprint(synced) === orbitEdgesFingerprint(eds)) return eds
+      return synced
+    })
+  }, [nodes, setEdges])
 
   const linkCandidates = useMemo(() => {
     if (!selectedNode || !selectedData) return []
@@ -306,9 +316,17 @@ export default function App() {
 
       if (!isNotableSmallPair(source, target)) return
 
+      // Same-orbit consecutive links are auto-managed from orbit order.
+      const sourceMastery = (source.data as PassiveNodeData).masteryId
+      const targetMastery = (target.data as PassiveNodeData).masteryId
+      if (sourceMastery && sourceMastery === targetMastery) {
+        return
+      }
+
       setEdges((eds) => {
         const existing = findLinkEdge(eds, source.id, target.id)
         if (existing) {
+          if (isOrbitSequentialEdgeId(existing.id)) return eds
           return eds.filter((e) => e.id !== existing.id)
         }
         return [...eds, passiveLinkEdge(source.id, target.id)]
@@ -404,6 +422,7 @@ export default function App() {
 
   const removeLink = useCallback(
     (edgeId: string) => {
+      if (isOrbitSequentialEdgeId(edgeId)) return
       setEdges((eds) => eds.filter((e) => e.id !== edgeId))
     },
     [setEdges],
@@ -681,7 +700,7 @@ export default function App() {
             }}
             proOptions={{ hideAttribution: true }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#3a4654" />
+            <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
             <Controls position="top-left" />
             <MiniMap
               pannable
@@ -695,8 +714,8 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            Notable↔Small links toggle on reconnect. Mastery Edit sets clockwise orbit order and
-            30° start angle. Outer bands fill every 3 trainings.
+            Same-orbit Notable↔Small nodes auto-link clockwise in order. Extra manual links work
+            off-orbit. More training bands → brighter glow.
           </p>
         </section>
 
