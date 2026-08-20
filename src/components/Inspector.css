@@ -84,32 +84,6 @@
   outline-offset: 1px;
 }
 
-.icon-swatches {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 6px;
-}
-
-.icon-swatch {
-  width: 100%;
-  aspect-ratio: 1;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.icon-swatch:hover {
-  transform: translateY(-1px);
-}
-
-.icon-swatch.is-active {
-  box-shadow:
-    0 0 0 2px #0b1016,
-    0 0 0 4px #eef3f7;
-}
-
 .training-list {
   list-style: none;
   margin: 0;

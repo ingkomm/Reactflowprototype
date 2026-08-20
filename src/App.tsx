@@ -21,7 +21,7 @@ import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
 import type { PassiveKind, PassiveNodeData, TrainingEntry } from './types'
-import { DEFAULT_ICON_BY_KIND, PASSIVE_KIND_LABEL } from './types'
+import { PASSIVE_KIND_LABEL } from './types'
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
@@ -50,17 +50,13 @@ function createPassiveData(
   label: string,
   trainings: TrainingEntry[] = [],
   extras: Partial<
-    Pick<
-      PassiveNodeData,
-      'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId' | 'iconColor'
-    >
+    Pick<PassiveNodeData, 'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId'>
   > = {},
 ): PassiveNodeData {
   return {
     label,
     kind,
     trainings,
-    iconColor: extras.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
     ...(kind === 'mastery'
       ? {
           orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -499,7 +495,6 @@ export default function App() {
               label: data.label,
               kind,
               trainings: data.trainings,
-              iconColor: data.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
               ...(kind === 'mastery'
                 ? {
                     orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -746,9 +741,6 @@ export default function App() {
           linkCandidates={linkCandidates}
           onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
           onChangeKind={changeKind}
-          onChangeIconColor={(nodeId, color) =>
-            updateNodeData(nodeId, (d) => ({ ...d, iconColor: color }))
-          }
           onChangeOrbitRadius={changeOrbitRadius}
           onChangeOrbitStartAngle={changeOrbitStartAngle}
           onChangeOrbitOrder={changeOrbitOrder}
