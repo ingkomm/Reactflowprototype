@@ -21,13 +21,17 @@ import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
 import type { PassiveKind, PassiveNodeData, TrainingEntry } from './types'
-import { PASSIVE_KIND_LABEL } from './types'
+import { DEFAULT_ICON_BY_KIND, NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from './types'
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
+  findNearestMastery,
   getOrderedOrbitSatellites,
   isSatelliteKind,
   layoutMasteryOrbit,
+  ORBIT_ATTACH_SLACK,
+  ORBIT_DETACH_SLACK,
+  orbitOrderByDropAngle,
   shareSameOrbit,
   snapOrbitAngle,
   withMasteryDragFlags,
@@ -50,13 +54,17 @@ function createPassiveData(
   label: string,
   trainings: TrainingEntry[] = [],
   extras: Partial<
-    Pick<PassiveNodeData, 'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId'>
+    Pick<
+      PassiveNodeData,
+      'orbitRadius' | 'orbitStartAngle' | 'orbitOrder' | 'masteryId' | 'iconColor'
+    >
   > = {},
 ): PassiveNodeData {
   return {
     label,
     kind,
     trainings,
+    iconColor: extras.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
     ...(kind === 'mastery'
       ? {
           orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -107,71 +115,196 @@ function findLinkEdge(edges: Edge[], a: string, b: string) {
   )
 }
 
-const seedMasteryId = 'mastery-a'
-const seedOrbitOrder = ['notable-a', 'small-a', 'small-b']
+const danceMasteryId = 'mastery-dance'
+const gymMasteryId = 'mastery-gym'
+const danceOrbitOrder = [
+  'notable-hiphop',
+  'notable-kpop',
+  'small-basic',
+  'small-footwork',
+  'small-stretch',
+]
+const gymOrbitOrder = [
+  'notable-strength',
+  'notable-cardio',
+  'small-legs',
+  'small-back',
+  'small-run',
+  'small-core',
+]
 
-const seedNodes: PassiveFlowNode[] = withMasteryDragFlags(
-  layoutMasteryOrbit(
-    [
-      {
-        id: seedMasteryId,
-        type: 'passive',
-        position: { x: 420, y: 280 },
-        dragHandle: '.node-drag-handle',
-        data: createPassiveData(
-          'mastery',
-          'Combo Mastery',
-          [createTraining('Slow reps', 4), createTraining('Live pace', 2)],
-          { orbitRadius: 180, orbitStartAngle: -90, orbitOrder: seedOrbitOrder },
-        ),
-      },
-      {
-        id: 'notable-a',
-        type: 'passive',
-        position: { x: 0, y: 0 },
-        dragHandle: '.node-drag-handle',
-        data: createPassiveData(
-          'notable',
-          'Core Focus',
-          [createTraining('Baseline', 3), createTraining('Review', 1)],
-          { masteryId: seedMasteryId },
-        ),
-      },
-      {
-        id: 'small-a',
-        type: 'passive',
-        position: { x: 0, y: 0 },
-        dragHandle: '.node-drag-handle',
-        data: createPassiveData('small', 'Footwork', [createTraining('Drill', 5)], {
-          masteryId: seedMasteryId,
-        }),
-      },
-      {
-        id: 'small-b',
-        type: 'passive',
-        position: { x: 0, y: 0 },
-        dragHandle: '.node-drag-handle',
-        data: createPassiveData('small', 'Timing', [createTraining('Metronome', 2)], {
-          masteryId: seedMasteryId,
-        }),
-      },
-    ],
-    seedMasteryId,
-  ),
-)
+function buildSeedNodes(): PassiveFlowNode[] {
+  const base: PassiveFlowNode[] = [
+    {
+      id: danceMasteryId,
+      type: 'passive',
+      position: { x: 260, y: 300 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData(
+        'mastery',
+        '댄스',
+        [createTraining('안무 리허설', 3), createTraining('공연 연습', 2)],
+        {
+          orbitRadius: 170,
+          orbitStartAngle: -90,
+          orbitOrder: danceOrbitOrder,
+          iconColor: NODE_ICON_COLORS[7],
+        },
+      ),
+    },
+    {
+      id: 'notable-hiphop',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData(
+        'notable',
+        '힙합',
+        [createTraining('기초 스텝', 4), createTraining('프리스타일', 2)],
+        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[5] },
+      ),
+    },
+    {
+      id: 'notable-kpop',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData(
+        'notable',
+        'K-pop',
+        [createTraining('안무 암기', 5), createTraining('포인트 안무', 3)],
+        { masteryId: danceMasteryId, iconColor: NODE_ICON_COLORS[4] },
+      ),
+    },
+    {
+      id: 'small-basic',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '기본기', [createTraining('아이솔레이션', 3)], {
+        masteryId: danceMasteryId,
+        iconColor: NODE_ICON_COLORS[2],
+      }),
+    },
+    {
+      id: 'small-footwork',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '풋워크', [createTraining('그루브', 2)], {
+        masteryId: danceMasteryId,
+        iconColor: NODE_ICON_COLORS[8],
+      }),
+    },
+    {
+      id: 'small-stretch',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '스트레칭', [createTraining('유연성', 1)], {
+        masteryId: danceMasteryId,
+        iconColor: NODE_ICON_COLORS[11],
+      }),
+    },
+    {
+      id: gymMasteryId,
+      type: 'passive',
+      position: { x: 760, y: 300 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData(
+        'mastery',
+        '운동',
+        [createTraining('워밍업', 4), createTraining('쿨다운', 2)],
+        {
+          orbitRadius: 170,
+          orbitStartAngle: -90,
+          orbitOrder: gymOrbitOrder,
+          iconColor: NODE_ICON_COLORS[0],
+        },
+      ),
+    },
+    {
+      id: 'notable-strength',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData(
+        'notable',
+        '근력',
+        [createTraining('스쿼트', 6), createTraining('데드리프트', 4)],
+        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[8] },
+      ),
+    },
+    {
+      id: 'notable-cardio',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData(
+        'notable',
+        '유산소',
+        [createTraining('러닝', 5), createTraining('사이클', 2)],
+        { masteryId: gymMasteryId, iconColor: NODE_ICON_COLORS[6] },
+      ),
+    },
+    {
+      id: 'small-legs',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '하체', [createTraining('런지', 3)], {
+        masteryId: gymMasteryId,
+        iconColor: NODE_ICON_COLORS[1],
+      }),
+    },
+    {
+      id: 'small-back',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '등', [createTraining('풀업', 4)], {
+        masteryId: gymMasteryId,
+        iconColor: NODE_ICON_COLORS[14],
+      }),
+    },
+    {
+      id: 'small-run',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '러닝', [createTraining('인터벌', 2)], {
+        masteryId: gymMasteryId,
+        iconColor: NODE_ICON_COLORS[9],
+      }),
+    },
+    {
+      id: 'small-core',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('small', '코어', [createTraining('플랭크', 3)], {
+        masteryId: gymMasteryId,
+        iconColor: NODE_ICON_COLORS[3],
+      }),
+    },
+  ]
 
-const initialEdges: Edge[] = []
-
-const kindAccent: Record<PassiveKind, string> = {
-  small: '#8b9aa8',
-  notable: '#d4a24c',
-  mastery: '#3db8a8',
+  return withMasteryDragFlags(
+    layoutMasteryOrbit(layoutMasteryOrbit(base, danceMasteryId), gymMasteryId),
+  )
 }
+
+const seedNodes = buildSeedNodes()
+
+const initialEdges: Edge[] = [
+  passiveLinkEdge('small-basic', 'small-legs'),
+  passiveLinkEdge('notable-hiphop', 'notable-strength'),
+]
 
 export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [selectedId, setSelectedId] = useState<string | null>(seedMasteryId)
+  const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
 
   const selectedNode = useMemo(
@@ -281,15 +414,8 @@ export default function App() {
           return {
             ...node,
             data: { ...data, masteryId },
-            draggable: false,
+            draggable: true,
           }
-        }
-        if (node.id === masteryId && data.kind === 'mastery') {
-          const order = [
-            ...(data.orbitOrder ?? []).filter((id) => id !== satelliteId),
-            satelliteId,
-          ]
-          return { ...node, data: { ...data, orbitOrder: order } }
         }
         if (oldMasteryId && node.id === oldMasteryId && data.kind === 'mastery') {
           return {
@@ -301,6 +427,14 @@ export default function App() {
           }
         }
         return node
+      })
+
+      const order = orbitOrderByDropAngle(next, masteryId, satelliteId)
+      next = next.map((node) => {
+        if (node.id !== masteryId) return node
+        const data = node.data as PassiveNodeData
+        if (data.kind !== 'mastery') return node
+        return { ...node, data: { ...data, orbitOrder: order } }
       })
 
       next = layoutMasteryOrbit(next, masteryId)
@@ -495,6 +629,7 @@ export default function App() {
               label: data.label,
               kind,
               trainings: data.trainings,
+              iconColor: data.iconColor ?? DEFAULT_ICON_BY_KIND[kind],
               ...(kind === 'mastery'
                 ? {
                     orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
@@ -647,6 +782,111 @@ export default function App() {
     [setNodes],
   )
 
+  const onNodeDragStop = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      const data = node.data as PassiveNodeData
+      if (!isSatelliteKind(data.kind)) return
+
+      setNodes((nds) => {
+        let next = nds.map((n) =>
+          n.id === node.id ? { ...n, position: node.position } : n,
+        )
+        const satellite = next.find((n) => n.id === node.id)
+        if (!satellite) return nds
+
+        const currentMasteryId = (satellite.data as PassiveNodeData).masteryId ?? null
+
+        if (currentMasteryId) {
+          const mastery = next.find((n) => n.id === currentMasteryId)
+          if (mastery) {
+            const parentDist =
+              findNearestMastery([mastery, satellite], satellite)?.dist ?? Infinity
+            const radius =
+              (mastery.data as PassiveNodeData).orbitRadius ?? DEFAULT_ORBIT_RADIUS
+
+            if (parentDist > radius + ORBIT_DETACH_SLACK) {
+              next = next.map((n) => {
+                const d = n.data as PassiveNodeData
+                if (n.id === satellite.id) {
+                  return { ...n, data: { ...d, masteryId: null }, draggable: true }
+                }
+                if (n.id === currentMasteryId && d.kind === 'mastery') {
+                  return {
+                    ...n,
+                    data: {
+                      ...d,
+                      orbitOrder: (d.orbitOrder ?? []).filter((id) => id !== satellite.id),
+                    },
+                  }
+                }
+                return n
+              })
+              next = layoutMasteryOrbit(next, currentMasteryId)
+
+              const freeSat = next.find((n) => n.id === satellite.id)!
+              const other = findNearestMastery(next, freeSat)
+              if (
+                other &&
+                other.mastery.id !== currentMasteryId &&
+                other.dist <= other.radius + ORBIT_ATTACH_SLACK
+              ) {
+                const order = orbitOrderByDropAngle(next, other.mastery.id, freeSat.id)
+                next = next.map((n) => {
+                  const d = n.data as PassiveNodeData
+                  if (n.id === freeSat.id) {
+                    return {
+                      ...n,
+                      data: { ...d, masteryId: other.mastery.id },
+                      draggable: true,
+                    }
+                  }
+                  if (n.id === other.mastery.id && d.kind === 'mastery') {
+                    return { ...n, data: { ...d, orbitOrder: order } }
+                  }
+                  return n
+                })
+                next = layoutMasteryOrbit(next, other.mastery.id)
+              }
+
+              return withMasteryDragFlags(next)
+            }
+
+            const order = orbitOrderByDropAngle(next, currentMasteryId, satellite.id)
+            next = next.map((n) => {
+              if (n.id !== currentMasteryId) return n
+              const d = n.data as PassiveNodeData
+              return { ...n, data: { ...d, orbitOrder: order } }
+            })
+            return withMasteryDragFlags(layoutMasteryOrbit(next, currentMasteryId))
+          }
+        }
+
+        const nearest = findNearestMastery(next, satellite)
+        if (nearest && nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK) {
+          const order = orbitOrderByDropAngle(next, nearest.mastery.id, satellite.id)
+          next = next.map((n) => {
+            const d = n.data as PassiveNodeData
+            if (n.id === satellite.id) {
+              return {
+                ...n,
+                data: { ...d, masteryId: nearest.mastery.id },
+                draggable: true,
+              }
+            }
+            if (n.id === nearest.mastery.id && d.kind === 'mastery') {
+              return { ...n, data: { ...d, orbitOrder: order } }
+            }
+            return n
+          })
+          return withMasteryDragFlags(layoutMasteryOrbit(next, nearest.mastery.id))
+        }
+
+        return withMasteryDragFlags(next)
+      })
+    },
+    [setNodes],
+  )
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -699,6 +939,7 @@ export default function App() {
             onPaneClick={onPaneClick}
             onNodeClick={onNodeClick}
             onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
@@ -719,16 +960,16 @@ export default function App() {
               pannable
               zoomable
               nodeColor={(node) => {
-                const kind = (node.data as PassiveNodeData | undefined)?.kind ?? 'small'
-                return kindAccent[kind]
+                const d = node.data as PassiveNodeData | undefined
+                return d?.iconColor ?? DEFAULT_ICON_BY_KIND[d?.kind ?? 'small']
               }}
               maskColor="rgba(8, 12, 16, 0.7)"
             />
           </ReactFlow>
 
           <p className="canvas-hint">
-            Same-orbit passives have no links — orbit only. Off-orbit links work for
-            Notable↔Small, Notable↔Notable, and Small↔Small.
+            노드를 드래그해 오르빗 근처에 놓으면 포함되고, 바깥으로 빼면 해제됩니다.
+            같은 오르빗끼리는 링크 없음 · 호버 시 요약 툴팁.
           </p>
         </section>
 
@@ -741,6 +982,9 @@ export default function App() {
           linkCandidates={linkCandidates}
           onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
           onChangeKind={changeKind}
+          onChangeIconColor={(nodeId, iconColor) =>
+            updateNodeData(nodeId, (d) => ({ ...d, iconColor }))
+          }
           onChangeOrbitRadius={changeOrbitRadius}
           onChangeOrbitStartAngle={changeOrbitStartAngle}
           onChangeOrbitOrder={changeOrbitOrder}

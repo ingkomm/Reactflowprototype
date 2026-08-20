@@ -7,10 +7,40 @@ export type TrainingEntry = {
   note?: string
 }
 
+/** Notion-like solid icon palette (16). */
+export const NODE_ICON_COLORS = [
+  '#9B9A97',
+  '#64473A',
+  '#D9730D',
+  '#DFAB01',
+  '#0F7B6C',
+  '#0B6E99',
+  '#6940A5',
+  '#AD1A72',
+  '#E03E3E',
+  '#D3D1CB',
+  '#C4A484',
+  '#FFA344',
+  '#FFE066',
+  '#4DAB9A',
+  '#6CB6EA',
+  '#B395EB',
+] as const
+
+export type NodeIconColor = (typeof NODE_ICON_COLORS)[number]
+
+export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
+  small: '#9B9A97',
+  notable: '#D9730D',
+  mastery: '#0F7B6C',
+}
+
 export type PassiveNodeData = {
   label: string
   kind: PassiveKind
   trainings: TrainingEntry[]
+  /** Solid color that fills the circular node face. */
+  iconColor: NodeIconColor
   /** Mastery only: radius of the circular orbit for attached passives. */
   orbitRadius?: number
   /**

@@ -152,20 +152,16 @@ export function layoutMasteryOrbit(
     return {
       ...node,
       position: next,
-      draggable: false,
+      draggable: true,
     }
   })
 }
 
 export function withMasteryDragFlags(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
-  return nodes.map((node) => {
-    const data = node.data as PassiveNodeData
-    const lockedToOrbit = Boolean(data.masteryId) && isSatelliteKind(data.kind)
-    return {
-      ...node,
-      draggable: !lockedToOrbit,
-    }
-  })
+  return nodes.map((node) => ({
+    ...node,
+    draggable: true,
+  }))
 }
 
 export function totalTrainingCount(trainings: { count: number }[]) {
@@ -191,4 +187,65 @@ export function shareSameOrbit(
   const am = a.data.masteryId
   const bm = b.data.masteryId
   return Boolean(am && bm && am === bm)
+}
+
+export const ORBIT_ATTACH_SLACK = 56
+export const ORBIT_DETACH_SLACK = 72
+
+export function distanceBetweenCenters(a: PassiveFlowNode, b: PassiveFlowNode) {
+  const ca = nodeCenter(a)
+  const cb = nodeCenter(b)
+  return Math.hypot(ca.x - cb.x, ca.y - cb.y)
+}
+
+/** Nearest mastery by center distance. */
+export function findNearestMastery(nodes: PassiveFlowNode[], satellite: PassiveFlowNode) {
+  let best: { mastery: PassiveFlowNode; dist: number; radius: number } | null = null
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (data.kind !== 'mastery') continue
+    const dist = distanceBetweenCenters(satellite, node)
+    const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
+    if (!best || dist < best.dist) {
+      best = { mastery: node, dist, radius }
+    }
+  }
+  return best
+}
+
+/** Insert satellite into clockwise orbit order using drop angle around mastery. */
+export function orbitOrderByDropAngle(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+): string[] {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  if (!mastery || !satellite) return [satelliteId]
+
+  const mc = nodeCenter(mastery)
+  const start =
+    (((mastery.data as PassiveNodeData).orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) * Math.PI) /
+    180
+
+  const norm = (angle: number) => {
+    let rel = angle - start
+    while (rel < 0) rel += Math.PI * 2
+    while (rel >= Math.PI * 2) rel -= Math.PI * 2
+    return rel
+  }
+
+  const others = getOrderedOrbitSatellites(nodes, masteryId).filter((s) => s.id !== satelliteId)
+  const items = [
+    ...others.map((o) => {
+      const c = nodeCenter(o)
+      return { id: o.id, rel: norm(Math.atan2(c.y - mc.y, c.x - mc.x)) }
+    }),
+    (() => {
+      const c = nodeCenter(satellite)
+      return { id: satelliteId, rel: norm(Math.atan2(c.y - mc.y, c.x - mc.x)) }
+    })(),
+  ]
+  items.sort((a, b) => a.rel - b.rel)
+  return items.map((i) => i.id)
 }

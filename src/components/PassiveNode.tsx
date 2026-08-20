@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import type { CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
+import { DEFAULT_ICON_BY_KIND, PASSIVE_KIND_LABEL } from '../types'
 import {
   DEFAULT_ORBIT_RADIUS,
   NODE_SIZE,
@@ -17,10 +18,16 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const bandLevel = trainingBandLevel(total)
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
+  const iconColor = data.iconColor ?? DEFAULT_ICON_BY_KIND[data.kind]
 
   const glowBlur = 16 + bandLevel * 14
   const glowAlpha = Math.min(0.92, 0.22 + bandLevel * 0.2)
   const haloStrength = Math.min(0.85, bandLevel * 0.22)
+
+  const topSessions = [...data.trainings]
+    .filter((t) => t.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
 
   return (
     <div
@@ -33,9 +40,9 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--glow-alpha': String(glowAlpha),
           '--halo-strength': String(haloStrength),
           '--band-level': String(bandLevel),
+          '--icon-color': iconColor,
         } as CSSProperties
       }
-      title={data.label}
     >
       {data.kind === 'mastery' && (
         <div
@@ -64,10 +71,24 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       />
 
       <div className="passive-node__ring" aria-hidden />
-      <div className="passive-node__core node-drag-handle">
-        <strong className="passive-node__label">{data.label}</strong>
-        <span className="passive-node__trainings">{total}</span>
+      <div className="passive-node__hit node-drag-handle" />
+
+      <div className="passive-node__tooltip" role="tooltip">
+        <p className="passive-node__tooltip-title">{data.label}</p>
+        <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
+        <p className="passive-node__tooltip-meta">총 트레이닝 {total}회</p>
+        {topSessions.length > 0 && (
+          <ul className="passive-node__tooltip-list">
+            {topSessions.map((t) => (
+              <li key={t.id}>
+                {t.label} · {t.count}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
+
+      <span className="passive-node__trainings">{total}</span>
       <span className="passive-node__connect-dot" aria-hidden />
     </div>
   )

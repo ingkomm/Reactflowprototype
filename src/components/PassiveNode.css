@@ -3,6 +3,7 @@
   --ring: #7a8694;
   --core: #1f2a33;
   --accent: #c9d2db;
+  --icon-color: #9b9a97;
   --glow: rgba(201, 210, 219, 0.25);
   --glow-blur: 16px;
   --glow-alpha: 0.25;
@@ -72,8 +73,8 @@
   opacity: var(--halo-strength);
   background: radial-gradient(
     circle,
-    color-mix(in srgb, var(--accent) 70%, white) 0%,
-    color-mix(in srgb, var(--accent) 35%, transparent) 42%,
+    color-mix(in srgb, var(--icon-color) 70%, white) 0%,
+    color-mix(in srgb, var(--icon-color) 35%, transparent) 42%,
     transparent 72%
   );
   filter: blur(calc(6px + var(--band-level) * 4px));
@@ -84,68 +85,101 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 3px solid var(--ring);
+  border: 3px solid color-mix(in srgb, var(--icon-color) 55%, white);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--icon-color) 35%, transparent),
     0 0 var(--glow-blur) rgba(255, 255, 255, calc(var(--glow-alpha) * 0.35)),
-    0 0 calc(var(--glow-blur) * 1.4) color-mix(in srgb, var(--accent) calc(var(--glow-alpha) * 100%), transparent);
+    0 0 calc(var(--glow-blur) * 1.4) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 100%), transparent);
   background:
-    radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
-    var(--core);
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.22), transparent 42%),
+    var(--icon-color);
 }
 
 .passive-node.has-bands .passive-node__ring {
-  border-color: color-mix(in srgb, var(--ring) 55%, white);
+  border-color: color-mix(in srgb, var(--icon-color) 35%, white);
 }
 
 .passive-node.is-selected .passive-node__ring {
   box-shadow:
     0 0 0 2px #f4f7fa,
-    0 0 0 5px color-mix(in srgb, var(--ring) 70%, white),
-    0 0 var(--glow-blur) color-mix(in srgb, var(--accent) calc(var(--glow-alpha) * 100%), transparent);
+    0 0 0 5px color-mix(in srgb, var(--icon-color) 70%, white),
+    0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 100%), transparent);
 }
 
-.passive-node__core {
-  position: relative;
+.passive-node__hit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   z-index: 4;
-  width: max-content;
-  max-width: calc(var(--node-size) + 48px);
-  min-width: 70%;
-  height: auto;
-  min-height: 70%;
-  border-radius: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  text-align: center;
-  padding: 4px 6px;
-  overflow: visible;
+  cursor: grab;
 }
 
-.passive-node__label {
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: #f5f7f9;
-  max-width: none;
-  overflow: visible;
-  white-space: normal;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.passive-node--notable .passive-node__label,
-.passive-node--mastery .passive-node__label {
-  font-size: 12px;
+.passive-node__hit:active {
+  cursor: grabbing;
 }
 
 .passive-node__trainings {
-  font-size: 10px;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  font-size: 11px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--accent) 85%, #fff);
-  opacity: 0.9;
+  color: #d7e0e8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.passive-node__tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 14px);
+  transform: translateX(-50%) translateY(4px);
+  min-width: 148px;
+  max-width: 220px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #0a0e14 94%, transparent);
+  border: 1px solid color-mix(in srgb, #9eb0c2 22%, transparent);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+}
+
+.passive-node:hover .passive-node__tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.passive-node__tooltip-title {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #f4f7fa;
+}
+
+.passive-node__tooltip-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #9aa8b5;
+}
+
+.passive-node__tooltip-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.74rem;
+  color: #d5dde5;
 }
 
 .passive-node__handle {
@@ -166,14 +200,13 @@
   pointer-events: all;
 }
 
-/* Expand click/drag hit area without moving the measured center point */
 .passive-node__handle::before {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  width: var(--node-size);
-  height: var(--node-size);
+  width: 18px;
+  height: 18px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
 }
@@ -186,7 +219,7 @@
   height: 8px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: color-mix(in srgb, var(--ring) 80%, white);
+  background: rgba(255, 255, 255, 0.55);
   box-shadow: 0 0 8px var(--glow);
   opacity: 0;
   pointer-events: none;
@@ -196,15 +229,9 @@
 
 .passive-node:hover .passive-node__connect-dot,
 .passive-node.is-selected .passive-node__connect-dot {
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 .node-drag-handle {
   pointer-events: all;
-  cursor: grab;
-  z-index: 4;
-}
-
-.node-drag-handle:active {
-  cursor: grabbing;
 }
