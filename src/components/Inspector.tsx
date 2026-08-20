@@ -1,12 +1,16 @@
 import type { PassiveKind, PassiveNodeData, TrainingEntry } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
+import { DEFAULT_ORBIT_RADIUS } from '../orbit'
 import './Inspector.css'
 
 type Props = {
   nodeId: string | null
   data: PassiveNodeData | null
+  masteryLabel?: string | null
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
+  onChangeOrbitRadius: (nodeId: string, radius: number) => void
+  onDetachFromMastery: (nodeId: string) => void
   onAddTraining: (nodeId: string) => void
   onUpdateTraining: (
     nodeId: string,
@@ -20,8 +24,11 @@ type Props = {
 export function Inspector({
   nodeId,
   data,
+  masteryLabel,
   onRename,
   onChangeKind,
+  onChangeOrbitRadius,
+  onDetachFromMastery,
   onAddTraining,
   onUpdateTraining,
   onRemoveTraining,
@@ -31,7 +38,10 @@ export function Inspector({
     return (
       <aside className="inspector">
         <h2 className="inspector__title">Node Inspector</h2>
-        <p className="inspector__empty">Select a node to edit its type and training counts.</p>
+        <p className="inspector__empty">
+          Select a Mastery to set orbit radius. Connect Small/Notable → Mastery to join an orbit
+          (no edge). Tree links are Notable↔Small only.
+        </p>
       </aside>
     )
   }
@@ -67,6 +77,42 @@ export function Inspector({
           ))}
         </select>
       </label>
+
+      {data.kind === 'mastery' && (
+        <label className="field">
+          <span>Orbit radius</span>
+          <input
+            type="number"
+            min={80}
+            max={480}
+            step={10}
+            value={data.orbitRadius ?? DEFAULT_ORBIT_RADIUS}
+            onChange={(e) => onChangeOrbitRadius(nodeId, Number(e.target.value) || DEFAULT_ORBIT_RADIUS)}
+          />
+        </label>
+      )}
+
+      {(data.kind === 'small' || data.kind === 'notable') && (
+        <div className="inspector__section">
+          <div className="inspector__section-head">
+            <h3>Mastery link</h3>
+            {data.masteryId && (
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => onDetachFromMastery(nodeId)}
+              >
+                Detach
+              </button>
+            )}
+          </div>
+          <p className="inspector__empty">
+            {data.masteryId
+              ? `Orbit of: ${masteryLabel ?? data.masteryId}`
+              : 'Not on an orbit. Connect this node to a Mastery (membership only, no edge line).'}
+          </p>
+        </div>
+      )}
 
       <div className="inspector__section">
         <div className="inspector__section-head">

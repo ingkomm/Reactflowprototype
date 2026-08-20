@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import type { PassiveNodeData } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
+import { DEFAULT_ORBIT_RADIUS } from '../orbit'
 import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
@@ -11,13 +12,21 @@ function totalTrainings(trainings: PassiveNodeData['trainings']) {
 
 export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const total = totalTrainings(data.trainings)
+  const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
 
   return (
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}`}
       title={`${data.label} · ${PASSIVE_KIND_LABEL[data.kind]}`}
     >
-      {/* Full-node target/source so edges always meet at the geometric center */}
+      {data.kind === 'mastery' && (
+        <div
+          className="passive-node__orbit"
+          style={{ width: orbitRadius * 2, height: orbitRadius * 2 }}
+          aria-hidden
+        />
+      )}
+
       <Handle
         id="center"
         type="source"

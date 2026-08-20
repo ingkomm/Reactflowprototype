@@ -113,6 +113,10 @@
   height: 100%;
 }
 
+.react-flow__node-passive {
+  overflow: visible !important;
+}
+
 .canvas-hint {
   position: absolute;
   left: 14px;

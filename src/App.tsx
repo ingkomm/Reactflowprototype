@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  addEdge,
   useNodesState,
   useEdgesState,
   ConnectionMode,
@@ -14,6 +13,7 @@ import {
   type Node,
   type OnSelectionChangeParams,
   BackgroundVariant,
+  type IsValidConnection,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -22,6 +22,12 @@ import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
 import type { PassiveKind, PassiveNodeData, TrainingEntry } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
+import {
+  DEFAULT_ORBIT_RADIUS,
+  isSatelliteKind,
+  layoutMasteryOrbit,
+  withMasteryDragFlags,
+} from './orbit'
 import './App.css'
 
 const nodeTypes = { passive: PassiveNode }
@@ -39,72 +45,110 @@ function createPassiveData(
   kind: PassiveKind,
   label: string,
   trainings: TrainingEntry[] = [],
+  extras: Partial<Pick<PassiveNodeData, 'orbitRadius' | 'masteryId'>> = {},
 ): PassiveNodeData {
-  return { label, kind, trainings }
+  return {
+    label,
+    kind,
+    trainings,
+    ...(kind === 'mastery'
+      ? { orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS }
+      : { masteryId: extras.masteryId ?? null }),
+  }
 }
 
-const initialNodes: PassiveFlowNode[] = [
-  {
-    id: 'root',
-    type: 'passive',
-    position: { x: 360, y: 260 },
-    dragHandle: '.node-drag-handle',
-    data: createPassiveData('notable', 'Core Focus', [
-      createTraining('Baseline', 3),
-      createTraining('Review', 1),
-    ]),
-  },
-  {
-    id: 'small-a',
-    type: 'passive',
-    position: { x: 180, y: 140 },
-    dragHandle: '.node-drag-handle',
-    data: createPassiveData('small', 'Footwork', [createTraining('Drill', 5)]),
-  },
-  {
-    id: 'small-b',
-    type: 'passive',
-    position: { x: 540, y: 140 },
-    dragHandle: '.node-drag-handle',
-    data: createPassiveData('small', 'Timing', [createTraining('Metronome', 2)]),
-  },
-  {
-    id: 'mastery-a',
-    type: 'passive',
-    position: { x: 360, y: 430 },
-    dragHandle: '.node-drag-handle',
-    data: createPassiveData('mastery', 'Combo Mastery', [
-      createTraining('Slow reps', 4),
-      createTraining('Live pace', 2),
-    ]),
-  },
-]
+function passiveLinkEdge(sourceId: string, targetId: string): Edge {
+  return {
+    id: `link-${sourceId}-${targetId}`,
+    type: 'center',
+    source: sourceId,
+    target: targetId,
+    sourceHandle: 'center',
+    targetHandle: 'center-target',
+  }
+}
+
+function resolveMasteryPair(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+): { mastery: PassiveFlowNode; satellite: PassiveFlowNode } | null {
+  const sourceData = source.data as PassiveNodeData
+  const targetData = target.data as PassiveNodeData
+
+  if (sourceData.kind === 'mastery' && isSatelliteKind(targetData.kind)) {
+    return { mastery: source, satellite: target }
+  }
+  if (targetData.kind === 'mastery' && isSatelliteKind(sourceData.kind)) {
+    return { mastery: target, satellite: source }
+  }
+  return null
+}
+
+function isNotableSmallPair(source: PassiveFlowNode, target: PassiveFlowNode) {
+  const a = (source.data as PassiveNodeData).kind
+  const b = (target.data as PassiveNodeData).kind
+  return (a === 'notable' && b === 'small') || (a === 'small' && b === 'notable')
+}
+
+function edgeTouchesMastery(edge: Edge, nodes: PassiveFlowNode[]) {
+  const source = nodes.find((n) => n.id === edge.source)
+  const target = nodes.find((n) => n.id === edge.target)
+  return (
+    (source?.data as PassiveNodeData | undefined)?.kind === 'mastery' ||
+    (target?.data as PassiveNodeData | undefined)?.kind === 'mastery'
+  )
+}
+
+const seedMasteryId = 'mastery-a'
+const seedNodes: PassiveFlowNode[] = withMasteryDragFlags(
+  layoutMasteryOrbit(
+    [
+      {
+        id: seedMasteryId,
+        type: 'passive',
+        position: { x: 420, y: 280 },
+        dragHandle: '.node-drag-handle',
+        data: createPassiveData('mastery', 'Combo Mastery', [
+          createTraining('Slow reps', 4),
+          createTraining('Live pace', 2),
+        ], { orbitRadius: 180 }),
+      },
+      {
+        id: 'notable-a',
+        type: 'passive',
+        position: { x: 0, y: 0 },
+        dragHandle: '.node-drag-handle',
+        data: createPassiveData('notable', 'Core Focus', [
+          createTraining('Baseline', 3),
+          createTraining('Review', 1),
+        ], { masteryId: seedMasteryId }),
+      },
+      {
+        id: 'small-a',
+        type: 'passive',
+        position: { x: 0, y: 0 },
+        dragHandle: '.node-drag-handle',
+        data: createPassiveData('small', 'Footwork', [createTraining('Drill', 5)], {
+          masteryId: seedMasteryId,
+        }),
+      },
+      {
+        id: 'small-b',
+        type: 'passive',
+        position: { x: 0, y: 0 },
+        dragHandle: '.node-drag-handle',
+        data: createPassiveData('small', 'Timing', [createTraining('Metronome', 2)], {
+          masteryId: seedMasteryId,
+        }),
+      },
+    ],
+    seedMasteryId,
+  ),
+)
 
 const initialEdges: Edge[] = [
-  {
-    id: 'e-root-a',
-    type: 'center',
-    source: 'root',
-    target: 'small-a',
-    sourceHandle: 'center',
-    targetHandle: 'center-target',
-  },
-  {
-    id: 'e-root-b',
-    type: 'center',
-    source: 'root',
-    target: 'small-b',
-    sourceHandle: 'center',
-    targetHandle: 'center-target',
-  },
-  {
-    id: 'e-root-m',
-    type: 'center',
-    source: 'root',
-    target: 'mastery-a',
-    sourceHandle: 'center',
-    targetHandle: 'center-target',
-  },
+  passiveLinkEdge('notable-a', 'small-a'),
+  passiveLinkEdge('notable-a', 'small-b'),
 ]
 
 const kindAccent: Record<PassiveKind, string> = {
@@ -114,9 +158,9 @@ const kindAccent: Record<PassiveKind, string> = {
 }
 
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [selectedId, setSelectedId] = useState<string | null>('root')
+  const [selectedId, setSelectedId] = useState<string | null>(seedMasteryId)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
 
   const selectedNode = useMemo(
@@ -124,21 +168,104 @@ export default function App() {
     [nodes, selectedId],
   )
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...connection,
-            type: 'center',
-            sourceHandle: connection.sourceHandle ?? 'center',
-            targetHandle: connection.targetHandle ?? 'center-target',
-          },
-          eds,
-        ),
+  const selectedMasteryLabel = useMemo(() => {
+    const masteryId = (selectedNode?.data as PassiveNodeData | undefined)?.masteryId
+    if (!masteryId) return null
+    const mastery = nodes.find((n) => n.id === masteryId)
+    return (mastery?.data as PassiveNodeData | undefined)?.label ?? masteryId
+  }, [nodes, selectedNode])
+
+  const isValidConnection = useCallback<IsValidConnection>(
+    (connection) => {
+      const source = nodes.find((n) => n.id === connection.source)
+      const target = nodes.find((n) => n.id === connection.target)
+      if (!source || !target || source.id === target.id) return false
+      // Orbit attach (no edge) OR Notable↔Small tree link
+      return (
+        resolveMasteryPair(source, target) !== null || isNotableSmallPair(source, target)
       )
     },
-    [setEdges],
+    [nodes],
+  )
+
+  const attachSatellite = useCallback((masteryId: string, satelliteId: string) => {
+    setNodes((nds) => {
+      const oldMasteryIds = new Set<string>()
+      const updated = nds.map((node) => {
+        const data = node.data as PassiveNodeData
+        if (node.id !== satelliteId) return node
+        if (data.masteryId && data.masteryId !== masteryId) {
+          oldMasteryIds.add(data.masteryId)
+        }
+        return {
+          ...node,
+          data: { ...data, masteryId },
+          draggable: false,
+        }
+      })
+
+      // Keep newly attached satellite last so it takes the next orbit slot.
+      const satellite = updated.find((n) => n.id === satelliteId)
+      const rest = updated.filter((n) => n.id !== satelliteId)
+      let laidOut = satellite ? [...rest, satellite] : updated
+      laidOut = layoutMasteryOrbit(laidOut, masteryId)
+      for (const oldId of oldMasteryIds) {
+        laidOut = layoutMasteryOrbit(laidOut, oldId)
+      }
+      return withMasteryDragFlags(laidOut)
+    })
+  }, [setNodes])
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const source = nodes.find((n) => n.id === connection.source)
+      const target = nodes.find((n) => n.id === connection.target)
+      if (!source || !target) return
+
+      const masteryPair = resolveMasteryPair(source, target)
+      if (masteryPair) {
+        // PoB-style: Mastery membership is orbit-only (no edge line).
+        attachSatellite(masteryPair.mastery.id, masteryPair.satellite.id)
+        return
+      }
+
+      if (!isNotableSmallPair(source, target)) return
+
+      setEdges((eds) => {
+        const exists = eds.some(
+          (e) =>
+            (e.source === source.id && e.target === target.id) ||
+            (e.source === target.id && e.target === source.id),
+        )
+        if (exists) return eds
+        return [
+          ...eds.filter((e) => !edgeTouchesMastery(e, nodes)),
+          passiveLinkEdge(source.id, target.id),
+        ]
+      })
+    },
+    [attachSatellite, nodes, setEdges],
+  )
+
+  const detachFromMastery = useCallback(
+    (satelliteId: string) => {
+      setNodes((nds) => {
+        let oldMasteryId: string | null = null
+        const next = nds.map((node) => {
+          if (node.id !== satelliteId) return node
+          const data = node.data as PassiveNodeData
+          oldMasteryId = data.masteryId ?? null
+          return {
+            ...node,
+            data: { ...data, masteryId: null },
+            draggable: true,
+          }
+        })
+        if (!oldMasteryId) return withMasteryDragFlags(next)
+        return withMasteryDragFlags(layoutMasteryOrbit(next, oldMasteryId))
+      })
+    },
+    [setNodes],
   )
 
   const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
@@ -158,6 +285,95 @@ export default function App() {
     [setNodes],
   )
 
+  const changeOrbitRadius = useCallback(
+    (masteryId: string, radius: number) => {
+      const clamped = Math.min(480, Math.max(80, radius))
+      setNodes((nds) => {
+        const next = nds.map((node) => {
+          if (node.id !== masteryId) return node
+          const data = node.data as PassiveNodeData
+          return { ...node, data: { ...data, orbitRadius: clamped } }
+        })
+        return withMasteryDragFlags(layoutMasteryOrbit(next, masteryId))
+      })
+    },
+    [setNodes],
+  )
+
+  const changeKind = useCallback(
+    (nodeId: string, kind: PassiveKind) => {
+      const current = nodes.find((n) => n.id === nodeId)
+      if (!current) return
+      const prev = current.data as PassiveNodeData
+      const affectedMasteries = new Set<string>()
+
+      if (prev.masteryId) affectedMasteries.add(prev.masteryId)
+      if (prev.kind === 'mastery' && kind !== 'mastery') affectedMasteries.add(nodeId)
+
+      setNodes((nds) => {
+        let next = nds.map((node) => {
+          const data = node.data as PassiveNodeData
+
+          if (node.id === nodeId) {
+            const nextData: PassiveNodeData = {
+              label: data.label,
+              kind,
+              trainings: data.trainings,
+              ...(kind === 'mastery'
+                ? { orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS, masteryId: null }
+                : {
+                    masteryId:
+                      isSatelliteKind(kind) && prev.kind !== 'mastery'
+                        ? data.masteryId ?? null
+                        : null,
+                  }),
+            }
+            return { ...node, data: nextData }
+          }
+
+          if (prev.kind === 'mastery' && kind !== 'mastery' && data.masteryId === nodeId) {
+            return { ...node, data: { ...data, masteryId: null }, draggable: true }
+          }
+
+          return node
+        })
+
+        for (const masteryId of affectedMasteries) {
+          if (prev.kind === 'mastery' && kind !== 'mastery' && masteryId === nodeId) continue
+          next = layoutMasteryOrbit(next, masteryId)
+        }
+        return withMasteryDragFlags(next)
+      })
+
+      // Drop invalid edges after kind changes (Mastery never has tree links;
+      // tree links are Notable↔Small only).
+      setEdges((eds) =>
+        eds.filter((e) => {
+          if (e.source === nodeId || e.target === nodeId) {
+            if (kind === 'mastery' || prev.kind === 'mastery') return false
+          }
+          const sourceNode =
+            e.source === nodeId
+              ? { data: { kind } }
+              : nodes.find((n) => n.id === e.source)
+          const targetNode =
+            e.target === nodeId
+              ? { data: { kind } }
+              : nodes.find((n) => n.id === e.target)
+          if (!sourceNode || !targetNode) return false
+          const sk =
+            e.source === nodeId ? kind : (sourceNode.data as PassiveNodeData).kind
+          const tk =
+            e.target === nodeId ? kind : (targetNode.data as PassiveNodeData).kind
+          return (
+            (sk === 'notable' && tk === 'small') || (sk === 'small' && tk === 'notable')
+          )
+        }),
+      )
+    },
+    [nodes, setEdges, setNodes],
+  )
+
   const addNode = useCallback(() => {
     const id = uid(addKind)
     const offset = nodes.length * 18
@@ -166,17 +382,41 @@ export default function App() {
       type: 'passive',
       position: { x: 280 + (offset % 220), y: 180 + (offset % 160) },
       dragHandle: '.node-drag-handle',
+      draggable: true,
       data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`, [
         createTraining('Session 1', 1),
       ]),
     }
-    setNodes((nds) => [...nds, newNode])
+    setNodes((nds) => withMasteryDragFlags([...nds, newNode]))
     setSelectedId(id)
   }, [addKind, nodes.length, setNodes])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
-      setNodes((nds) => nds.filter((n) => n.id !== nodeId))
+      setNodes((nds) => {
+        const target = nds.find((n) => n.id === nodeId)
+        if (!target) return nds
+        const data = target.data as PassiveNodeData
+        const affected = new Set<string>()
+        if (data.kind === 'mastery') affected.add(nodeId)
+        if (data.masteryId) affected.add(data.masteryId)
+
+        let next = nds
+          .filter((n) => n.id !== nodeId)
+          .map((node) => {
+            const d = node.data as PassiveNodeData
+            if (d.masteryId === nodeId) {
+              return { ...node, data: { ...d, masteryId: null }, draggable: true }
+            }
+            return node
+          })
+
+        for (const masteryId of affected) {
+          if (masteryId === nodeId) continue
+          next = layoutMasteryOrbit(next, masteryId)
+        }
+        return withMasteryDragFlags(next)
+      })
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
       setSelectedId((cur) => (cur === nodeId ? null : cur))
     },
@@ -190,9 +430,23 @@ export default function App() {
 
   const onPaneClick = useCallback(() => setSelectedId(null), [])
 
-  const onNodeClick = useCallback((_: MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((_: ReactMouseEvent, node: Node) => {
     setSelectedId(node.id)
   }, [])
+
+  const onNodeDrag = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      const data = node.data as PassiveNodeData
+      if (data.kind !== 'mastery') return
+      setNodes((nds) => {
+        const synced = nds.map((n) =>
+          n.id === node.id ? { ...n, position: node.position } : n,
+        )
+        return withMasteryDragFlags(layoutMasteryOrbit(synced, node.id))
+      })
+    },
+    [setNodes],
+  )
 
   return (
     <div className="app-shell">
@@ -241,13 +495,15 @@ export default function App() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             onSelectionChange={onSelectionChange}
             onPaneClick={onPaneClick}
             onNodeClick={onNodeClick}
+            onNodeDrag={onNodeDrag}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
-            connectionRadius={28}
+            connectionRadius={36}
             connectionLineType={ConnectionLineType.Straight}
             connectionLineStyle={{ stroke: '#7f8fa0', strokeWidth: 2 }}
             fitView
@@ -259,7 +515,7 @@ export default function App() {
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#3a4654" />
-            <Controls />
+            <Controls position="top-left" />
             <MiniMap
               pannable
               zoomable
@@ -272,16 +528,19 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            Drag the node label to move. Drag from the ring/center to connect. Select a node to manage
-            trainings. Delete / Backspace removes selected nodes.
+            Tree links are Notable↔Small only. Connect Small/Notable to a Mastery to join its orbit
+            (no line — PoB style). One Mastery per passive.
           </p>
         </section>
 
         <Inspector
           nodeId={selectedNode?.id ?? null}
           data={(selectedNode?.data as PassiveNodeData | undefined) ?? null}
+          masteryLabel={selectedMasteryLabel}
           onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
-          onChangeKind={(nodeId, kind) => updateNodeData(nodeId, (d) => ({ ...d, kind }))}
+          onChangeKind={changeKind}
+          onChangeOrbitRadius={changeOrbitRadius}
+          onDetachFromMastery={detachFromMastery}
           onAddTraining={(nodeId) =>
             updateNodeData(nodeId, (d) => ({
               ...d,
