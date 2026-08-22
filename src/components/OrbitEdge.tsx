@@ -11,10 +11,12 @@ import {
   CROSS_ORBIT_GLOW_COLOR,
   linkEndpointPad,
   linkGlowStyle,
+  NODE_SIZE,
   orbitLinkSpec,
   trimStraightEndpoints,
 } from '../orbit'
 import { usePowerSet } from '../PowerContext'
+import { PoweredLinkVisual } from './PoweredLinkVisual'
 
 export type OrbitEdgeData = {
   masteryId?: string
@@ -61,11 +63,12 @@ export function OrbitEdge({
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
   const sd = sourceNode?.data as PassiveNodeData | undefined
+  const td = targetNode?.data as PassiveNodeData | undefined
   const edgeData = data as OrbitEdgeData | undefined
   const masteryId = edgeData?.masteryId ?? sd?.masteryId ?? ''
   const masteryNode = useInternalNode(masteryId)
 
-  if (!sourceNode || !targetNode || !masteryNode || !masteryId) return null
+  if (!sourceNode || !targetNode || !masteryNode || !masteryId || !sd || !td) return null
 
   const sourceLit = powered.has(source)
   const targetLit = powered.has(target)
@@ -77,7 +80,7 @@ export function OrbitEdge({
   if (!spec) return null
 
   const lit = sourceLit && targetLit
-  const lineStyle = linkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected), lit)
+  const lineStyle = linkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected), false)
 
   const sourceCX =
     sourceNode.internals.positionAbsolute.x + (sourceNode.measured.width ?? 0) / 2
@@ -89,13 +92,12 @@ export function OrbitEdge({
     targetNode.internals.positionAbsolute.y + (targetNode.measured.height ?? 0) / 2
 
   if (spec.kind === 'chord') {
-    const td = targetNode.data as PassiveNodeData
     const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
       sourceCX,
       sourceCY,
       targetCX,
       targetCY,
-      linkEndpointPad(sd!, sourceLit),
+      linkEndpointPad(sd, sourceLit),
       linkEndpointPad(td, targetLit),
     )
     const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
@@ -114,7 +116,21 @@ export function OrbitEdge({
           style={{ stroke: 'transparent', strokeWidth: 1 }}
           interactionWidth={interactionWidth}
         />
-        <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
+        {lit ? (
+          <PoweredLinkVisual
+            id={id}
+            pathD={path}
+            sx={sourceX}
+            sy={sourceY}
+            tx={targetX}
+            ty={targetY}
+            sourceFlareR={NODE_SIZE[sd.kind] / 2}
+            targetFlareR={NODE_SIZE[td.kind] / 2}
+            selected={Boolean(selected)}
+          />
+        ) : (
+          <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
+        )}
       </>
     )
   }
@@ -125,6 +141,8 @@ export function OrbitEdge({
   }
 
   const path = orbitArcPath(mc.x, mc.y, spec.arcRadius, spec.a1, spec.a2, spec.clockwise)
+  const start = polar(mc.x, mc.y, spec.arcRadius, spec.a1)
+  const end = polar(mc.x, mc.y, spec.arcRadius, spec.a2)
 
   return (
     <>
@@ -134,7 +152,21 @@ export function OrbitEdge({
         style={{ stroke: 'transparent', strokeWidth: 1 }}
         interactionWidth={interactionWidth}
       />
-      <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
+      {lit ? (
+        <PoweredLinkVisual
+          id={id}
+          pathD={path}
+          sx={start.x}
+          sy={start.y}
+          tx={end.x}
+          ty={end.y}
+          sourceFlareR={NODE_SIZE[sd.kind] / 2}
+          targetFlareR={NODE_SIZE[td.kind] / 2}
+          selected={Boolean(selected)}
+        />
+      ) : (
+        <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
+      )}
     </>
   )
 }
