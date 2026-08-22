@@ -13,7 +13,7 @@ import {
   trimStraightEndpoints,
 } from '../orbit'
 import { usePowerSet, usePowerFlowMeta } from '../PowerContext'
-import { orientPowerLinkVisual } from '../powerLinkVisual'
+import { orientPowerLinkVisual } from '../power'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
 
 export type CenterFlowEdge = Edge<Record<string, unknown>, 'center'>

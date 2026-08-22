@@ -27,14 +27,19 @@ import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData
 import { PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
-  DEFAULT_CLASS_ID_BY_KIND,
   resolvePassiveClass,
   type PassiveClass,
 } from './passiveClass'
 import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
-import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
+import { createStage, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
+import { createPassiveData, passiveLinkEdge, orbitLinkEdge } from './graphFactory'
+import {
+  DEFAULT_SELECTED_NODE_ID,
+  SEED_EDGES,
+  SEED_NODES,
+} from './seedGraph'
 import {
   applySatelliteOrbitPlacement,
   DEFAULT_ORBIT_START_ANGLE,
@@ -48,7 +53,6 @@ import {
   isStealthPassiveKind,
   layoutMasteryOrbit,
   masteryOuterOrbitRadius,
-  mergeOrbitOrderFromTiers,
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
@@ -63,10 +67,9 @@ import {
   snapOrbitAngle,
   withMasteryDragFlags,
 } from './orbit'
-import { OrbitRotateController } from './components/OrbitRotateController'
+import { OrbitRotateController, shouldSuppressOrbitSelectionClear } from './components/OrbitRotateController'
 import { MiniMapCircleNode } from './components/MiniMapCircleNode'
 import { ZoomKeyboardController } from './components/ZoomKeyboardController'
-import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { VoidHighlightProvider } from './VoidHighlightContext'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
@@ -76,87 +79,6 @@ const edgeTypes = { center: CenterEdge, orbit: OrbitEdge }
 
 function uid(prefix: string) {
   return stageUid(prefix)
-}
-
-function createPassiveData(
-  kind: PassiveKind,
-  label: string,
-  extras: Partial<
-    Pick<
-      PassiveNodeData,
-      | 'orbitTierCount'
-      | 'orbitStartAngle'
-      | 'orbitStartAngleByTier'
-      | 'orbitOrder'
-      | 'orbitOrderByTier'
-      | 'orbitLocked'
-      | 'masteryId'
-      | 'orbitTier'
-      | 'voidPassing'
-      | 'classId'
-      | 'stages'
-    >
-  > = {},
-): PassiveNodeData {
-  return {
-    label,
-    kind,
-    stages:
-      extras.stages ??
-      (kind === 'initial' || isStealthPassiveKind(kind) ? [] : [createStage(1)]),
-    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
-    ...(isMasteryKind(kind)
-      ? {
-          orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
-          orbitStartAngleByTier: extras.orbitStartAngleByTier,
-          orbitOrder: extras.orbitOrder ?? [],
-          orbitOrderByTier: extras.orbitOrderByTier,
-          orbitLocked: extras.orbitLocked ?? false,
-          orbitTierCount: extras.orbitTierCount ?? 1,
-        }
-      : kind === 'void'
-        ? {
-            masteryId: extras.masteryId ?? null,
-            voidPassing: extras.voidPassing ?? false,
-            orbitTier: extras.orbitTier ?? 1,
-          }
-        : kind === 'initial'
-          ? {}
-          : {
-              masteryId: extras.masteryId ?? null,
-              orbitTier: extras.orbitTier ?? 1,
-            }),
-  }
-}
-
-function passiveLinkEdge(sourceId: string, targetId: string): Edge {
-  return {
-    id: `link-${sourceId}-${targetId}`,
-    type: 'center',
-    source: sourceId,
-    target: targetId,
-    sourceHandle: 'center',
-    targetHandle: 'center-target',
-  }
-}
-
-function orbitLinkEdge(sourceId: string, targetId: string, masteryId: string): Edge {
-  return {
-    id: `orbit-${sourceId}-${targetId}`,
-    type: 'orbit',
-    source: sourceId,
-    target: targetId,
-    data: { masteryId },
-    zIndex: 1,
-  }
-}
-
-function orbitAdjacentEdges(order: string[], masteryId: string): Edge[] {
-  if (order.length < 2) return []
-  return order.map((id, i) => {
-    const next = order[(i + 1) % order.length]!
-    return orbitLinkEdge(id, next, masteryId)
-  })
 }
 
 type NodeClipboard = {
@@ -269,232 +191,10 @@ function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
   return pruneEdgesReachableFromInitial(nodes, pruneInvalidEdges(nodes, edges))
 }
 
-const danceMasteryId = 'mastery-dance'
-const gymMasteryId = 'mastery-gym'
-const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
-  1: ['notable-hiphop', 'notable-kpop', 'small-basic'],
-  2: ['small-footwork', 'small-stretch'],
-}
-const danceOrbitOrder = mergeOrbitOrderFromTiers(2, danceOrbitOrderByTier)
-const danceOrbitStartAngleByTier: Partial<Record<OrbitTier, number>> = {
-  1: -90,
-  2: 0,
-}
-const gymOrbitOrder = [
-  'notable-strength',
-  'notable-cardio',
-  'small-legs',
-  'small-back',
-  'small-run',
-  'small-core',
-]
-
-function buildSeedNodes(): PassiveFlowNode[] {
-  const base: PassiveFlowNode[] = [
-    {
-      id: 'initial-main',
-      type: 'passive',
-      position: { x: 20, y: 300 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('initial', '시작', { stages: [], classId: 'i-default' }),
-    },
-    {
-      id: danceMasteryId,
-      type: 'passive',
-      position: { x: 260, y: 300 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('mastery', '댄스', {
-        stages: defaultStagesForSeed([
-          { label: '기초 그루브', goal: 4, logged: 4 },
-          { label: '안무 리허설', goal: 5, logged: 3 },
-          { label: '공연', goal: 3, logged: 1 },
-        ]),
-        orbitStartAngle: -90,
-        orbitStartAngleByTier: danceOrbitStartAngleByTier,
-        orbitOrder: danceOrbitOrder,
-        orbitOrderByTier: danceOrbitOrderByTier,
-        orbitTierCount: 2,
-        classId: 'm-dance',
-      }),
-    },
-    {
-      id: 'notable-hiphop',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('notable', '힙합', {
-        stages: defaultStagesForSeed([
-          { label: '기초 스텝', goal: 5, logged: 4 },
-          { label: '프리스타일', goal: 4, logged: 2 },
-        ]),
-        masteryId: danceMasteryId,
-        orbitTier: 1,
-        classId: 'n-hiphop',
-      }),
-    },
-    {
-      id: 'notable-kpop',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('notable', 'K-pop', {
-        stages: defaultStagesForSeed([
-          { label: '안무 암기', goal: 6, logged: 5 },
-          { label: '포인트 안무', goal: 3, logged: 3 },
-        ]),
-        masteryId: danceMasteryId,
-        orbitTier: 1,
-        classId: 'n-kpop',
-      }),
-    },
-    {
-      id: 'small-basic',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '기본기', {
-        stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 4 }]),
-        masteryId: danceMasteryId,
-        orbitTier: 1,
-        classId: 's-basic',
-      }),
-    },
-    {
-      id: 'small-footwork',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '풋워크', {
-        stages: defaultStagesForSeed([{ label: '그루브', goal: 3, logged: 2 }]),
-        masteryId: danceMasteryId,
-        orbitTier: 2,
-        classId: 's-footwork',
-      }),
-    },
-    {
-      id: 'small-stretch',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '스트레칭', {
-        stages: defaultStagesForSeed([{ label: '유연성', goal: 3, logged: 1 }]),
-        masteryId: danceMasteryId,
-        orbitTier: 2,
-        classId: 's-stretch',
-      }),
-    },
-    {
-      id: gymMasteryId,
-      type: 'passive',
-      position: { x: 760, y: 300 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('mastery', '운동', {
-        stages: defaultStagesForSeed([
-          { label: '워밍업', goal: 4, logged: 4 },
-          { label: '메인', goal: 5, logged: 2 },
-          { label: '쿨다운', goal: 3, logged: 0 },
-        ]),
-        orbitStartAngle: -90,
-        orbitOrder: gymOrbitOrder,
-        orbitTierCount: 1,
-        classId: 'm-gym',
-      }),
-    },
-    {
-      id: 'notable-strength',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('notable', '근력', {
-        stages: defaultStagesForSeed([
-          { label: '스쿼트', goal: 6, logged: 6 },
-          { label: '데드리프트', goal: 5, logged: 4 },
-        ]),
-        masteryId: gymMasteryId,
-        classId: 'n-strength',
-      }),
-    },
-    {
-      id: 'notable-cardio',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('notable', '유산소', {
-        stages: defaultStagesForSeed([
-          { label: '러닝', goal: 5, logged: 5 },
-          { label: '사이클', goal: 4, logged: 2 },
-        ]),
-        masteryId: gymMasteryId,
-        classId: 'n-cardio',
-      }),
-    },
-    {
-      id: 'small-legs',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '하체', {
-        stages: defaultStagesForSeed([{ label: '런지', goal: 4, logged: 4 }]),
-        masteryId: gymMasteryId,
-        classId: 's-legs',
-      }),
-    },
-    {
-      id: 'small-back',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '등', {
-        stages: defaultStagesForSeed([{ label: '풀업', goal: 5, logged: 4 }]),
-        masteryId: gymMasteryId,
-        classId: 's-back',
-      }),
-    },
-    {
-      id: 'small-run',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '러닝', {
-        stages: defaultStagesForSeed([{ label: '인터벌', goal: 3, logged: 2 }]),
-        masteryId: gymMasteryId,
-        classId: 's-run',
-      }),
-    },
-    {
-      id: 'small-core',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '코어', {
-        stages: defaultStagesForSeed([{ label: '플랭크', goal: 4, logged: 3 }]),
-        masteryId: gymMasteryId,
-        classId: 's-core',
-      }),
-    },
-  ]
-
-  return withMasteryDragFlags(
-    layoutMasteryOrbit(layoutMasteryOrbit(base, danceMasteryId), gymMasteryId),
-  )
-}
-
-const seedNodes = buildSeedNodes()
-
-const initialEdges: Edge[] = [
-  passiveLinkEdge('initial-main', 'small-basic'),
-  passiveLinkEdge('initial-main', 'small-legs'),
-  passiveLinkEdge('notable-hiphop', danceMasteryId),
-  passiveLinkEdge('notable-strength', gymMasteryId),
-  ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], danceMasteryId),
-  ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], danceMasteryId),
-  ...orbitAdjacentEdges(gymOrbitOrder, gymMasteryId),
-]
-
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
+  const [nodes, setNodes, onNodesChange] = useNodesState(SEED_NODES)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(SEED_EDGES)
+  const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
   const [addKind, setAddKind] = useState<PassiveKind>('small')

@@ -13,13 +13,29 @@ import {
   snapshotMasteryTierAngles,
   snapOrbitAngle,
 } from '../orbit'
-import {
-  beginOrbitRotateDrag,
-  endOrbitRotateDrag,
-  orbitInteractionGuard,
-} from '../orbitInteractionGuard'
 import type { PassiveFlowNode } from './PassiveNode'
 import type { OrbitTier, PassiveNodeData } from '../types'
+
+/** Suppresses pane click / selection clear while orbit ring is being rotated. */
+const orbitInteractionGuard = {
+  dragging: false,
+  suppressUntil: 0,
+  preserveSelectionId: null as string | null,
+}
+
+function beginOrbitRotateDrag(preserveSelectionId: string | null) {
+  orbitInteractionGuard.dragging = true
+  orbitInteractionGuard.preserveSelectionId = preserveSelectionId
+}
+
+function endOrbitRotateDrag() {
+  orbitInteractionGuard.dragging = false
+  orbitInteractionGuard.suppressUntil = Date.now() + 400
+}
+
+export function shouldSuppressOrbitSelectionClear() {
+  return orbitInteractionGuard.dragging || Date.now() < orbitInteractionGuard.suppressUntil
+}
 
 type Props = {
   commit: () => void
