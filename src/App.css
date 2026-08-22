@@ -74,6 +74,20 @@
   padding: 7px 10px;
 }
 
+.topbar__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.topbar__toggle input {
+  accent-color: #9fe8dd;
+}
+
 .btn {
   border: none;
   border-radius: 8px;

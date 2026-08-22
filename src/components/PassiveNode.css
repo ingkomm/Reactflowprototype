@@ -59,6 +59,25 @@
     0 0 40px color-mix(in srgb, #ffe066 25%, transparent);
 }
 
+.passive-node--void {
+  --node-size: 40px;
+  --ring: #5a6570;
+  --core: transparent;
+  --accent: #6a7580;
+}
+
+.passive-node--void .passive-node__ring {
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, #9aa8b5 35%, transparent);
+  box-shadow: none;
+}
+
+.passive-node--void .passive-node__title {
+  color: #6a7580;
+  text-shadow: none;
+  font-size: 0.65rem;
+}
+
 .passive-node.is-unpowered .passive-node__ring {
   box-shadow: none;
   background:

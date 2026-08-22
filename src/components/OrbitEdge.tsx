@@ -6,8 +6,7 @@ import {
 } from '@xyflow/react'
 import type { PassiveNodeData } from '../types'
 import type { PassiveFlowNode } from './PassiveNode'
-import { orbitAdjacentArcSpec, poweredLinkGlowStyle } from '../orbit'
-import { usePassiveClasses } from '../PassiveClassContext'
+import { CROSS_ORBIT_GLOW_COLOR, orbitAdjacentArcSpec, poweredLinkGlowStyle } from '../orbit'
 import { usePowerSet } from '../PowerContext'
 
 export type OrbitEdgeData = {
@@ -52,7 +51,6 @@ export function OrbitEdge({
   selected,
 }: EdgeProps) {
   const powered = usePowerSet()
-  const { resolve } = usePassiveClasses()
   const nodes = useStore((s) => s.nodes)
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -65,9 +63,6 @@ export function OrbitEdge({
 
   const arc = orbitAdjacentArcSpec(nodes as PassiveFlowNode[], masteryId, source, target)
   if (!arc) return null
-
-  const md = masteryNode.data as PassiveNodeData
-  const masteryColor = resolve(md.classId, 'mastery').iconColor
 
   const mc = {
     x: masteryNode.internals.positionAbsolute.x + (masteryNode.measured.width ?? 76) / 2,
@@ -86,7 +81,7 @@ export function OrbitEdge({
         path={path}
         style={
           lit
-            ? poweredLinkGlowStyle(masteryColor, Boolean(selected))
+            ? poweredLinkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected))
             : { stroke: ORBIT_OFF, strokeWidth: 1, cursor: 'pointer' }
         }
         interactionWidth={0}

@@ -7,6 +7,7 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
   small: 48,
   notable: 68,
   mastery: 76,
+  void: 40,
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180
@@ -16,6 +17,17 @@ export const ORBIT_ANGLE_STEP = 15
 
 export function isSatelliteKind(kind: PassiveKind) {
   return kind === 'small' || kind === 'notable'
+}
+
+/** Nodes that may sit on a mastery orbit (including spacers). */
+export function isOrbitMemberKind(kind: PassiveKind) {
+  return kind === 'small' || kind === 'notable' || kind === 'void'
+}
+
+export function isMasteryOrbitLocked(nodes: PassiveFlowNode[], masteryId: string) {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return false
+  return Boolean((mastery.data as PassiveNodeData).orbitLocked)
 }
 
 /** Clockwise neighbors on a mastery orbit ring (including wrap). */
@@ -286,7 +298,7 @@ export function getOrbitSatellites(
 ): PassiveFlowNode[] {
   return nodes.filter((n) => {
     const data = n.data as PassiveNodeData
-    return data.masteryId === masteryId && isSatelliteKind(data.kind)
+    return data.masteryId === masteryId && isOrbitMemberKind(data.kind)
   })
 }
 

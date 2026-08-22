@@ -1,4 +1,4 @@
-export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery'
+export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery' | 'void'
 
 /** One training log entry within a stage. Counts are capped by the stage goal. */
 export type TrainingLog = {
@@ -48,6 +48,7 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   small: '#9B9A97',
   notable: '#D9730D',
   mastery: '#0F7B6C',
+  void: '#6CB6EA',
 }
 
 export type PassiveNodeData = {
@@ -69,7 +70,9 @@ export type PassiveNodeData = {
   orbitStartAngle?: number
   /** Mastery only: satellite node ids in clockwise orbit order (1-based UI). */
   orbitOrder?: string[]
-  /** Small/Notable only: the single Mastery this passive belongs to. */
+  /** Mastery only: when true, orbit membership count/order cannot change. */
+  orbitLocked?: boolean
+  /** Small/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
 }
 
@@ -78,6 +81,7 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   small: 'Small Passive',
   notable: 'Notable Passive',
   mastery: 'Mastery',
+  void: 'Void Node',
 }
 
 export const DEFAULT_STAGE_GOAL = 3

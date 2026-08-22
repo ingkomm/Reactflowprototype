@@ -34,13 +34,15 @@ import {
 import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
 import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
+import { snapNodeTopLeft } from './grid'
 import {
   areOrbitAdjacent,
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
   getOrderedOrbitSatellites,
-  isSatelliteKind,
+  isMasteryOrbitLocked,
+  isOrbitMemberKind,
   layoutMasteryOrbit,
   ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
@@ -69,6 +71,7 @@ function createPassiveData(
       | 'orbitRadius'
       | 'orbitStartAngle'
       | 'orbitOrder'
+      | 'orbitLocked'
       | 'masteryId'
       | 'classId'
       | 'stages'
@@ -78,15 +81,18 @@ function createPassiveData(
   return {
     label,
     kind,
-    stages: extras.stages ?? (kind === 'initial' ? [] : [createStage(1)]),
+    stages: extras.stages ?? (kind === 'initial' || kind === 'void' ? [] : [createStage(1)]),
     classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
     ...(kind === 'mastery'
       ? {
           orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: extras.orbitOrder ?? [],
+          orbitLocked: extras.orbitLocked ?? false,
         }
-      : { masteryId: extras.masteryId ?? null }),
+      : kind === 'initial' || kind === 'void'
+        ? {}
+        : { masteryId: extras.masteryId ?? null }),
   }
 }
 
@@ -164,7 +170,7 @@ function buildPastedNode(
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: [],
         }
-      : kind === 'initial'
+      : kind === 'initial' || kind === 'void'
         ? {}
         : { masteryId: null }),
   }
@@ -189,10 +195,10 @@ function resolveMasteryPair(
   const sourceData = source.data as PassiveNodeData
   const targetData = target.data as PassiveNodeData
 
-  if (sourceData.kind === 'mastery' && isSatelliteKind(targetData.kind)) {
+  if (sourceData.kind === 'mastery' && isOrbitMemberKind(targetData.kind)) {
     return { mastery: source, satellite: target }
   }
-  if (targetData.kind === 'mastery' && isSatelliteKind(sourceData.kind)) {
+  if (targetData.kind === 'mastery' && isOrbitMemberKind(sourceData.kind)) {
     return { mastery: target, satellite: source }
   }
   return null
@@ -293,7 +299,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '기본기', {
-        stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 3 }]),
+        stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 4 }]),
         masteryId: danceMasteryId,
         classId: 's-basic',
       }),
@@ -371,7 +377,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '하체', {
-        stages: defaultStagesForSeed([{ label: '런지', goal: 4, logged: 3 }]),
+        stages: defaultStagesForSeed([{ label: '런지', goal: 4, logged: 4 }]),
         masteryId: gymMasteryId,
         classId: 's-legs',
       }),
@@ -431,6 +437,7 @@ export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
@@ -681,6 +688,7 @@ export default function App() {
   )
 
   const attachSatellite = useCallback((masteryId: string, satelliteId: string) => {
+    if (isMasteryOrbitLocked(nodes, masteryId)) return
     commit()
     setNodes((nds) => {
       const current = nds.find((n) => n.id === satelliteId)
@@ -723,7 +731,7 @@ export default function App() {
       }
       return stack(next)
     })
-  }, [commit, setNodes])
+  }, [commit, nodes, setNodes, stack])
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -734,7 +742,9 @@ export default function App() {
       const linkKind = classifyLink(source, target, nodes)
       if (linkKind === 'attach') {
         const pair = resolveMasteryPair(source, target)
-        if (pair) attachSatellite(pair.mastery.id, pair.satellite.id)
+        if (pair && !isMasteryOrbitLocked(nodes, pair.mastery.id)) {
+          attachSatellite(pair.mastery.id, pair.satellite.id)
+        }
         return
       }
       if (linkKind !== 'center' && linkKind !== 'orbit') return
@@ -760,6 +770,9 @@ export default function App() {
 
   const detachFromMastery = useCallback(
     (satelliteId: string) => {
+      const sat = nodes.find((n) => n.id === satelliteId)
+      const masteryId = (sat?.data as PassiveNodeData | undefined)?.masteryId
+      if (masteryId && isMasteryOrbitLocked(nodes, masteryId)) return
       commit()
       setNodes((nds) => {
         let oldMasteryId: string | null = null
@@ -789,7 +802,7 @@ export default function App() {
         return stack(layoutMasteryOrbit(next, oldMasteryId))
       })
     },
-    [commit, setNodes],
+    [commit, nodes, setNodes, stack],
   )
 
   const changeOrbitRadius = useCallback(
@@ -805,7 +818,7 @@ export default function App() {
         return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
-    [commit, setNodes],
+    [commit, setNodes, stack],
   )
 
   const changeOrbitStartAngle = useCallback(
@@ -826,6 +839,7 @@ export default function App() {
 
   const changeOrbitOrder = useCallback(
     (masteryId: string, satelliteId: string, order1Based: number) => {
+      if (isMasteryOrbitLocked(nodes, masteryId)) return
       commit()
       setNodes((nds) => {
         const mastery = nds.find((n) => n.id === masteryId)
@@ -844,7 +858,7 @@ export default function App() {
         return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
-    [commit, setNodes],
+    [commit, nodes, setNodes, stack],
   )
 
   const removeLink = useCallback(
@@ -897,6 +911,13 @@ export default function App() {
     [commit, setNodes],
   )
 
+  const changeOrbitLocked = useCallback(
+    (masteryId: string, locked: boolean) => {
+      updateNodeData(masteryId, (d) => ({ ...d, orbitLocked: locked }))
+    },
+    [updateNodeData],
+  )
+
   const changeKind = useCallback(
     (nodeId: string, kind: PassiveKind) => {
       const current = nodes.find((n) => n.id === nodeId)
@@ -917,7 +938,7 @@ export default function App() {
               label: data.label,
               kind,
               stages:
-                kind === 'initial'
+                kind === 'initial' || kind === 'void'
                   ? []
                   : data.stages.length > 0
                     ? data.stages
@@ -928,13 +949,14 @@ export default function App() {
                     orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
                     orbitOrder: [],
+                    orbitLocked: data.orbitLocked ?? false,
                     masteryId: null,
                   }
-                : kind === 'initial'
+                : kind === 'initial' || kind === 'void'
                   ? {}
                   : {
                       masteryId:
-                        isSatelliteKind(kind) && prev.kind !== 'mastery'
+                        isOrbitMemberKind(kind) && prev.kind !== 'mastery'
                           ? data.masteryId ?? null
                           : null,
                     }),
@@ -950,7 +972,7 @@ export default function App() {
             prev.masteryId &&
             node.id === prev.masteryId &&
             data.kind === 'mastery' &&
-            !isSatelliteKind(kind)
+            !isOrbitMemberKind(kind)
           ) {
             return {
               ...node,
@@ -1025,18 +1047,20 @@ export default function App() {
   const addNode = useCallback(() => {
     const id = uid(addKind)
     const offset = nodes.length * 18
+    const raw = { x: 280 + (offset % 220), y: 180 + (offset % 160) }
+    const position = gridSnapEnabled ? snapNodeTopLeft(raw) : raw
     commit()
     const newNode: PassiveFlowNode = {
       id,
       type: 'passive',
-      position: { x: 280 + (offset % 220), y: 180 + (offset % 160) },
+      position,
       dragHandle: '.node-drag-handle',
       draggable: true,
       data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`),
     }
     setNodes((nds) => stack([...nds, newNode]))
     setSelectedId(id)
-  }, [addKind, commit, nodes.length, setNodes, stack])
+  }, [addKind, commit, gridSnapEnabled, nodes.length, setNodes, stack])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -1077,20 +1101,42 @@ export default function App() {
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const data = node.data as PassiveNodeData
       if (data.kind !== 'mastery') return
+      const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
       setNodes((nds) => {
         const synced = nds.map((n) =>
-          n.id === node.id ? { ...n, position: node.position } : n,
+          n.id === node.id ? { ...n, position } : n,
         )
         return stack(layoutMasteryOrbit(synced, node.id))
       })
     },
-    [setNodes, stack],
+    [gridSnapEnabled, setNodes, stack],
   )
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const data = node.data as PassiveNodeData
-      if (!isSatelliteKind(data.kind)) return
+
+      if (data.kind === 'mastery') {
+        setNodes((nds) => {
+          const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
+          const synced = nds.map((n) => (n.id === node.id ? { ...n, position } : n))
+          return stack(layoutMasteryOrbit(synced, node.id))
+        })
+        return
+      }
+
+      if (!isOrbitMemberKind(data.kind)) {
+        if (gridSnapEnabled) {
+          setNodes((nds) =>
+            stack(
+              nds.map((n) =>
+                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position) } : n,
+              ),
+            ),
+          )
+        }
+        return
+      }
 
       setNodes((nds) => {
         let next = nds.map((n) =>
@@ -1102,6 +1148,10 @@ export default function App() {
         const currentMasteryId = (satellite.data as PassiveNodeData).masteryId ?? null
 
         if (currentMasteryId) {
+          if (isMasteryOrbitLocked(next, currentMasteryId)) {
+            return stack(layoutMasteryOrbit(next, currentMasteryId))
+          }
+
           const mastery = next.find((n) => n.id === currentMasteryId)
           if (mastery) {
             const parentDist =
@@ -1113,7 +1163,8 @@ export default function App() {
               next = next.map((n) => {
                 const d = n.data as PassiveNodeData
                 if (n.id === satellite.id) {
-                  return { ...n, data: { ...d, masteryId: null }, draggable: true }
+                  const pos = gridSnapEnabled ? snapNodeTopLeft(n.position) : n.position
+                  return { ...n, position: pos, data: { ...d, masteryId: null }, draggable: true }
                 }
                 if (n.id === currentMasteryId && d.kind === 'mastery') {
                   return {
@@ -1133,6 +1184,7 @@ export default function App() {
               if (
                 other &&
                 other.mastery.id !== currentMasteryId &&
+                !isMasteryOrbitLocked(next, other.mastery.id) &&
                 other.dist <= other.radius + ORBIT_ATTACH_SLACK
               ) {
                 const order = orbitOrderByDropAngle(next, other.mastery.id, freeSat.id)
@@ -1167,7 +1219,11 @@ export default function App() {
         }
 
         const nearest = findNearestMastery(next, satellite)
-        if (nearest && nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK) {
+        if (
+          nearest &&
+          !isMasteryOrbitLocked(next, nearest.mastery.id) &&
+          nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK
+        ) {
           const order = orbitOrderByDropAngle(next, nearest.mastery.id, satellite.id)
           next = next.map((n) => {
             const d = n.data as PassiveNodeData
@@ -1186,10 +1242,16 @@ export default function App() {
           return stack(layoutMasteryOrbit(next, nearest.mastery.id))
         }
 
+        if (gridSnapEnabled && !currentMasteryId) {
+          next = next.map((n) =>
+            n.id === node.id ? { ...n, position: snapNodeTopLeft(n.position) } : n,
+          )
+        }
+
         return stack(next)
       })
     },
-    [setNodes, stack],
+    [gridSnapEnabled, setNodes, stack],
   )
 
   return (
@@ -1221,6 +1283,14 @@ export default function App() {
           <button type="button" className="btn btn--primary" onClick={addNode}>
             Add Node
           </button>
+          <label className="topbar__toggle">
+            <input
+              type="checkbox"
+              checked={gridSnapEnabled}
+              onChange={(e) => setGridSnapEnabled(e.target.checked)}
+            />
+            <span>그리드 스냅</span>
+          </label>
           <button
             type="button"
             className="btn btn--danger"
@@ -1298,7 +1368,7 @@ export default function App() {
           </PowerProvider>
 
           <p className="canvas-hint">
-            Initial에서 파워 공급 · 오르빗 인접 = 호 링크 · Mastery↔Notable = 직선 링크
+            1단계 완료 후 파워 전달 · Void = 링크 차단 · Mastery 오르빗 Lock 가능
           </p>
         </section>
 
@@ -1328,6 +1398,7 @@ export default function App() {
             onChangeOrbitRadius={changeOrbitRadius}
             onChangeOrbitStartAngle={changeOrbitStartAngle}
             onChangeOrbitOrder={changeOrbitOrder}
+            onChangeOrbitLocked={changeOrbitLocked}
             onDetachFromMastery={detachFromMastery}
             onRemoveLink={removeLink}
             onAddLink={addLink}

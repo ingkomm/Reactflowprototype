@@ -12,6 +12,7 @@ import {
 import { DEFAULT_ORBIT_RADIUS, NODE_SIZE, nodeInteractRadius } from '../orbit'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { useNodePowered } from '../PowerContext'
+import { canTransmitPower } from '../power'
 import { IconGlyph } from './IconGlyph'
 import {
   TrainingBands,
@@ -27,7 +28,9 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
-  const powered = useNodePowered(id) || data.kind === 'initial'
+  const isVoid = data.kind === 'void'
+  const powered = !isVoid && (useNodePowered(id) || data.kind === 'initial')
+  const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
   const bandLevel = stageBandLevel(stages)
@@ -80,25 +83,29 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {powered && bandCount > 0 && <TrainingBands stages={stages} nodeSize={nodeSize} />}
+      {powered && bandCount > 0 && !isVoid && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
-      <Handle
-        id="center"
-        type="source"
-        position={Position.Top}
-        className="passive-node__handle"
-        isConnectable
-      />
-      <Handle
-        id="center-target"
-        type="target"
-        position={Position.Top}
-        className="passive-node__handle"
-        isConnectable
-      />
+      {!isVoid && (
+        <>
+          <Handle
+            id="center"
+            type="source"
+            position={Position.Top}
+            className="passive-node__handle"
+            isConnectable
+          />
+          <Handle
+            id="center-target"
+            type="target"
+            position={Position.Top}
+            className="passive-node__handle"
+            isConnectable
+          />
+        </>
+      )}
 
       <div className="passive-node__ring" aria-hidden>
-        <IconGlyph iconId={iconId} className="passive-node__glyph" />
+        {!isVoid && <IconGlyph iconId={iconId} className="passive-node__glyph" />}
       </div>
 
       <div className="passive-node__hit node-drag-handle" />
@@ -108,10 +115,16 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       <div className="passive-node__tooltip" role="tooltip">
         <p className="passive-node__tooltip-title">{data.label}</p>
         <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
-        {!powered && data.kind !== 'initial' && (
+        {!powered && data.kind !== 'initial' && data.kind !== 'void' && (
           <p className="passive-node__tooltip-meta">파워 미공급</p>
         )}
-        {data.kind !== 'initial' && (
+        {powered && !canRelay && data.kind !== 'initial' && bandCount > 0 && (
+          <p className="passive-node__tooltip-meta">1단계 미완료 — 파워 전달 불가</p>
+        )}
+        {isVoid && (
+          <p className="passive-node__tooltip-meta">링크·파워 없음 (배치용)</p>
+        )}
+        {data.kind !== 'initial' && data.kind !== 'void' && (
           <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
         )}
         {bandCount > 0 && (

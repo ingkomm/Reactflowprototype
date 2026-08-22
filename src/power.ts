@@ -1,7 +1,13 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { PassiveNodeData } from './types'
-import { getOrderedOrbitSatellites, isSatelliteKind, shareSameOrbit } from './orbit'
+import { isStageComplete } from './stage'
+import {
+  getOrderedOrbitSatellites,
+  isOrbitMemberKind,
+  isSatelliteKind,
+  shareSameOrbit,
+} from './orbit'
 
 export type LinkKind = 'center' | 'orbit'
 
@@ -15,6 +21,18 @@ function isInitial(data: PassiveNodeData) {
 
 function isMastery(data: PassiveNodeData) {
   return data.kind === 'mastery'
+}
+
+function isVoid(data: PassiveNodeData) {
+  return data.kind === 'void'
+}
+
+/** At least one stage band must be complete before power flows onward. */
+export function canTransmitPower(data: PassiveNodeData): boolean {
+  if (data.kind === 'initial') return true
+  if (isVoid(data)) return false
+  if (data.stages.length === 0) return false
+  return data.stages.some(isStageComplete)
 }
 
 function findCenterEdge(edges: Edge[], a: string, b: string) {
@@ -41,7 +59,7 @@ export function computePoweredNodeIds(
   let changed = true
   while (changed) {
     changed = false
-      for (const edge of edges) {
+    for (const edge of edges) {
       const kind = edgeLinkKind(edge)
       if (kind !== 'center' && kind !== 'orbit') continue
 
@@ -51,13 +69,15 @@ export function computePoweredNodeIds(
       const sd = source.data as PassiveNodeData
       const td = target.data as PassiveNodeData
 
-      for (const [from, , to] of [
+      for (const [from, fromData, to] of [
         [source, sd, target] as const,
         [target, td, source] as const,
       ]) {
         if (!powered.has(from.id)) continue
+        if (!canTransmitPower(fromData)) continue
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
+        if (isVoid(toData)) continue
         if (!powered.has(to.id)) {
           powered.add(to.id)
           changed = true
@@ -74,6 +94,7 @@ export function computePoweredNodeIds(
       const satData = sat.data as PassiveNodeData
       if (satData.kind !== 'notable') continue
       if (!powered.has(sat.id)) continue
+      if (!canTransmitPower(satData)) continue
       if (findCenterEdge(edges, node.id, sat.id)) {
         powered.add(node.id)
         break
@@ -103,6 +124,8 @@ export function classifyPassiveConnection(
   const sd = source.data as PassiveNodeData
   const td = target.data as PassiveNodeData
 
+  if (isVoid(sd) || isVoid(td)) return null
+
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
     if (other.kind === 'small') return 'center'
@@ -115,20 +138,17 @@ export function classifyPassiveConnection(
   ) {
     const notable = sd.kind === 'notable' ? sd : td
     const mastery = isMastery(sd) ? source : target
-    const notableNode = sd.kind === 'notable' ? source : target
     if (notable.masteryId === mastery.id) return 'center'
-    void notableNode
     return null
   }
 
-  if (isMastery(sd) && (td.kind === 'small' || td.kind === 'notable')) {
+  if (isMastery(sd) && isOrbitMemberKind(td.kind)) {
     return 'attach'
   }
-  if (isMastery(td) && (sd.kind === 'small' || sd.kind === 'notable')) {
+  if (isMastery(td) && isOrbitMemberKind(sd.kind)) {
     return 'attach'
   }
 
-  // Notable ↔ Notable direct links are never allowed.
   if (sd.kind === 'notable' && td.kind === 'notable') return null
 
   if (
@@ -141,7 +161,6 @@ export function classifyPassiveConnection(
     return null
   }
 
-  // Off-orbit / cross-orbit: straight center links (orbit-internal stays arc-only above).
   if (!shareSameOrbit({ data: sd }, { data: td })) {
     if (sd.kind === 'small' && td.kind === 'small') return 'center'
     if (

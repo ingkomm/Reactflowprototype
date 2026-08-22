@@ -13,7 +13,6 @@ import {
   poweredLinkGlowStyle,
   trimStraightEndpoints,
 } from '../orbit'
-import { usePassiveClasses } from '../PassiveClassContext'
 import { usePowerSet } from '../PowerContext'
 
 export type CenterFlowEdge = Edge<Record<string, unknown>, 'center'>
@@ -31,7 +30,6 @@ export function CenterEdge({
   selected,
 }: EdgeProps) {
   const powered = usePowerSet()
-  const { resolve } = usePassiveClasses()
   const lit = powered.has(source) && powered.has(target)
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -68,11 +66,6 @@ export function CenterEdge({
   const hitPath = getStraightPath({ sourceX: sourceCX, sourceY: sourceCY, targetX: targetCX, targetY: targetCY })[0]
 
   if (lit) {
-    const masteryData = sd.kind === 'mastery' ? sd : td.kind === 'mastery' ? td : null
-    const glowColor =
-      notableMastery && masteryData
-        ? resolve(masteryData.classId, 'mastery').iconColor
-        : CROSS_ORBIT_GLOW_COLOR
     const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
     return (
       <>
@@ -85,7 +78,7 @@ export function CenterEdge({
         <BaseEdge
           id={id}
           path={path}
-          style={poweredLinkGlowStyle(glowColor, Boolean(selected))}
+          style={poweredLinkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected))}
           interactionWidth={0}
         />
       </>

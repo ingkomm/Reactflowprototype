@@ -61,6 +61,7 @@ type Props = {
   onChangeOrbitRadius: (nodeId: string, radius: number) => void
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
+  onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onDetachFromMastery: (nodeId: string) => void
   onRemoveLink: (edgeId: string) => void
   onAddLink: (peerId: string) => void
@@ -88,6 +89,7 @@ export function Inspector({
   onChangeOrbitRadius,
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
+  onChangeOrbitLocked,
   onDetachFromMastery,
   onRemoveLink,
   onAddLink,
@@ -260,32 +262,56 @@ export function Inspector({
 
       <div className="field">
         <span>클래스</span>
-        <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
-          {kindClasses.map((cls) => {
-            const selected = currentClass.id === cls.id
-            return (
-              <button
-                key={cls.id}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={`class-pick${selected ? ' is-selected' : ''}`}
-                title={cls.label}
-                onClick={() => onChangeClassId(nodeId, cls.id)}
-              >
-                <span className="class-pick__icon" style={{ color: cls.iconColor }}>
-                  <IconGlyph iconId={cls.iconId} />
-                </span>
-                <span className="class-pick__label">{cls.label}</span>
-              </button>
-            )
-          })}
-        </div>
-        <p className="field-hint">아이콘·색상은 우측 상단 클래스 관리에서 편집합니다.</p>
+        {data.kind !== 'initial' && data.kind !== 'void' ? (
+          <>
+            <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
+              {kindClasses.map((cls) => {
+                const selected = currentClass.id === cls.id
+                return (
+                  <button
+                    key={cls.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`class-pick${selected ? ' is-selected' : ''}`}
+                    title={cls.label}
+                    onClick={() => onChangeClassId(nodeId, cls.id)}
+                  >
+                    <span className="class-pick__icon" style={{ color: cls.iconColor }}>
+                      <IconGlyph iconId={cls.iconId} />
+                    </span>
+                    <span className="class-pick__label">{cls.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="field-hint">아이콘·색상은 우측 상단 클래스 관리에서 편집합니다.</p>
+          </>
+        ) : (
+          <p className="inspector__empty">이 종류는 클래스를 사용하지 않습니다.</p>
+        )}
       </div>
+
+      {data.kind === 'void' && (
+        <p className="inspector__empty">
+          Void Node — 오르빗 배치·링크 차단용. 파워·링크·띠 없음.
+        </p>
+      )}
 
       {data.kind === 'mastery' && (
         <>
+          <label className="field field--row">
+            <span>Orbit lock</span>
+            <input
+              type="checkbox"
+              checked={data.orbitLocked ?? false}
+              onChange={(e) => onChangeOrbitLocked(nodeId, e.target.checked)}
+            />
+          </label>
+          <p className="field-hint">
+            Lock 시 오르빗 회전·멤버 추가/제거·순서 변경이 불가합니다.
+          </p>
+
           <label className="field">
             <span>Orbit radius</span>
             <input
@@ -331,6 +357,7 @@ export function Inspector({
                     <select
                       aria-label={`Order for ${member.label}`}
                       value={member.order}
+                      disabled={data.orbitLocked}
                       onChange={(e) =>
                         onChangeOrbitOrder(nodeId, member.id, Number(e.target.value))
                       }
@@ -428,7 +455,7 @@ export function Inspector({
         </div>
       )}
 
-      {(data.kind === 'small' || data.kind === 'notable') && (
+      {(data.kind === 'small' || data.kind === 'notable' || data.kind === 'void') && (
         <>
           <div className="inspector__section">
             <div className="inspector__section-head">
@@ -452,7 +479,7 @@ export function Inspector({
         </>
       )}
 
-      {data.kind !== 'initial' && (
+      {data.kind !== 'initial' && data.kind !== 'void' && (
       <div className="inspector__section">
         <div className="inspector__section-head">
           <h3>단계 (띠)</h3>
