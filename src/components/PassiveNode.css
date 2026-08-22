@@ -42,43 +42,7 @@
   --ring: #3db8a8;
   --core: #142528;
   --accent: #9fe8dd;
-  --glow: rgba(61, 184, 168, 0.55);
-}
-
-.passive-node--mastery:not(.is-unpowered) .passive-node__ring {
-  box-shadow:
-    0 0 14px color-mix(in srgb, var(--accent) 75%, transparent),
-    0 0 28px color-mix(in srgb, var(--accent) 50%, transparent),
-    0 0 44px color-mix(in srgb, var(--accent) 28%, transparent),
-    inset 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent);
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.16), transparent 42%),
-    color-mix(in srgb, var(--accent) 38%, #0d1218);
-}
-
-.passive-node--mastery:not(.is-unpowered) .passive-node__halo {
-  opacity: max(var(--halo-strength), 0.38);
-  filter: blur(calc(7px + var(--band-level) * 4px));
-  box-shadow:
-    0 0 24px color-mix(in srgb, var(--accent) 45%, transparent),
-    0 0 40px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
-.passive-node--mastery:not(.is-unpowered) .passive-node__glyph {
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 80%, transparent))
-    drop-shadow(0 0 14px color-mix(in srgb, var(--accent) 45%, transparent));
-}
-
-.passive-node--mastery:not(.is-unpowered) .passive-node__title {
-  text-shadow:
-    -1px 0 0 rgba(0, 0, 0, 0.92),
-    1px 0 0 rgba(0, 0, 0, 0.92),
-    0 -1px 0 rgba(0, 0, 0, 0.92),
-    0 1px 0 rgba(0, 0, 0, 0.92),
-    0 0 3px color-mix(in srgb, var(--accent) 95%, white),
-    0 0 10px var(--accent),
-    0 0 22px color-mix(in srgb, var(--accent) 90%, transparent),
-    0 0 38px color-mix(in srgb, var(--accent) 60%, transparent);
+  --glow: rgba(61, 184, 168, 0.35);
 }
 
 .passive-node--initial {
