@@ -108,8 +108,8 @@ export function OrbitEdge({
   }
 
   const mc = {
-    x: masteryNode.internals.positionAbsolute.x + (masteryNode.measured.width ?? 76) / 2,
-    y: masteryNode.internals.positionAbsolute.y + (masteryNode.measured.height ?? 76) / 2,
+    x: masteryNode.internals.positionAbsolute.x + (masteryNode.measured.width ?? 88) / 2,
+    y: masteryNode.internals.positionAbsolute.y + (masteryNode.measured.height ?? 88) / 2,
   }
 
   const path = orbitArcPath(mc.x, mc.y, spec.arcRadius, spec.a1, spec.a2, spec.clockwise)

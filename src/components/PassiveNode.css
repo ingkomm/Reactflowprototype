@@ -23,7 +23,7 @@
 }
 
 .passive-node--small {
-  --node-size: 48px;
+  --node-size: 40px;
   --ring: #8b9aa8;
   --core: #24313b;
   --accent: #d5dde5;
@@ -38,7 +38,7 @@
 }
 
 .passive-node--mastery {
-  --node-size: 76px;
+  --node-size: 88px;
   --ring: #3db8a8;
   --core: #142528;
   --accent: #9fe8dd;
@@ -67,7 +67,7 @@
 }
 
 .passive-node--voidMastery {
-  --node-size: 76px;
+  --node-size: 88px;
   --ring: transparent;
   --core: transparent;
   --accent: #6a7580;

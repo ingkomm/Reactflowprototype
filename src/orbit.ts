@@ -4,10 +4,10 @@ import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
-  small: 48,
+  small: 40,
   notable: 68,
-  mastery: 76,
-  voidMastery: 76,
+  mastery: 88,
+  voidMastery: 88,
   void: 36,
 }
 
