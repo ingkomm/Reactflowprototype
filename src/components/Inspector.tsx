@@ -485,7 +485,7 @@ export function Inspector({
           )}
           {(data.kind === 'small' || data.kind === 'notable') && (
             <p className="inspector__empty">
-              같은 단 = 인접 노드만 호 링크 · 다른 단 = 호 링크 불가 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
+              같은 단 = 인접 노드만 호 링크 · 인접 단(1↔2, 2↔3) = 직선 호 링크 · 1↔3 불가 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
             </p>
           )}
           {links.length === 0 ? (

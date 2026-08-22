@@ -191,6 +191,12 @@
   opacity: 0.35;
 }
 
+.passive-node--mastery.is-unpowered.is-orbit-highlighted .passive-node__orbit {
+  opacity: 1;
+  border-color: color-mix(in srgb, #9fe8dd 32%, transparent);
+  box-shadow: inset 0 0 24px rgba(61, 184, 168, 0.1);
+}
+
 .passive-node__orbit {
   position: absolute;
   left: 50%;

@@ -277,7 +277,12 @@ export function setMasteryTierStartAngle(
   return next
 }
 
-/** Orbit arc link allowed: same tier only; must be adjacent on that ring. */
+/** True when two orbit tiers are neighbors (1↔2, 2↔3). */
+export function areOrbitTiersAdjacent(tierA: OrbitTier, tierB: OrbitTier): boolean {
+  return Math.abs(tierA - tierB) === 1
+}
+
+/** Orbit link: same tier = adjacent on ring; adjacent tiers (1↔2, 2↔3) = any pair. */
 export function canOrbitLink(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -294,17 +299,13 @@ export function canOrbitLink(
 
   const tierA = getSatelliteOrbitTier(nodes, masteryId, aId)
   const tierB = getSatelliteOrbitTier(nodes, masteryId, bId)
-  if (tierA !== tierB) return false
-  return areOrbitAdjacent(nodes, masteryId, aId, bId)
+  if (tierA === tierB) return areOrbitAdjacent(nodes, masteryId, aId, bId)
+  return areOrbitTiersAdjacent(tierA, tierB)
 }
 
-export type OrbitLinkSpec = {
-  kind: 'arc'
-  a1: number
-  a2: number
-  arcRadius: number
-  clockwise: boolean
-}
+export type OrbitLinkSpec =
+  | { kind: 'arc'; a1: number; a2: number; arcRadius: number; clockwise: boolean }
+  | { kind: 'chord' }
 
 /** Outermost training-band edge radius from the satellite node center. */
 export function satelliteBandOuterRadius(data: PassiveNodeData): number {
@@ -330,7 +331,7 @@ function orbitSlotAngle(
   return startRad + (2 * Math.PI * index) / count
 }
 
-/** Orbit link geometry: arc on a tier ring (same tier only). */
+/** Orbit link geometry: arc on a tier ring, or chord across adjacent tiers. */
 export function orbitLinkSpec(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -350,7 +351,8 @@ export function orbitLinkSpec(
   const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
   const tierA = getSatelliteOrbitTier(nodes, masteryId, sourceId)
   const tierB = getSatelliteOrbitTier(nodes, masteryId, targetId)
-  if (tierA !== tierB) return null
+
+  if (tierA !== tierB) return { kind: 'chord' }
 
   const orbitR = orbitTierRadius(tierCount, tierA)
   const ordered = getOrderedTierSatellites(nodes, masteryId, tierA).map((s) => s.id)

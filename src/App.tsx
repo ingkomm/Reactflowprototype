@@ -1557,7 +1557,7 @@ export default function App() {
           </PowerProvider>
 
           <p className="canvas-hint">
-            Initial 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 단 간 호 링크 불가 · 단별 독립 회전
+            Initial 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 인접 단(1↔2, 2↔3) 호 링크 · 단별 독립 회전
           </p>
         </section>
 

@@ -51,6 +51,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     (data.kind === 'void' && !data.masteryId) ||
     (data.kind === 'voidMastery' && orbitSatelliteCount === 0)
   const powered = !isStealth && (useNodePowered(id) || data.kind === 'initial')
+  const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
@@ -83,6 +84,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         isStealth ? ' is-stealth' : ''
       }${isAmbientVisible ? ' is-ambient-visible' : ''}${
         showVoidHighlight ? ' is-void-highlighted' : ''
+      }${
+        showOrbitHighlight ? ' is-orbit-highlighted' : ''
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }`}

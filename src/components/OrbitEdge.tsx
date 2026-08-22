@@ -1,12 +1,19 @@
 import {
   BaseEdge,
+  getStraightPath,
   useInternalNode,
   useStore,
   type EdgeProps,
 } from '@xyflow/react'
 import type { PassiveNodeData } from '../types'
 import type { PassiveFlowNode } from './PassiveNode'
-import { CROSS_ORBIT_GLOW_COLOR, linkGlowStyle, orbitLinkSpec } from '../orbit'
+import {
+  CROSS_ORBIT_GLOW_COLOR,
+  linkEndpointPad,
+  linkGlowStyle,
+  orbitLinkSpec,
+  trimStraightEndpoints,
+} from '../orbit'
 import { usePowerSet } from '../PowerContext'
 
 export type OrbitEdgeData = {
@@ -64,6 +71,41 @@ export function OrbitEdge({
 
   const lit = powered.has(source) && powered.has(target)
   const lineStyle = linkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected), lit)
+
+  const sourceCX =
+    sourceNode.internals.positionAbsolute.x + (sourceNode.measured.width ?? 0) / 2
+  const sourceCY =
+    sourceNode.internals.positionAbsolute.y + (sourceNode.measured.height ?? 0) / 2
+  const targetCX =
+    targetNode.internals.positionAbsolute.x + (targetNode.measured.width ?? 0) / 2
+  const targetCY =
+    targetNode.internals.positionAbsolute.y + (targetNode.measured.height ?? 0) / 2
+
+  if (spec.kind === 'chord') {
+    const td = targetNode.data as PassiveNodeData
+    const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
+      sourceCX,
+      sourceCY,
+      targetCX,
+      targetCY,
+      linkEndpointPad(sd!),
+      linkEndpointPad(td),
+    )
+    const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+    const hitPath = getStraightPath({
+      sourceX: sourceCX,
+      sourceY: sourceCY,
+      targetX: targetCX,
+      targetY: targetCY,
+    })[0]
+
+    return (
+      <>
+        <BaseEdge id={`${id}-hit`} path={hitPath} style={{ stroke: 'transparent', strokeWidth: 14 }} />
+        <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
+      </>
+    )
+  }
 
   const mc = {
     x: masteryNode.internals.positionAbsolute.x + (masteryNode.measured.width ?? 76) / 2,
