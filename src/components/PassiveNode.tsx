@@ -11,7 +11,7 @@ import {
 } from '../stage'
 import {
   getOrderedOrbitSatellites,
-  getOrbitTiersWithLinks,
+  getOrbitTiersWithRingLinks,
   isMasteryKind,
   isStealthPassiveKind,
   normalizeOrbitTierCount,
@@ -53,7 +53,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     (data.kind === 'void' && !data.masteryId) ||
     (data.kind === 'voidMastery' && orbitSatelliteCount === 0)
   const powered = !isStealth && (useNodePowered(id) || data.kind === 'initial')
-  const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
+  const showOrbitHighlight =
+    voidHighlight && data.kind === 'mastery' && !powered && !data.orbitLocked
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
@@ -62,7 +63,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const linkedOrbitTiers = useMemo(() => {
     if (!isMastery || !data.orbitLocked) return null
-    return getOrbitTiersWithLinks(nodes, edges, id)
+    return getOrbitTiersWithRingLinks(nodes, edges, id)
   }, [nodes, edges, id, isMastery, data.orbitLocked])
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]

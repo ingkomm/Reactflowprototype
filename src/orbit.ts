@@ -315,8 +315,8 @@ type OrbitEdgeLike = {
   data?: { masteryId?: string }
 }
 
-/** Tiers that have at least one orbit link touching a satellite on that ring. */
-export function getOrbitTiersWithLinks(
+/** Tiers with at least one same-tier orbit arc (ring link on that tier). */
+export function getOrbitTiersWithRingLinks(
   nodes: PassiveFlowNode[],
   edges: OrbitEdgeLike[],
   masteryId: string,
@@ -325,13 +325,23 @@ export function getOrbitTiersWithLinks(
   for (const edge of edges) {
     if (edge.type !== 'orbit') continue
     if (edge.data?.masteryId !== masteryId) continue
-    tiers.add(getSatelliteOrbitTier(nodes, masteryId, edge.source))
-    tiers.add(getSatelliteOrbitTier(nodes, masteryId, edge.target))
+    const tierA = getSatelliteOrbitTier(nodes, masteryId, edge.source)
+    const tierB = getSatelliteOrbitTier(nodes, masteryId, edge.target)
+    if (tierA === tierB) tiers.add(tierA)
   }
   return tiers
 }
 
-/** When locked, only tiers with orbit links show rings / accept rotate hit-test. */
+/** @deprecated Use getOrbitTiersWithRingLinks for locked orbit ring visibility. */
+export function getOrbitTiersWithLinks(
+  nodes: PassiveFlowNode[],
+  edges: OrbitEdgeLike[],
+  masteryId: string,
+): Set<OrbitTier> {
+  return getOrbitTiersWithRingLinks(nodes, edges, masteryId)
+}
+
+/** When locked, only tiers with on-ring arc links show rings / accept rotate hit-test. */
 export function visibleOrbitTiersForMastery(
   nodes: PassiveFlowNode[],
   edges: OrbitEdgeLike[],
@@ -339,7 +349,7 @@ export function visibleOrbitTiersForMastery(
 ): Set<OrbitTier> | null {
   const mastery = nodes.find((n) => n.id === masteryId)
   if (!mastery || !isMasteryOrbitLocked(nodes, masteryId)) return null
-  return getOrbitTiersWithLinks(nodes, edges, masteryId)
+  return getOrbitTiersWithRingLinks(nodes, edges, masteryId)
 }
 
 /** Set snapped start angle for one tier; tier 1 also updates legacy orbitStartAngle. */

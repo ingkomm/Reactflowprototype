@@ -368,7 +368,7 @@ export function Inspector({
           </label>
           <p className="field-hint">
             {data.orbitLocked
-              ? 'Lock 시 멤버 추가/제거·순서 변경 불가 · 링크 있는 궤도만 표시 · 1~3단 함께 회전'
+              ? 'Lock 시 멤버 추가/제거·순서 변경 불가 · 같은 단 호 링크 있는 궤도만 표시 · 1~3단 함께 회전'
               : 'Lock 시 멤버 추가/제거·순서 변경만 불가합니다. 빈 오르빗 링을 드래그하면 해당 단만 회전합니다.'}
           </p>
 
@@ -404,7 +404,7 @@ export function Inspector({
                   ))}
                 </select>
               </label>
-              <p className="field-hint">잠금 중 · 1~3단 동시 회전 · 링크 없는 궤도는 숨김</p>
+              <p className="field-hint">잠금 중 · 1~3단 동시 회전 · 같은 단 호 링크 없는 궤도는 숨김</p>
             </>
           ) : (
             <>

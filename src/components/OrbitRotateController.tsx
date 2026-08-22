@@ -13,20 +13,27 @@ import {
   snapshotMasteryTierAngles,
   snapOrbitAngle,
 } from '../orbit'
+import {
+  beginOrbitRotateDrag,
+  endOrbitRotateDrag,
+  orbitInteractionGuard,
+} from '../orbitInteractionGuard'
 import type { PassiveFlowNode } from './PassiveNode'
 import type { OrbitTier, PassiveNodeData } from '../types'
 
 type Props = {
   commit: () => void
+  selectedIdRef: React.RefObject<string | null>
   setNodes: (updater: (nds: PassiveFlowNode[]) => PassiveFlowNode[]) => void
   stack: (nds: PassiveFlowNode[]) => PassiveFlowNode[]
+  restoreSelection: (nodeId: string) => void
 }
 
 /**
  * Drag empty mastery orbit ring to rotate.
  * Unlocked: per-tier start angle. Locked: all tiers rotate together; only linked rings hit-test.
  */
-export function OrbitRotateController({ commit, setNodes, stack }: Props) {
+export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, restoreSelection }: Props) {
   const { screenToFlowPosition } = useReactFlow()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const edges = useStore((s) => s.edges)
@@ -111,6 +118,12 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
 
       const md = mastery.data as PassiveNodeData
       const locked = Boolean(md.orbitLocked)
+      try {
+        pane.setPointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+      beginOrbitRotateDrag(selectedIdRef.current ?? hit.masteryId)
       dragRef.current = {
         pointerId: e.pointerId,
         masteryId: hit.masteryId,
@@ -151,13 +164,22 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       applyDragDelta(drag, e.clientX, e.clientY)
     }
 
+    const finishDrag = (e: PointerEvent, drag: NonNullable<typeof dragRef.current>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      dragRef.current = null
+      pane.classList.remove('is-orbit-rotating')
+      applyDragDelta(drag, e.clientX, e.clientY)
+      endOrbitRotateDrag()
+      const preserveId = orbitInteractionGuard.preserveSelectionId
+      if (preserveId) restoreSelection(preserveId)
+    }
+
     const endDrag = (event: Event) => {
       const e = event as PointerEvent
       const drag = dragRef.current
       if (!drag || drag.pointerId !== e.pointerId) return
-      dragRef.current = null
-      pane.classList.remove('is-orbit-rotating')
-      applyDragDelta(drag, e.clientX, e.clientY)
+      finishDrag(e, drag)
     }
 
     pane.addEventListener('pointerdown', onPointerDown, true)
@@ -172,7 +194,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       window.removeEventListener('pointercancel', endDrag)
       pane.classList.remove('is-orbit-rotating', 'is-orbit-hover')
     }
-  }, [commit, screenToFlowPosition, setNodes, stack])
+  }, [commit, restoreSelection, screenToFlowPosition, selectedIdRef, setNodes, stack])
 
   return null
 }

@@ -64,6 +64,7 @@ import {
   withMasteryDragFlags,
 } from './orbit'
 import { OrbitRotateController } from './components/OrbitRotateController'
+import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { VoidHighlightProvider } from './VoidHighlightContext'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
@@ -1027,8 +1028,17 @@ export default function App() {
   )
 
   const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
+    if (shouldSuppressOrbitSelectionClear()) return
     setSelectedId(selected[0]?.id ?? null)
   }, [])
+
+  const restoreFlowSelection = useCallback(
+    (nodeId: string) => {
+      setSelectedId(nodeId)
+      setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === nodeId })))
+    },
+    [setNodes],
+  )
 
   const updateNodeData = useCallback(
     (nodeId: string, updater: (data: PassiveNodeData) => PassiveNodeData) => {
@@ -1264,7 +1274,10 @@ export default function App() {
     deleteNode(selectedId)
   }, [deleteNode, selectedId])
 
-  const onPaneClick = useCallback(() => setSelectedId(null), [])
+  const onPaneClick = useCallback(() => {
+    if (shouldSuppressOrbitSelectionClear()) return
+    setSelectedId(null)
+  }, [])
 
   const onNodeClick = useCallback((_: ReactMouseEvent, node: Node) => {
     setSelectedId(node.id)
@@ -1552,7 +1565,13 @@ export default function App() {
             }}
             proOptions={{ hideAttribution: true }}
           >
-            <OrbitRotateController commit={commit} setNodes={setNodes} stack={stack} />
+            <OrbitRotateController
+              commit={commit}
+              selectedIdRef={selectedIdRef}
+              setNodes={setNodes}
+              stack={stack}
+              restoreSelection={restoreFlowSelection}
+            />
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
             <Controls position="top-left" />
             <MiniMap
