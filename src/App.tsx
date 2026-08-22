@@ -22,8 +22,8 @@ import { CenterEdge } from './components/CenterEdge'
 import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
-import { classifyPassiveConnection, computePoweredNodeIds } from './power'
-import type { PassiveKind, PassiveNodeData, StageData } from './types'
+import { classifyPassiveConnection, computePoweredNodeIds, pruneEdgesReachableFromInitial } from './power'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
@@ -36,8 +36,6 @@ import { ClassManager } from './components/ClassManager'
 import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
 import {
-  areOrbitAdjacent,
-  DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
   getOrderedOrbitSatellites,
@@ -46,6 +44,9 @@ import {
   isOrbitMemberKind,
   isStealthPassiveKind,
   layoutMasteryOrbit,
+  masteryOuterOrbitRadius,
+  normalizeOrbitTier,
+  normalizeOrbitTierCount,
   ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
   orbitOrderByDropAngle,
@@ -70,11 +71,12 @@ function createPassiveData(
   extras: Partial<
     Pick<
       PassiveNodeData,
-      | 'orbitRadius'
+      | 'orbitTierCount'
       | 'orbitStartAngle'
       | 'orbitOrder'
       | 'orbitLocked'
       | 'masteryId'
+      | 'orbitTier'
       | 'voidPassing'
       | 'classId'
       | 'stages'
@@ -90,19 +92,23 @@ function createPassiveData(
     classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
     ...(isMasteryKind(kind)
       ? {
-          orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: extras.orbitOrder ?? [],
           orbitLocked: extras.orbitLocked ?? false,
+          orbitTierCount: extras.orbitTierCount ?? 1,
         }
       : kind === 'void'
         ? {
             masteryId: extras.masteryId ?? null,
             voidPassing: extras.voidPassing ?? false,
+            orbitTier: extras.orbitTier ?? 1,
           }
         : kind === 'initial'
           ? {}
-          : { masteryId: extras.masteryId ?? null }),
+          : {
+              masteryId: extras.masteryId ?? null,
+              orbitTier: extras.orbitTier ?? 1,
+            }),
   }
 }
 
@@ -176,15 +182,15 @@ function buildPastedNode(
     classId: source.classId,
     ...(isMasteryKind(kind)
       ? {
-          orbitRadius: source.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: [],
+          orbitTierCount: source.orbitTierCount ?? 1,
         }
       : kind === 'void'
-        ? { masteryId: null, voidPassing: source.voidPassing ?? false }
+        ? { masteryId: null, voidPassing: source.voidPassing ?? false, orbitTier: 1 }
         : kind === 'initial'
           ? {}
-          : { masteryId: null }),
+          : { masteryId: null, orbitTier: 1 }),
   }
 
   return {
@@ -228,9 +234,7 @@ function classifyLink(
   target: PassiveFlowNode,
   nodes: PassiveFlowNode[],
 ) {
-  return classifyPassiveConnection(source, target, nodes, (masteryId, a, b) =>
-    areOrbitAdjacent(nodes, masteryId, a, b),
-  )
+  return classifyPassiveConnection(source, target, nodes)
 }
 
 function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
@@ -242,6 +246,10 @@ function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
     if (e.type === 'orbit') return linkKind === 'orbit'
     return linkKind === 'center'
   })
+}
+
+function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
+  return pruneEdgesReachableFromInitial(nodes, pruneInvalidEdges(nodes, edges))
 }
 
 const danceMasteryId = 'mastery-dance'
@@ -282,9 +290,9 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '안무 리허설', goal: 5, logged: 3 },
           { label: '공연', goal: 3, logged: 1 },
         ]),
-        orbitRadius: 170,
         orbitStartAngle: -90,
         orbitOrder: danceOrbitOrder,
+        orbitTierCount: 2,
         classId: 'm-dance',
       }),
     },
@@ -360,9 +368,9 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '메인', goal: 5, logged: 2 },
           { label: '쿨다운', goal: 3, logged: 0 },
         ]),
-        orbitRadius: 170,
         orbitStartAngle: -90,
         orbitOrder: gymOrbitOrder,
+        orbitTierCount: 1,
         classId: 'm-gym',
       }),
     },
@@ -605,18 +613,12 @@ export default function App() {
     [nodes, edges],
   )
 
-  // Drop edges that no longer match link rules (orbit adjacency, no Notable↔Notable, etc.).
+  // Drop invalid links and anything not reachable from Initial.
   useEffect(() => {
     setEdges((eds) => {
-      const next = eds.filter((e) => {
-        const source = nodes.find((n) => n.id === e.source)
-        const target = nodes.find((n) => n.id === e.target)
-        if (!source || !target) return false
-        const linkKind = classifyLink(source, target, nodes)
-        if (e.type === 'orbit') return linkKind === 'orbit'
-        return linkKind === 'center'
-      })
-      return next.length === eds.length ? eds : next
+      const next = sanitizeEdges(nodes, eds)
+      if (next.length === eds.length && next.every((e, i) => e.id === eds[i]?.id)) return eds
+      return next
     })
   }, [nodes, setEdges])
 
@@ -632,7 +634,14 @@ export default function App() {
     if (!masteryId) return null
     const mastery = nodes.find((n) => n.id === masteryId)
     return (mastery?.data as PassiveNodeData | undefined)?.label ?? masteryId
-  }, [nodes, selectedData])
+  }, [nodes, selectedData?.masteryId])
+
+  const selectedMasteryTierCount = useMemo(() => {
+    const masteryId = selectedData?.masteryId
+    if (!masteryId) return null
+    const mastery = nodes.find((n) => n.id === masteryId)
+    return normalizeOrbitTierCount((mastery?.data as PassiveNodeData | undefined)?.orbitTierCount)
+  }, [nodes, selectedData?.masteryId])
 
   const orbitMembers = useMemo(() => {
     if (!selectedNode || !selectedData || !isMasteryKind(selectedData.kind)) return []
@@ -643,9 +652,13 @@ export default function App() {
         label: data.label,
         kind: data.kind,
         order: index + 1,
+        tier: normalizeOrbitTier(
+          data.orbitTier,
+          normalizeOrbitTierCount(selectedData.orbitTierCount),
+        ),
       }
     })
-  }, [nodes, selectedData?.kind, selectedNode])
+  }, [nodes, selectedData?.kind, selectedData?.orbitTierCount, selectedNode])
 
   const selectedLinks = useMemo(() => {
     if (!selectedNode || !selectedData) return []
@@ -828,20 +841,62 @@ export default function App() {
     [commit, nodes, setNodes, stack],
   )
 
-  const changeOrbitRadius = useCallback(
-    (masteryId: string, radius: number) => {
-      const clamped = Math.min(480, Math.max(80, radius))
+  const changeOrbitTierCount = useCallback(
+    (masteryId: string, tierCount: OrbitTierCount) => {
       commit()
       setNodes((nds) => {
-        const next = nds.map((node) => {
-          if (node.id !== masteryId) return node
+        let next = nds.map((node) => {
           const data = node.data as PassiveNodeData
-          return { ...node, data: { ...data, orbitRadius: clamped } }
+          if (node.id === masteryId) {
+            return { ...node, data: { ...data, orbitTierCount: tierCount } }
+          }
+          if (data.masteryId === masteryId) {
+            return {
+              ...node,
+              data: {
+                ...data,
+                orbitTier: normalizeOrbitTier(data.orbitTier, tierCount),
+              },
+            }
+          }
+          return node
         })
-        return stack(layoutMasteryOrbit(next, masteryId))
+        next = layoutMasteryOrbit(next, masteryId)
+        const stacked = stack(next)
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
       })
     },
-    [commit, setNodes, stack],
+    [commit, setEdges, setNodes, stack],
+  )
+
+  const changeSatelliteOrbitTier = useCallback(
+    (satelliteId: string, tier: OrbitTier) => {
+      commit()
+      setNodes((nds) => {
+        const satellite = nds.find((n) => n.id === satelliteId)
+        if (!satellite) return nds
+        const masteryId = (satellite.data as PassiveNodeData).masteryId
+        if (!masteryId) return nds
+        const mastery = nds.find((n) => n.id === masteryId)
+        const tierCount = normalizeOrbitTierCount(
+          (mastery?.data as PassiveNodeData | undefined)?.orbitTierCount,
+        )
+        let next = nds.map((node) => {
+          if (node.id !== satelliteId) return node
+          const data = node.data as PassiveNodeData
+          return {
+            ...node,
+            data: { ...data, orbitTier: normalizeOrbitTier(tier, tierCount) },
+          }
+        })
+        next = layoutMasteryOrbit(next, masteryId)
+        const stacked = stack(next)
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
+      })
+    },
+    [commit, setEdges, setNodes, stack],
   )
 
   const changeOrbitStartAngle = useCallback(
@@ -956,7 +1011,7 @@ export default function App() {
               }
             : node,
         )
-        setEdges((eds) => pruneInvalidEdges(next, eds))
+        setEdges((eds) => sanitizeEdges(next, eds))
         return next
       })
     },
@@ -991,10 +1046,12 @@ export default function App() {
               classId: resolvePassiveClass(classes, data.classId, kind).id,
               ...(isMasteryKind(kind)
                 ? {
-                    orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
                     orbitOrder: isMasteryKind(prev.kind) ? (data.orbitOrder ?? []) : [],
                     orbitLocked: data.orbitLocked ?? false,
+                    orbitTierCount: isMasteryKind(prev.kind)
+                      ? normalizeOrbitTierCount(data.orbitTierCount)
+                      : 1,
                     masteryId: null,
                   }
                 : kind === 'void'
@@ -1004,6 +1061,15 @@ export default function App() {
                           ? data.masteryId ?? null
                           : null,
                       voidPassing: prev.kind === 'void' ? (data.voidPassing ?? false) : false,
+                      orbitTier: normalizeOrbitTier(
+                        data.orbitTier,
+                        data.masteryId
+                          ? normalizeOrbitTierCount(
+                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
+                                ?.orbitTierCount,
+                            )
+                          : 1,
+                      ),
                     }
                 : kind === 'initial'
                   ? {}
@@ -1012,6 +1078,15 @@ export default function App() {
                         isOrbitMemberKind(kind) && !isMasteryKind(prev.kind)
                           ? data.masteryId ?? null
                           : null,
+                      orbitTier: normalizeOrbitTier(
+                        data.orbitTier,
+                        data.masteryId
+                          ? normalizeOrbitTierCount(
+                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
+                                ?.orbitTierCount,
+                            )
+                          : 1,
+                      ),
                     }),
             }
             return { ...node, data: nextData }
@@ -1065,7 +1140,6 @@ export default function App() {
             { ...sourceNode, data: sourceData },
             { ...targetNode, data: targetData },
             nodes,
-            (masteryId, a, b) => areOrbitAdjacent(nodes, masteryId, a, b),
           )
 
           if (e.type === 'orbit') return linkKind === 'orbit'
@@ -1209,8 +1283,7 @@ export default function App() {
           if (mastery) {
             const parentDist =
               findNearestMastery([mastery, satellite], satellite)?.dist ?? Infinity
-            const radius =
-              (mastery.data as PassiveNodeData).orbitRadius ?? DEFAULT_ORBIT_RADIUS
+            const radius = masteryOuterOrbitRadius(mastery.data as PassiveNodeData)
 
             if (parentDist > radius + ORBIT_DETACH_SLACK) {
               next = next.map((n) => {
@@ -1437,6 +1510,7 @@ export default function App() {
             nodeId={selectedNode?.id ?? null}
             data={selectedData}
             masteryLabel={selectedMasteryLabel}
+            masteryTierCount={selectedMasteryTierCount}
             orbitMembers={orbitMembers}
             links={selectedLinks}
             linkCandidates={linkCandidates}
@@ -1448,7 +1522,8 @@ export default function App() {
             onChangeStages={(nodeId, stages) =>
               updateNodeData(nodeId, (d) => ({ ...d, stages }))
             }
-            onChangeOrbitRadius={changeOrbitRadius}
+            onChangeOrbitTierCount={changeOrbitTierCount}
+            onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
             onChangeOrbitStartAngle={changeOrbitStartAngle}
             onChangeOrbitOrder={changeOrbitOrder}
             onChangeOrbitLocked={changeOrbitLocked}

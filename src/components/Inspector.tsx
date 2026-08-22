@@ -2,6 +2,8 @@ import { useEffect, useState, type DragEvent } from 'react'
 import type {
   PassiveKind,
   PassiveNodeData,
+  OrbitTier,
+  OrbitTierCount,
   StageData,
   TrainingLog,
 } from '../types'
@@ -16,10 +18,10 @@ import {
   withNormalizedStage,
 } from '../stage'
 import {
-  DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   isMasteryKind,
   isStealthPassiveKind,
+  normalizeOrbitTierCount,
   orbitAngleOptions,
 } from '../orbit'
 import { classesForKind } from '../passiveClass'
@@ -32,6 +34,7 @@ export type OrbitMember = {
   label: string
   kind: PassiveKind
   order: number
+  tier: OrbitTier
 }
 
 export type LinkItem = {
@@ -53,6 +56,7 @@ type Props = {
   nodeId: string | null
   data: PassiveNodeData | null
   masteryLabel?: string | null
+  masteryTierCount?: OrbitTierCount | null
   orbitMembers?: OrbitMember[]
   links?: LinkItem[]
   linkCandidates?: LinkCandidate[]
@@ -60,7 +64,8 @@ type Props = {
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeClassId: (nodeId: string, classId: string) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
-  onChangeOrbitRadius: (nodeId: string, radius: number) => void
+  onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
+  onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
@@ -82,6 +87,7 @@ export function Inspector({
   nodeId,
   data,
   masteryLabel,
+  masteryTierCount = null,
   orbitMembers = [],
   links = [],
   linkCandidates = [],
@@ -89,7 +95,8 @@ export function Inspector({
   onChangeKind,
   onChangeClassId,
   onChangeStages,
-  onChangeOrbitRadius,
+  onChangeOrbitTierCount,
+  onChangeSatelliteOrbitTier,
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
   onChangeOrbitLocked,
@@ -124,6 +131,7 @@ export function Inspector({
 
   const angleOptions = orbitAngleOptions()
   const startAngle = data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
+  const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const stages = sortedStages(data.stages ?? [])
   const kindClasses = classesForKind(classes, data.kind)
   const currentClass = resolve(data.classId, data.kind)
@@ -363,18 +371,21 @@ export function Inspector({
           </p>
 
           <label className="field">
-            <span>Orbit radius</span>
-            <input
-              type="number"
-              min={80}
-              max={480}
-              step={10}
-              value={data.orbitRadius ?? DEFAULT_ORBIT_RADIUS}
+            <span>Orbit tiers</span>
+            <select
+              value={orbitTierCount}
               onChange={(e) =>
-                onChangeOrbitRadius(nodeId, Number(e.target.value) || DEFAULT_ORBIT_RADIUS)
+                onChangeOrbitTierCount(nodeId, Number(e.target.value) as OrbitTierCount)
               }
-            />
+            >
+              <option value={1}>1단</option>
+              <option value={2}>2단</option>
+              <option value={3}>3단</option>
+            </select>
           </label>
+          <p className="field-hint">
+            같은 단에서는 인접 노드만 호 링크 · 다른 단 사이에는 인접 제한 없음
+          </p>
 
           <label className="field">
             <span>Orbit start angle</span>
@@ -418,6 +429,25 @@ export function Inspector({
                         </option>
                       ))}
                     </select>
+                    {orbitTierCount > 1 && (
+                      <select
+                        aria-label={`Tier for ${member.label}`}
+                        value={member.tier}
+                        disabled={data.orbitLocked}
+                        onChange={(e) =>
+                          onChangeSatelliteOrbitTier(
+                            member.id,
+                            Number(e.target.value) as OrbitTier,
+                          )
+                        }
+                      >
+                        {Array.from({ length: orbitTierCount }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            {i + 1}단
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -444,7 +474,7 @@ export function Inspector({
           )}
           {(data.kind === 'small' || data.kind === 'notable') && (
             <p className="inspector__empty">
-              오르빗 안 = 인접 노드만 호 링크 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
+              같은 단 = 인접 노드만 호 링크 · 다른 단 = 제한 없음 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
             </p>
           )}
           {links.length === 0 ? (
@@ -525,6 +555,23 @@ export function Inspector({
                 ? `Orbit of: ${masteryLabel ?? data.masteryId}`
                 : 'Not on an orbit. Connect to a Mastery or Void Master (membership only).'}
             </p>
+            {data.masteryId && masteryTierCount !== null && masteryTierCount > 1 && (
+              <label className="field">
+                <span>Orbit tier</span>
+                <select
+                  value={data.orbitTier ?? 1}
+                  onChange={(e) =>
+                    onChangeSatelliteOrbitTier(nodeId, Number(e.target.value) as OrbitTier)
+                  }
+                >
+                  {Array.from({ length: masteryTierCount }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {i + 1}단
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
         </>
       )}

@@ -1,5 +1,8 @@
 export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery' | 'voidMastery' | 'void'
 
+export type OrbitTier = 1 | 2 | 3
+export type OrbitTierCount = 1 | 2 | 3
+
 /** One training log entry within a stage. Counts are capped by the stage goal. */
 export type TrainingLog = {
   id: string
@@ -64,6 +67,8 @@ export type PassiveNodeData = {
   classId: string
   /** Mastery / Void Master: radius of the circular orbit for attached passives. */
   orbitRadius?: number
+  /** Mastery / Void Master: number of concentric orbit tiers (1–3). */
+  orbitTierCount?: OrbitTierCount
   /**
    * Mastery / Void Master: starting angle in degrees for orbit slot #1.
    * Snapped to 15° steps. Default -90 (top). Clockwise from there.
@@ -75,6 +80,8 @@ export type PassiveNodeData = {
   orbitLocked?: boolean
   /** Small/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
+  /** Small/Notable/Void on an orbit: which tier ring (1 = innermost). */
+  orbitTier?: OrbitTier
   /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
   voidPassing?: boolean
 }

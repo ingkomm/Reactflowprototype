@@ -4,6 +4,7 @@ import type { PassiveNodeData } from './types'
 import { isStageComplete } from './stage'
 import {
   getOrderedOrbitSatellites,
+  canOrbitLink,
   isMasteryKind,
   isOrbitMemberKind,
   isSatelliteKind,
@@ -114,12 +115,61 @@ export function isEdgePowered(
   return powered.has(edge.source) && powered.has(edge.target)
 }
 
+/** Nodes reachable from any Initial node via center/orbit links. */
+export function getNodesReachableFromInitial(
+  nodes: PassiveFlowNode[],
+  edges: Edge[],
+): Set<string> {
+  const reachable = new Set<string>()
+  const queue: string[] = []
+
+  for (const node of nodes) {
+    if ((node.data as PassiveNodeData).kind === 'initial') {
+      reachable.add(node.id)
+      queue.push(node.id)
+    }
+  }
+
+  const adj = new Map<string, Set<string>>()
+  for (const edge of edges) {
+    if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type) continue
+    for (const [a, b] of [
+      [edge.source, edge.target],
+      [edge.target, edge.source],
+    ] as const) {
+      if (!adj.has(a)) adj.set(a, new Set())
+      adj.get(a)!.add(b)
+    }
+  }
+
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    for (const next of adj.get(id) ?? []) {
+      if (!reachable.has(next)) {
+        reachable.add(next)
+        queue.push(next)
+      }
+    }
+  }
+
+  return reachable
+}
+
+/** Drop links whose endpoints are not both reachable from Initial. */
+export function pruneEdgesReachableFromInitial(
+  nodes: PassiveFlowNode[],
+  edges: Edge[],
+): Edge[] {
+  const reachable = getNodesReachableFromInitial(nodes, edges)
+  if (reachable.size === 0) return []
+  return edges.filter((e) => reachable.has(e.source) && reachable.has(e.target))
+}
+
 /** Whether a new center/orbit link is allowed between two nodes. */
 export function classifyPassiveConnection(
   source: PassiveFlowNode,
   target: PassiveFlowNode,
-  _nodes: PassiveFlowNode[],
-  areAdjacent: (masteryId: string, a: string, b: string) => boolean,
+  nodes: PassiveFlowNode[],
 ): LinkKind | 'attach' | null {
   if (source.id === target.id) return null
 
@@ -159,7 +209,7 @@ export function classifyPassiveConnection(
     isSatelliteKind(td.kind)
   ) {
     const masteryId = sd.masteryId!
-    if (areAdjacent(masteryId, source.id, target.id)) return 'orbit'
+    if (canOrbitLink(nodes, masteryId, source.id, target.id)) return 'orbit'
     return null
   }
 

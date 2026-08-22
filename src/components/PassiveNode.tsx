@@ -10,13 +10,15 @@ import {
   stageLoggedCount,
 } from '../stage'
 import {
-  DEFAULT_ORBIT_RADIUS,
   getOrderedOrbitSatellites,
   isMasteryKind,
   isStealthPassiveKind,
+  normalizeOrbitTierCount,
   NODE_SIZE,
   nodeInteractRadius,
+  orbitTierRadius,
 } from '../orbit'
+import type { OrbitTier } from '../types'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
@@ -51,7 +53,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const stages = data.stages ?? []
   const bandLevel = stageBandLevel(stages)
   const bandCount = stages.length
-  const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
+  const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
   const iconId = passiveClass.iconId
@@ -89,17 +92,26 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           '--connect-r': `${connectR}px`,
           '--icon-color': iconColor,
           '--label-offset': `${labelOffset}px`,
-          '--orbit-r': `${orbitRadius}px`,
+          '--orbit-r': `${outerOrbitR}px`,
           '--unpowered-glow': UNPOWERED_GLOW,
         } as CSSProperties
       }
     >
       {isMastery && (
-        <div
-          className="passive-node__orbit"
-          style={{ width: orbitRadius * 2, height: orbitRadius * 2 }}
-          aria-hidden
-        />
+        <>
+          {Array.from({ length: orbitTierCount }, (_, index) => {
+            const tier = (index + 1) as OrbitTier
+            const tierR = orbitTierRadius(orbitTierCount, tier)
+            return (
+              <div
+                key={tier}
+                className="passive-node__orbit"
+                style={{ width: tierR * 2, height: tierR * 2 }}
+                aria-hidden
+              />
+            )
+          })}
+        </>
       )}
 
       <div className="passive-node__halo" aria-hidden />
