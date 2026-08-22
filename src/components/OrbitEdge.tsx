@@ -6,21 +6,20 @@ import {
 } from '@xyflow/react'
 import type { PassiveNodeData } from '../types'
 import type { PassiveFlowNode } from './PassiveNode'
-import { orbitAdjacentArcSpec } from '../orbit'
+import { orbitAdjacentArcSpec, poweredLinkGlowStyle } from '../orbit'
+import { usePassiveClasses } from '../PassiveClassContext'
 import { usePowerSet } from '../PowerContext'
 
 export type OrbitEdgeData = {
   masteryId?: string
 }
 
-const ORBIT_GLOW = 'color-mix(in srgb, #9fe8dd 82%, #eef3f7)'
 const ORBIT_OFF = 'color-mix(in srgb, #9aa8b5 18%, transparent)'
 
 function polar(cx: number, cy: number, r: number, angle: number) {
   return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
 }
 
-/** Short arc only — used for adjacent orbit neighbors. */
 function orbitArcPath(
   cx: number,
   cy: number,
@@ -53,6 +52,7 @@ export function OrbitEdge({
   selected,
 }: EdgeProps) {
   const powered = usePowerSet()
+  const { resolve } = usePassiveClasses()
   const nodes = useStore((s) => s.nodes)
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -66,6 +66,9 @@ export function OrbitEdge({
   const arc = orbitAdjacentArcSpec(nodes as PassiveFlowNode[], masteryId, source, target)
   if (!arc) return null
 
+  const md = masteryNode.data as PassiveNodeData
+  const masteryColor = resolve(md.classId, 'mastery').iconColor
+
   const mc = {
     x: masteryNode.internals.positionAbsolute.x + (masteryNode.measured.width ?? 76) / 2,
     y: masteryNode.internals.positionAbsolute.y + (masteryNode.measured.height ?? 76) / 2,
@@ -74,7 +77,6 @@ export function OrbitEdge({
   const path = orbitArcPath(mc.x, mc.y, arc.arcRadius, arc.a1, arc.a2, arc.clockwise)
 
   const lit = powered.has(source) && powered.has(target)
-  const stroke = lit ? ORBIT_GLOW : ORBIT_OFF
 
   return (
     <>
@@ -82,14 +84,11 @@ export function OrbitEdge({
       <BaseEdge
         id={id}
         path={path}
-        style={{
-          stroke,
-          strokeWidth: lit ? (selected ? 3 : 2.5) : 1,
-          filter: lit
-            ? 'drop-shadow(0 0 8px color-mix(in srgb, #9fe8dd 50%, transparent))'
-            : undefined,
-          cursor: 'pointer',
-        }}
+        style={
+          lit
+            ? poweredLinkGlowStyle(masteryColor, Boolean(selected))
+            : { stroke: ORBIT_OFF, strokeWidth: 1, cursor: 'pointer' }
+        }
         interactionWidth={0}
       />
     </>

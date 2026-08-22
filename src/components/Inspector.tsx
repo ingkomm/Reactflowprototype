@@ -358,7 +358,7 @@ export function Inspector({
             <h3>Links</h3>
           </div>
           {data.kind === 'initial' && (
-            <p className="inspector__empty">Initial Node에서 Small/Notable로 직선 링크로 파워를 공급합니다.</p>
+            <p className="inspector__empty">Initial Node는 Small Passive에만 직선 링크로 파워를 공급합니다.</p>
           )}
           {data.kind === 'mastery' && (
             <p className="inspector__empty">

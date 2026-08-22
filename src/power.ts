@@ -105,7 +105,7 @@ export function classifyPassiveConnection(
 
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
-    if (other.kind === 'small' || other.kind === 'notable') return 'center'
+    if (other.kind === 'small') return 'center'
     return null
   }
 

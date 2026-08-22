@@ -96,6 +96,58 @@ export function orbitAdjacentArcSpec(
   }
 }
 
+/** Pad straight links so strokes stop outside the outermost training band. */
+export function linkEndpointPad(data: PassiveNodeData) {
+  return satelliteBandOuterRadius(data) + 4
+}
+
+export function trimStraightEndpoints(
+  sx: number,
+  sy: number,
+  tx: number,
+  ty: number,
+  sourcePad: number,
+  targetPad: number,
+) {
+  const dx = tx - sx
+  const dy = ty - sy
+  const len = Math.hypot(dx, dy)
+  if (len <= sourcePad + targetPad + 1) {
+    return { sourceX: sx, sourceY: sy, targetX: tx, targetY: ty }
+  }
+  const ux = dx / len
+  const uy = dy / len
+  return {
+    sourceX: sx + ux * sourcePad,
+    sourceY: sy + uy * sourcePad,
+    targetX: tx - ux * targetPad,
+    targetY: ty - uy * targetPad,
+  }
+}
+
+/** Same-orbit Notable ↔ its Mastery center link. */
+export function isSameOrbitNotableMasteryLink(
+  sd: PassiveNodeData,
+  td: PassiveNodeData,
+  sourceId: string,
+  targetId: string,
+) {
+  if (sd.kind === 'notable' && td.kind === 'mastery' && sd.masteryId === targetId) return true
+  if (td.kind === 'notable' && sd.kind === 'mastery' && td.masteryId === sourceId) return true
+  return false
+}
+
+export function poweredLinkGlowStyle(color: string, selected: boolean) {
+  return {
+    stroke: `color-mix(in srgb, ${color} 82%, #eef3f7)`,
+    strokeWidth: selected ? 3 : 2.5,
+    filter: `drop-shadow(0 0 8px color-mix(in srgb, ${color} 50%, transparent))`,
+    cursor: 'pointer' as const,
+  }
+}
+
+export const CROSS_ORBIT_GLOW_COLOR = '#9fe8dd'
+
 export function snapOrbitAngle(degrees: number) {
   const stepped = Math.round(degrees / ORBIT_ANGLE_STEP) * ORBIT_ANGLE_STEP
   // Normalize to (-180, 180]

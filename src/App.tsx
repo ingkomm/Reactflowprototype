@@ -419,8 +419,8 @@ function buildSeedNodes(): PassiveFlowNode[] {
 const seedNodes = buildSeedNodes()
 
 const initialEdges: Edge[] = [
-  passiveLinkEdge('initial-main', 'notable-hiphop'),
-  passiveLinkEdge('initial-main', 'notable-strength'),
+  passiveLinkEdge('initial-main', 'small-basic'),
+  passiveLinkEdge('initial-main', 'small-legs'),
   passiveLinkEdge('notable-hiphop', danceMasteryId),
   passiveLinkEdge('notable-strength', gymMasteryId),
   ...orbitAdjacentEdges(danceOrbitOrder, danceMasteryId),
