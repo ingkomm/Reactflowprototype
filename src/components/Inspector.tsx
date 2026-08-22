@@ -384,7 +384,7 @@ export function Inspector({
             </select>
           </label>
           <p className="field-hint">
-            같은 단에서는 인접 노드만 호 링크 · 다른 단 사이에는 인접 제한 없음
+            1단 직경 고정 · 2·3단은 바깥으로 추가 · 멤버 드래그로 단 배치
           </p>
 
           <label className="field">
