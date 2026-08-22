@@ -29,6 +29,7 @@ import {
   outermostBandRadius,
 } from './TrainingBands'
 import { useVoidHighlight } from '../VoidHighlightContext'
+import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 
