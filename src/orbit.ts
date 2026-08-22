@@ -43,19 +43,10 @@ export function satelliteBandOuterRadius(data: PassiveNodeData): number {
   return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2
 }
 
-/** Orbit link arc radius from mastery center — sits outside both endpoints' outer bands. */
-export const ORBIT_LINK_BAND_CLEARANCE = 6
-
-export function orbitLinkDrawRadius(
-  orbitRadius: number,
-  sourceData: PassiveNodeData,
-  targetData: PassiveNodeData,
-): number {
-  const outer = Math.max(
-    satelliteBandOuterRadius(sourceData),
-    satelliteBandOuterRadius(targetData),
-  )
-  return orbitRadius + outer + ORBIT_LINK_BAND_CLEARANCE
+/** Angular trim (radians) so an orbit arc at orbitRadius clears a node's outer band. */
+function orbitBandAngularTrim(data: PassiveNodeData, orbitRadius: number) {
+  const bandOuter = satelliteBandOuterRadius(data)
+  return Math.asin(Math.min(1, (bandOuter + 2) / orbitRadius))
 }
 
 function orbitSlotAngle(masteryData: PassiveNodeData, index: number, count: number) {
@@ -88,14 +79,19 @@ export function orbitAdjacentArcSpec(
   const ib = ordered.indexOf(targetId)
   const n = ordered.length
 
-  const a1 = orbitSlotAngle(md, ia, n)
-  const a2 = orbitSlotAngle(md, ib, n)
+  const a1Raw = orbitSlotAngle(md, ia, n)
+  const a2Raw = orbitSlotAngle(md, ib, n)
   const clockwise = (ia + 1) % n === ib
+  const trimA = orbitBandAngularTrim(sd, orbitR)
+  const trimB = orbitBandAngularTrim(td, orbitR)
+
+  const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
+  const a2 = clockwise ? a2Raw - trimB : a2Raw + trimB
 
   return {
     a1,
     a2,
-    arcRadius: orbitLinkDrawRadius(orbitR, sd, td),
+    arcRadius: orbitR,
     clockwise,
   }
 }
