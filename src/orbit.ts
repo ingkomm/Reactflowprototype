@@ -261,6 +261,87 @@ export function getTierStartAngle(data: PassiveNodeData, tier: OrbitTier): numbe
   return DEFAULT_ORBIT_START_ANGLE
 }
 
+/** Set the same start angle on every tier (used when orbit is locked). */
+export function setMasteryUnifiedStartAngle(
+  data: PassiveNodeData,
+  degrees: number,
+): PassiveNodeData {
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const snapped = snapOrbitAngle(degrees)
+  const byTier: Partial<Record<OrbitTier, number>> = {}
+  for (let t = 1; t <= tierCount; t++) {
+    byTier[t as OrbitTier] = snapped
+  }
+  return { ...data, orbitStartAngleByTier: byTier, orbitStartAngle: snapped }
+}
+
+/** Snapshot current start angle per tier (for locked unified drag). */
+export function snapshotMasteryTierAngles(
+  data: PassiveNodeData,
+): Partial<Record<OrbitTier, number>> {
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const snap: Partial<Record<OrbitTier, number>> = {}
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    snap[tier] = getTierStartAngle(data, tier)
+  }
+  return snap
+}
+
+/** Apply the same rotation delta to every tier (orbit locked). */
+export function rotateAllMasteryTiersByDelta(
+  data: PassiveNodeData,
+  originByTier: Partial<Record<OrbitTier, number>>,
+  deltaDeg: number,
+): PassiveNodeData {
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const byTier: Partial<Record<OrbitTier, number>> = { ...(data.orbitStartAngleByTier ?? {}) }
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    const origin = originByTier[tier] ?? getTierStartAngle(data, tier)
+    byTier[tier] = snapOrbitAngle(origin + deltaDeg)
+  }
+  return {
+    ...data,
+    orbitStartAngleByTier: byTier,
+    orbitStartAngle: byTier[1] ?? data.orbitStartAngle,
+  }
+}
+
+type OrbitEdgeLike = {
+  type?: string
+  source: string
+  target: string
+  data?: { masteryId?: string }
+}
+
+/** Tiers that have at least one orbit link touching a satellite on that ring. */
+export function getOrbitTiersWithLinks(
+  nodes: PassiveFlowNode[],
+  edges: OrbitEdgeLike[],
+  masteryId: string,
+): Set<OrbitTier> {
+  const tiers = new Set<OrbitTier>()
+  for (const edge of edges) {
+    if (edge.type !== 'orbit') continue
+    if (edge.data?.masteryId !== masteryId) continue
+    tiers.add(getSatelliteOrbitTier(nodes, masteryId, edge.source))
+    tiers.add(getSatelliteOrbitTier(nodes, masteryId, edge.target))
+  }
+  return tiers
+}
+
+/** When locked, only tiers with orbit links show rings / accept rotate hit-test. */
+export function visibleOrbitTiersForMastery(
+  nodes: PassiveFlowNode[],
+  edges: OrbitEdgeLike[],
+  masteryId: string,
+): Set<OrbitTier> | null {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery || !isMasteryOrbitLocked(nodes, masteryId)) return null
+  return getOrbitTiersWithLinks(nodes, edges, masteryId)
+}
+
 /** Set snapped start angle for one tier; tier 1 also updates legacy orbitStartAngle. */
 export function setMasteryTierStartAngle(
   data: PassiveNodeData,
@@ -497,6 +578,7 @@ export function nodeInteractRadius(data: PassiveNodeData) {
 export function findMasteryOrbitRingAt(
   nodes: PassiveFlowNode[],
   flowPoint: { x: number; y: number },
+  edges: OrbitEdgeLike[] = [],
 ): { masteryId: string; tier: OrbitTier; pointerDeg: number } | null {
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
@@ -513,8 +595,10 @@ export function findMasteryOrbitRingAt(
     if (!isMasteryKind(data.kind)) continue
     const c = nodeCenter(node, nodes)
     const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+    const linkedTiers = visibleOrbitTiersForMastery(nodes, edges, node.id)
     for (let tier = 1; tier <= tierCount; tier++) {
       const orbitTier = tier as OrbitTier
+      if (linkedTiers && !linkedTiers.has(orbitTier)) continue
       const radius = orbitTierRadius(tierCount, orbitTier)
       const dist = Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y)
       const err = Math.abs(dist - radius)

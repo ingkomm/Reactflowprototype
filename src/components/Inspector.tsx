@@ -367,7 +367,9 @@ export function Inspector({
             />
           </label>
           <p className="field-hint">
-            Lock 시 멤버 추가/제거·순서 변경만 불가합니다. 빈 오르빗 링을 드래그하면 해당 단만 회전합니다.
+            {data.orbitLocked
+              ? 'Lock 시 멤버 추가/제거·순서 변경 불가 · 링크 있는 궤도만 표시 · 1~3단 함께 회전'
+              : 'Lock 시 멤버 추가/제거·순서 변경만 불가합니다. 빈 오르빗 링을 드래그하면 해당 단만 회전합니다.'}
           </p>
 
           <label className="field">
@@ -387,17 +389,13 @@ export function Inspector({
             1단 직경 고정 · 2·3단은 바깥으로 추가 · 멤버 드래그로 단 배치
           </p>
 
-          {Array.from({ length: orbitTierCount }, (_, index) => {
-            const tier = (index + 1) as OrbitTier
-            const startAngle = getTierStartAngle(data, tier)
-            return (
-              <label key={tier} className="field">
-                <span>{tier}단 시작 각도</span>
+          {data.orbitLocked ? (
+            <>
+              <label className="field">
+                <span>오르빗 회전 각도</span>
                 <select
-                  value={startAngle}
-                  onChange={(e) =>
-                    onChangeOrbitStartAngle(nodeId, tier, Number(e.target.value))
-                  }
+                  value={getTierStartAngle(data, 1)}
+                  onChange={(e) => onChangeOrbitStartAngle(nodeId, 1, Number(e.target.value))}
                 >
                   {angleOptions.map((deg) => (
                     <option key={deg} value={deg}>
@@ -406,9 +404,34 @@ export function Inspector({
                   ))}
                 </select>
               </label>
-            )
-          })}
-          <p className="field-hint">각 단은 독립 각도 · 캔버스에서 해당 단 링 드래그로 회전</p>
+              <p className="field-hint">잠금 중 · 1~3단 동시 회전 · 링크 없는 궤도는 숨김</p>
+            </>
+          ) : (
+            <>
+              {Array.from({ length: orbitTierCount }, (_, index) => {
+                const tier = (index + 1) as OrbitTier
+                const startAngle = getTierStartAngle(data, tier)
+                return (
+                  <label key={tier} className="field">
+                    <span>{tier}단 시작 각도</span>
+                    <select
+                      value={startAngle}
+                      onChange={(e) =>
+                        onChangeOrbitStartAngle(nodeId, tier, Number(e.target.value))
+                      }
+                    >
+                      {angleOptions.map((deg) => (
+                        <option key={deg} value={deg}>
+                          {deg}°
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              })}
+              <p className="field-hint">각 단은 독립 각도 · 캔버스에서 해당 단 링 드래그로 회전</p>
+            </>
+          )}
 
           <div className="inspector__section">
             <div className="inspector__section-head">

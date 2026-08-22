@@ -8,7 +8,9 @@ import {
   nodeCenter,
   normalizeAngleDelta,
   pointerAngleDeg,
+  rotateAllMasteryTiersByDelta,
   setMasteryTierStartAngle,
+  snapshotMasteryTierAngles,
   snapOrbitAngle,
 } from '../orbit'
 import type { PassiveFlowNode } from './PassiveNode'
@@ -21,28 +23,33 @@ type Props = {
 }
 
 /**
- * Drag empty mastery orbit ring (pane space, not node faces) to rotate that tier's start angle.
- * Angle snaps every ORBIT_ANGLE_STEP degrees.
+ * Drag empty mastery orbit ring to rotate.
+ * Unlocked: per-tier start angle. Locked: all tiers rotate together; only linked rings hit-test.
  */
 export function OrbitRotateController({ commit, setNodes, stack }: Props) {
   const { screenToFlowPosition } = useReactFlow()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
+  const edges = useStore((s) => s.edges)
   const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
   nodesRef.current = nodes
+  edgesRef.current = edges
 
   const dragRef = useRef<{
     pointerId: number
     masteryId: string
     tier: OrbitTier
+    locked: boolean
     originPointerDeg: number
     originStartDeg: number
+    originAnglesByTier?: Partial<Record<OrbitTier, number>>
   } | null>(null)
 
   useEffect(() => {
     const pane = document.querySelector('.react-flow__pane')
     if (!pane) return
 
-    const applyAngle = (masteryId: string, tier: OrbitTier, angleDeg: number) => {
+    const applyPerTierAngle = (masteryId: string, tier: OrbitTier, angleDeg: number) => {
       const snapped = snapOrbitAngle(angleDeg)
       setNodes((nds) => {
         const mastery = nds.find((n) => n.id === masteryId)
@@ -52,6 +59,24 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
         const next = nds.map((n) =>
           n.id === masteryId
             ? { ...n, data: setMasteryTierStartAngle(data, tier, snapped) }
+            : n,
+        )
+        return stack(layoutMasteryOrbit(next, masteryId))
+      })
+    }
+
+    const applyLockedDelta = (
+      masteryId: string,
+      originByTier: Partial<Record<OrbitTier, number>>,
+      deltaDeg: number,
+    ) => {
+      setNodes((nds) => {
+        const mastery = nds.find((n) => n.id === masteryId)
+        if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return nds
+        const data = mastery.data as PassiveNodeData
+        const next = nds.map((n) =>
+          n.id === masteryId
+            ? { ...n, data: rotateAllMasteryTiersByDelta(data, originByTier, deltaDeg) }
             : n,
         )
         return stack(layoutMasteryOrbit(next, masteryId))
@@ -75,7 +100,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (target?.closest?.('.react-flow__node, .passive-node')) return
 
       const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
+      const hit = findMasteryOrbitRingAt(nodesRef.current, flow, edgesRef.current)
       if (!hit) return
 
       const mastery = nodesRef.current.find((n) => n.id === hit.masteryId)
@@ -85,15 +110,29 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       e.stopPropagation()
 
       const md = mastery.data as PassiveNodeData
+      const locked = Boolean(md.orbitLocked)
       dragRef.current = {
         pointerId: e.pointerId,
         masteryId: hit.masteryId,
         tier: hit.tier,
+        locked,
         originPointerDeg: hit.pointerDeg,
         originStartDeg: getTierStartAngle(md, hit.tier),
+        originAnglesByTier: locked ? snapshotMasteryTierAngles(md) : undefined,
       }
       commit()
       pane.classList.add('is-orbit-rotating')
+    }
+
+    const applyDragDelta = (drag: NonNullable<typeof dragRef.current>, clientX: number, clientY: number) => {
+      const pointerDeg = angleFromPointer(drag.masteryId, clientX, clientY)
+      if (pointerDeg == null) return
+      const delta = normalizeAngleDelta(pointerDeg - drag.originPointerDeg)
+      if (drag.locked && drag.originAnglesByTier) {
+        applyLockedDelta(drag.masteryId, drag.originAnglesByTier, delta)
+      } else {
+        applyPerTierAngle(drag.masteryId, drag.tier, drag.originStartDeg + delta)
+      }
     }
 
     const onPointerMove = (event: Event) => {
@@ -103,16 +142,13 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (!drag || drag.pointerId !== e.pointerId) {
         if (dragRef.current) return
         const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-        const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
+        const hit = findMasteryOrbitRingAt(nodesRef.current, flow, edgesRef.current)
         pane.classList.toggle('is-orbit-hover', Boolean(hit))
         return
       }
 
       e.preventDefault()
-      const pointerDeg = angleFromPointer(drag.masteryId, e.clientX, e.clientY)
-      if (pointerDeg == null) return
-      const delta = normalizeAngleDelta(pointerDeg - drag.originPointerDeg)
-      applyAngle(drag.masteryId, drag.tier, drag.originStartDeg + delta)
+      applyDragDelta(drag, e.clientX, e.clientY)
     }
 
     const endDrag = (event: Event) => {
@@ -121,11 +157,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (!drag || drag.pointerId !== e.pointerId) return
       dragRef.current = null
       pane.classList.remove('is-orbit-rotating')
-
-      const pointerDeg = angleFromPointer(drag.masteryId, e.clientX, e.clientY)
-      if (pointerDeg == null) return
-      const delta = normalizeAngleDelta(pointerDeg - drag.originPointerDeg)
-      applyAngle(drag.masteryId, drag.tier, drag.originStartDeg + delta)
+      applyDragDelta(drag, e.clientX, e.clientY)
     }
 
     pane.addEventListener('pointerdown', onPointerDown, true)

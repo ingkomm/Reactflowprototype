@@ -41,6 +41,7 @@ import {
   findNearestMastery,
   getOrderedTierSatellites,
   getSatelliteOrbitTier,
+  getTierStartAngle,
   isMasteryKind,
   isMasteryOrbitLocked,
   isOrbitMemberKind,
@@ -50,11 +51,14 @@ import {
   mergeOrbitOrderFromTiers,
   normalizeOrbitTier,
   normalizeOrbitTierCount,
+  normalizeAngleDelta,
   ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
   removeSatelliteFromOrbitOrders,
+  rotateAllMasteryTiersByDelta,
   setMasteryTierOrbitOrder,
   setMasteryTierStartAngle,
+  snapshotMasteryTierAngles,
   removeNodesAndRelayout,
   snapOrbitAngle,
   withMasteryDragFlags,
@@ -945,7 +949,16 @@ export default function App() {
         const next = nds.map((node) => {
           if (node.id !== masteryId) return node
           const data = node.data as PassiveNodeData
-          return { ...node, data: setMasteryTierStartAngle(data, tier, snapped) }
+          let nextData: PassiveNodeData
+          if (data.orbitLocked) {
+            const snapshot = snapshotMasteryTierAngles(data)
+            const refTier: OrbitTier = 1
+            const delta = normalizeAngleDelta(snapped - getTierStartAngle(data, refTier))
+            nextData = rotateAllMasteryTiersByDelta(data, snapshot, delta)
+          } else {
+            nextData = setMasteryTierStartAngle(data, tier, snapped)
+          }
+          return { ...node, data: nextData }
         })
         return stack(layoutMasteryOrbit(next, masteryId))
       })
