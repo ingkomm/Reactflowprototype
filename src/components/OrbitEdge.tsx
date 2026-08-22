@@ -69,7 +69,10 @@ export function OrbitEdge({
   const sourceLit = powered.has(source)
   const targetLit = powered.has(target)
 
-  const spec = orbitLinkSpec(nodes as PassiveFlowNode[], masteryId, source, target)
+  const spec = orbitLinkSpec(nodes as PassiveFlowNode[], masteryId, source, target, {
+    sourcePowered: sourceLit,
+    targetPowered: targetLit,
+  })
   if (!spec) return null
 
   const lit = sourceLit && targetLit
@@ -91,8 +94,8 @@ export function OrbitEdge({
       sourceCY,
       targetCX,
       targetCY,
-      linkEndpointPad(sd!),
-      linkEndpointPad(td),
+      linkEndpointPad(sd!, sourceLit),
+      linkEndpointPad(td, targetLit),
     )
     const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
     const hitPath = getStraightPath({

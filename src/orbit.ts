@@ -362,14 +362,28 @@ export function satelliteBandOuterRadius(data: PassiveNodeData): number {
   return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2
 }
 
-/** Radius used to trim links toward a node — always the node face, never bands. */
-export function nodeLinkTrimRadius(data: PassiveNodeData): number {
+/** True when training bands are rendered on the node (matches PassiveNode). */
+export function nodeHasVisibleBands(data: PassiveNodeData, nodePowered: boolean): boolean {
+  if (!nodePowered) return false
+  if (isStealthPassiveKind(data.kind)) return false
+  return (data.stages?.length ?? 0) > 0
+}
+
+/** Link trim radius: outside visible bands when present, otherwise the node face. */
+export function nodeLinkTrimRadius(data: PassiveNodeData, nodePowered = false): number {
+  if (nodeHasVisibleBands(data, nodePowered)) {
+    return satelliteBandOuterRadius(data)
+  }
   return NODE_SIZE[data.kind] / 2
 }
 
-/** Angular trim (radians) so an orbit arc at orbitRadius clears the node rim. */
-function orbitBandAngularTrim(data: PassiveNodeData, orbitRadius: number) {
-  const rim = nodeLinkTrimRadius(data) + 2
+/** Angular trim (radians) so an orbit arc clears the node rim or band outer edge. */
+function orbitBandAngularTrim(
+  data: PassiveNodeData,
+  orbitRadius: number,
+  nodePowered = false,
+) {
+  const rim = nodeLinkTrimRadius(data, nodePowered) + 2
   return Math.asin(Math.min(1, rim / orbitRadius))
 }
 
@@ -389,6 +403,7 @@ export function orbitLinkSpec(
   masteryId: string,
   sourceId: string,
   targetId: string,
+  options?: { sourcePowered?: boolean; targetPowered?: boolean },
 ): OrbitLinkSpec | null {
   if (!canOrbitLink(nodes, masteryId, sourceId, targetId)) return null
 
@@ -415,8 +430,8 @@ export function orbitLinkSpec(
   const a1Raw = orbitSlotAngle(md, tierA, ia, n)
   const a2Raw = orbitSlotAngle(md, tierA, ib, n)
   const clockwise = (ia + 1) % n === ib
-  const trimA = orbitBandAngularTrim(sd, orbitR)
-  const trimB = orbitBandAngularTrim(td, orbitR)
+  const trimA = orbitBandAngularTrim(sd, orbitR, options?.sourcePowered ?? false)
+  const trimB = orbitBandAngularTrim(td, orbitR, options?.targetPowered ?? false)
 
   const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
   const a2 = clockwise ? a2Raw - trimB : a2Raw + trimB
@@ -442,9 +457,10 @@ export function orbitAdjacentArcSpec(
   return spec
 }
 
-/** Pad straight/orbit link endpoints at the node face (links never enter band rings). */
-export function linkEndpointPad(data: PassiveNodeData) {
-  return nodeLinkTrimRadius(data) + 2
+/** Pad link endpoints outside visible bands (links never draw through band rings). */
+export function linkEndpointPad(data: PassiveNodeData, nodePowered = false) {
+  const hasBands = nodeHasVisibleBands(data, nodePowered)
+  return nodeLinkTrimRadius(data, nodePowered) + (hasBands ? 4 : 2)
 }
 
 export function trimStraightEndpoints(

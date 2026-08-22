@@ -59,13 +59,16 @@ export function CenterEdge({
   const masteryCY = notableIsSource ? targetCY : sourceCY
   const notableData = notableIsSource ? sd : td
 
+  const notableId = notableIsSource ? source : target
+  const notablePowered = powered.has(notableId)
+
   const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
     sourceCX,
     sourceCY,
     targetCX,
     targetCY,
-    linkEndpointPad(sd),
-    linkEndpointPad(td),
+    linkEndpointPad(sd, sourceLit),
+    linkEndpointPad(td, targetLit),
   )
 
   const hitPath = getStraightPath({
@@ -81,7 +84,7 @@ export function CenterEdge({
     notableCY,
     masteryCX,
     masteryCY,
-    linkEndpointPad(notableData),
+    linkEndpointPad(notableData, notablePowered),
     NODE_SIZE.mastery / 2 + 2,
   )
   const [beamPath] = getStraightPath({
