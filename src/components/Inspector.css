@@ -16,6 +16,18 @@
   gap: 8px;
 }
 
+.inspector__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.inspector__orbit-lock.is-active {
+  border-color: color-mix(in srgb, #9fe8dd 40%, transparent);
+  color: #9fe8dd;
+}
+
 .inspector__title {
   margin: 0;
   font-size: 0.95rem;

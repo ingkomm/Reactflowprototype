@@ -6,14 +6,12 @@ import {
 } from '@xyflow/react'
 import type { PassiveNodeData } from '../types'
 import type { PassiveFlowNode } from './PassiveNode'
-import { CROSS_ORBIT_GLOW_COLOR, orbitAdjacentArcSpec, poweredLinkGlowStyle } from '../orbit'
+import { CROSS_ORBIT_GLOW_COLOR, linkGlowStyle, orbitAdjacentArcSpec } from '../orbit'
 import { usePowerSet } from '../PowerContext'
 
 export type OrbitEdgeData = {
   masteryId?: string
 }
-
-const ORBIT_OFF = 'color-mix(in srgb, #9aa8b5 18%, transparent)'
 
 function polar(cx: number, cy: number, r: number, angle: number) {
   return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
@@ -79,11 +77,7 @@ export function OrbitEdge({
       <BaseEdge
         id={id}
         path={path}
-        style={
-          lit
-            ? poweredLinkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected))
-            : { stroke: ORBIT_OFF, strokeWidth: 1, cursor: 'pointer' }
-        }
+        style={linkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected), lit)}
         interactionWidth={0}
       />
     </>

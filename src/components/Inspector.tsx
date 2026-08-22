@@ -234,9 +234,21 @@ export function Inspector({
         <h2 className="inspector__title">
           {isMasteryKind(data.kind) ? 'Mastery Edit' : 'Node Inspector'}
         </h2>
-        <button type="button" className="btn btn--danger" onClick={() => onDeleteNode(nodeId)}>
-          Delete
-        </button>
+        <div className="inspector__header-actions">
+          {isMasteryKind(data.kind) && (
+            <button
+              type="button"
+              className={`btn btn--ghost inspector__orbit-lock${data.orbitLocked ? ' is-active' : ''}`}
+              aria-pressed={data.orbitLocked ?? false}
+              onClick={() => onChangeOrbitLocked(nodeId, !(data.orbitLocked ?? false))}
+            >
+              {data.orbitLocked ? '🔒 오르빗 잠김' : '🔓 오르빗 잠금'}
+            </button>
+          )}
+          <button type="button" className="btn btn--danger" onClick={() => onDeleteNode(nodeId)}>
+            Delete
+          </button>
+        </div>
       </div>
 
       <label className="field">

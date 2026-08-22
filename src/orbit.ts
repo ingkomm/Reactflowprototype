@@ -159,13 +159,20 @@ export function isSameOrbitNotableMasteryLink(
   return false
 }
 
-export function poweredLinkGlowStyle(color: string, selected: boolean) {
+export function linkGlowStyle(color: string, selected: boolean, powered: boolean) {
+  const strokeMix = powered ? 82 : 38
+  const glowMix = powered ? 50 : 14
   return {
-    stroke: `color-mix(in srgb, ${color} 82%, #eef3f7)`,
+    stroke: `color-mix(in srgb, ${color} ${strokeMix}%, #eef3f7)`,
     strokeWidth: selected ? 3 : 2.5,
-    filter: `drop-shadow(0 0 8px color-mix(in srgb, ${color} 50%, transparent))`,
+    filter: `drop-shadow(0 0 ${powered ? 8 : 4}px color-mix(in srgb, ${color} ${glowMix}%, transparent))`,
+    opacity: powered ? 1 : 0.38,
     cursor: 'pointer' as const,
   }
+}
+
+export function poweredLinkGlowStyle(color: string, selected: boolean) {
+  return linkGlowStyle(color, selected, true)
 }
 
 export const CROSS_ORBIT_GLOW_COLOR = '#9fe8dd'

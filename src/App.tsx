@@ -22,6 +22,7 @@ import { CenterEdge } from './components/CenterEdge'
 import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
+import { GraphActionsProvider } from './GraphActionsContext'
 import { classifyPassiveConnection, computePoweredNodeIds } from './power'
 import type { PassiveKind, PassiveNodeData, StageData } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
@@ -922,6 +923,16 @@ export default function App() {
     [updateNodeData],
   )
 
+  const toggleOrbitLock = useCallback(
+    (masteryId: string) => {
+      const node = nodes.find((n) => n.id === masteryId)
+      if (!node) return
+      const locked = (node.data as PassiveNodeData).orbitLocked ?? false
+      changeOrbitLocked(masteryId, !locked)
+    },
+    [changeOrbitLocked, nodes],
+  )
+
   const changeKind = useCallback(
     (nodeId: string, kind: PassiveKind) => {
       const current = nodes.find((n) => n.id === nodeId)
@@ -1319,6 +1330,7 @@ export default function App() {
       >
         <section className="canvas-pane" aria-label="Passive tree canvas">
           <PowerProvider poweredIds={poweredIds}>
+          <GraphActionsProvider toggleOrbitLock={toggleOrbitLock}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1369,6 +1381,7 @@ export default function App() {
               maskColor="rgba(8, 12, 16, 0.7)"
             />
           </ReactFlow>
+          </GraphActionsProvider>
           </PowerProvider>
 
           <p className="canvas-hint">
