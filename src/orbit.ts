@@ -55,8 +55,10 @@ export function findMasteryOrbitRingAt(
   flowPoint: { x: number; y: number },
 ): { masteryId: string; pointerDeg: number } | null {
   for (const node of nodes) {
+    if (node.type && node.type !== 'passive') continue
     const data = node.data as PassiveNodeData
-    const c = nodeCenter(node)
+    if (!data?.kind) continue
+    const c = nodeCenter(node, nodes)
     const faceR = NODE_SIZE[data.kind] / 2
     if (Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y) <= faceR + 6) {
       return null
@@ -65,9 +67,10 @@ export function findMasteryOrbitRingAt(
 
   let best: { masteryId: string; pointerDeg: number; err: number } | null = null
   for (const node of nodes) {
+    if (node.type && node.type !== 'passive') continue
     const data = node.data as PassiveNodeData
     if (data.kind !== 'mastery') continue
-    const c = nodeCenter(node)
+    const c = nodeCenter(node, nodes)
     const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
     const dist = Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y)
     const err = Math.abs(dist - radius)
@@ -83,11 +86,45 @@ export function findMasteryOrbitRingAt(
   return best ? { masteryId: best.masteryId, pointerDeg: best.pointerDeg } : null
 }
 
-export function nodeCenter(node: PassiveFlowNode) {
+/** Walk parentId chain to absolute top-left in flow coords. */
+export function absolutePosition(
+  node: { id: string; position: { x: number; y: number }; parentId?: string },
+  nodes: { id: string; position: { x: number; y: number }; parentId?: string }[],
+) {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  let x = node.position.x
+  let y = node.position.y
+  let parentId = node.parentId
+  while (parentId) {
+    const parent = byId.get(parentId)
+    if (!parent) break
+    x += parent.position.x
+    y += parent.position.y
+    parentId = parent.parentId
+  }
+  return { x, y }
+}
+
+export function toParentRelative(
+  absolute: { x: number; y: number },
+  parentId: string,
+  nodes: { id: string; position: { x: number; y: number }; parentId?: string }[],
+) {
+  const parent = nodes.find((n) => n.id === parentId)
+  if (!parent) return absolute
+  const origin = absolutePosition(parent, nodes)
+  return { x: absolute.x - origin.x, y: absolute.y - origin.y }
+}
+
+export function nodeCenter(
+  node: PassiveFlowNode,
+  nodes?: { id: string; position: { x: number; y: number }; parentId?: string }[],
+) {
   const size = NODE_SIZE[(node.data as PassiveNodeData).kind]
+  const origin = nodes ? absolutePosition(node, nodes) : node.position
   return {
-    x: node.position.x + size / 2,
-    y: node.position.y + size / 2,
+    x: origin.x + size / 2,
+    y: origin.y + size / 2,
   }
 }
 
@@ -108,6 +145,7 @@ export function getOrbitSatellites(
   masteryId: string,
 ): PassiveFlowNode[] {
   return nodes.filter((n) => {
+    if (n.type === 'frame') return false
     const data = n.data as PassiveNodeData
     return data.masteryId === masteryId && isSatelliteKind(data.kind)
   })
@@ -175,7 +213,7 @@ export function layoutMasteryOrbit(
   const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const startDeg = data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
   const startRad = (startDeg * Math.PI) / 180
-  const center = nodeCenter(mastery)
+  const center = nodeCenter(mastery, synced)
   const satellites = getOrderedOrbitSatellites(synced, masteryId)
 
   if (satellites.length === 0) {
@@ -187,13 +225,14 @@ export function layoutMasteryOrbit(
     // Screen Y grows downward, so increasing angle from start is clockwise.
     const angle = startRad + (2 * Math.PI * index) / satellites.length
     const kind = (sat.data as PassiveNodeData).kind
+    const abs = positionFromCenter(
+      center.x + radius * Math.cos(angle),
+      center.y + radius * Math.sin(angle),
+      kind,
+    )
     positioned.set(
       sat.id,
-      positionFromCenter(
-        center.x + radius * Math.cos(angle),
-        center.y + radius * Math.sin(angle),
-        kind,
-      ),
+      sat.parentId ? toParentRelative(abs, sat.parentId, synced) : abs,
     )
   })
 
@@ -213,11 +252,18 @@ export function withMasteryDragFlags(
   selectedId: string | null = null,
 ): PassiveFlowNode[] {
   return nodes.map((node) => {
+    if (node.type === 'frame') {
+      return {
+        ...node,
+        zIndex: node.id === selectedId ? 2 : 0,
+      }
+    }
     const data = node.data as PassiveNodeData
     // Mastery orbits are large; keep them under satellite titles/links visually.
     const baseZ = data.kind === 'mastery' ? 1 : 6
     return {
       ...node,
+      dragHandle: '.node-drag-handle',
       draggable: true,
       zIndex: node.id === selectedId ? 40 : baseZ,
     }
@@ -240,14 +286,22 @@ export function removeNodesAndRelayout(
 
   for (const node of nodes) {
     if (!ids.has(node.id)) continue
+    if (node.type === 'frame') continue
     const data = node.data as PassiveNodeData
     if (data.masteryId) affectedMasteries.add(data.masteryId)
     if (data.kind === 'mastery') affectedMasteries.add(node.id)
   }
 
   let next = nodes
+    .map((node) => {
+      if (node.parentId && ids.has(node.parentId)) {
+        return detachNodeFromFrame(node, nodes)
+      }
+      return node
+    })
     .filter((n) => !ids.has(n.id))
     .map((node) => {
+      if (node.type === 'frame') return node
       const data = node.data as PassiveNodeData
       if (data.masteryId && ids.has(data.masteryId)) {
         return {
@@ -302,9 +356,13 @@ export function shareSameOrbit(
 export const ORBIT_ATTACH_SLACK = 56
 export const ORBIT_DETACH_SLACK = 72
 
-export function distanceBetweenCenters(a: PassiveFlowNode, b: PassiveFlowNode) {
-  const ca = nodeCenter(a)
-  const cb = nodeCenter(b)
+export function distanceBetweenCenters(
+  a: PassiveFlowNode,
+  b: PassiveFlowNode,
+  nodes?: PassiveFlowNode[],
+) {
+  const ca = nodeCenter(a, nodes)
+  const cb = nodeCenter(b, nodes)
   return Math.hypot(ca.x - cb.x, ca.y - cb.y)
 }
 
@@ -312,9 +370,10 @@ export function distanceBetweenCenters(a: PassiveFlowNode, b: PassiveFlowNode) {
 export function findNearestMastery(nodes: PassiveFlowNode[], satellite: PassiveFlowNode) {
   let best: { mastery: PassiveFlowNode; dist: number; radius: number } | null = null
   for (const node of nodes) {
+    if (node.type === 'frame') continue
     const data = node.data as PassiveNodeData
-    if (data.kind !== 'mastery') continue
-    const dist = distanceBetweenCenters(satellite, node)
+    if (!data || data.kind !== 'mastery') continue
+    const dist = distanceBetweenCenters(satellite, node, nodes)
     const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
     if (!best || dist < best.dist) {
       best = { mastery: node, dist, radius }
@@ -333,7 +392,7 @@ export function orbitOrderByDropAngle(
   const satellite = nodes.find((n) => n.id === satelliteId)
   if (!mastery || !satellite) return [satelliteId]
 
-  const mc = nodeCenter(mastery)
+  const mc = nodeCenter(mastery, nodes)
   const start =
     (((mastery.data as PassiveNodeData).orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) * Math.PI) /
     180
@@ -348,14 +407,91 @@ export function orbitOrderByDropAngle(
   const others = getOrderedOrbitSatellites(nodes, masteryId).filter((s) => s.id !== satelliteId)
   const items = [
     ...others.map((o) => {
-      const c = nodeCenter(o)
+      const c = nodeCenter(o, nodes)
       return { id: o.id, rel: norm(Math.atan2(c.y - mc.y, c.x - mc.x)) }
     }),
     (() => {
-      const c = nodeCenter(satellite)
+      const c = nodeCenter(satellite, nodes)
       return { id: satelliteId, rel: norm(Math.atan2(c.y - mc.y, c.x - mc.x)) }
     })(),
   ]
   items.sort((a, b) => a.rel - b.rel)
   return items.map((i) => i.id)
+}
+
+export function frameSize(node: {
+  width?: number
+  height?: number
+  style?: { width?: number | string; height?: number | string }
+}) {
+  const w = node.width ?? Number(node.style?.width) ?? 280
+  const h = node.height ?? Number(node.style?.height) ?? 200
+  return { width: w, height: h }
+}
+
+/** Topmost frame whose bounds contain the flow point. */
+export function findFrameContaining(
+  nodes: PassiveFlowNode[],
+  point: { x: number; y: number },
+) {
+  let best: PassiveFlowNode | null = null
+  let bestZ = -Infinity
+  for (const node of nodes) {
+    if (node.type !== 'frame') continue
+    const origin = absolutePosition(node, nodes)
+    const { width, height } = frameSize(node)
+    if (
+      point.x < origin.x ||
+      point.y < origin.y ||
+      point.x > origin.x + width ||
+      point.y > origin.y + height
+    ) {
+      continue
+    }
+    const z = node.zIndex ?? 0
+    if (!best || z >= bestZ) {
+      best = node
+      bestZ = z
+    }
+  }
+  return best
+}
+
+export function attachNodeToFrame(
+  node: PassiveFlowNode,
+  frame: PassiveFlowNode,
+  nodes: PassiveFlowNode[],
+): PassiveFlowNode {
+  const abs = absolutePosition(node, nodes)
+  const rel = toParentRelative(abs, frame.id, nodes)
+  return {
+    ...node,
+    parentId: frame.id,
+    extent: 'parent',
+    position: rel,
+  }
+}
+
+export function detachNodeFromFrame(
+  node: PassiveFlowNode,
+  nodes: PassiveFlowNode[],
+): PassiveFlowNode {
+  if (!node.parentId) return node
+  const abs = absolutePosition(node, nodes)
+  return {
+    ...node,
+    parentId: undefined,
+    extent: undefined,
+    position: abs,
+  }
+}
+
+/** Keep frame nodes before their children for React Flow subflows. */
+export function sortFramesFirst(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
+  const frames = nodes.filter((n) => n.type === 'frame')
+  const rest = nodes.filter((n) => n.type !== 'frame')
+  const frameIds = new Set(frames.map((f) => f.id))
+  const inFrame = rest.filter((n) => n.parentId && frameIds.has(n.parentId))
+  const free = rest.filter((n) => !n.parentId || !frameIds.has(n.parentId))
+  return [...frames, ...free, ...inFrame]
 }

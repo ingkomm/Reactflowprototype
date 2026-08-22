@@ -10,6 +10,7 @@ import {
   snapOrbitAngle,
 } from '../orbit'
 import type { PassiveFlowNode } from './PassiveNode'
+import type { PassiveNodeData } from '../types'
 
 type Props = {
   commit: () => void
@@ -42,15 +43,20 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       const snapped = snapOrbitAngle(angleDeg)
       setNodes((nds) => {
         const mastery = nds.find((n) => n.id === masteryId)
-        if (!mastery || mastery.data.kind !== 'mastery') return nds
-        if ((mastery.data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) === snapped) {
+        if (!mastery || mastery.type === 'frame') return nds
+        const data = mastery.data as PassiveNodeData
+        if (data.kind !== 'mastery') return nds
+        if ((data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) === snapped) {
           return nds
         }
-        const next = nds.map((n) =>
-          n.id === masteryId
-            ? { ...n, data: { ...n.data, orbitStartAngle: snapped } }
-            : n,
-        )
+        const next = nds.map((n) => {
+          if (n.id !== masteryId || n.type === 'frame') return n
+          const d = n.data as PassiveNodeData
+          return {
+            ...n,
+            data: { ...d, orbitStartAngle: snapped },
+          } as PassiveFlowNode
+        })
         return stack(layoutMasteryOrbit(next, masteryId))
       })
     }
@@ -59,7 +65,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       const mastery = nodesRef.current.find((n) => n.id === masteryId)
       if (!mastery) return null
       const flow = screenToFlowPosition({ x: clientX, y: clientY })
-      const c = nodeCenter(mastery)
+      const c = nodeCenter(mastery, nodesRef.current as PassiveFlowNode[])
       return pointerAngleDeg(c.x, c.y, flow.x, flow.y)
     }
 
@@ -73,7 +79,9 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (!hit) return
 
       const mastery = nodesRef.current.find((n) => n.id === hit.masteryId)
-      if (!mastery || mastery.data.kind !== 'mastery') return
+      if (!mastery || mastery.type === 'frame') return
+      const masteryData = mastery.data as { kind?: string; orbitStartAngle?: number }
+      if (masteryData.kind !== 'mastery') return
 
       e.preventDefault()
       e.stopPropagation()
@@ -82,7 +90,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
         pointerId: e.pointerId,
         masteryId: hit.masteryId,
         originPointerDeg: hit.pointerDeg,
-        originStartDeg: mastery.data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+        originStartDeg: masteryData.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
       }
       commit()
       pane.classList.add('is-orbit-rotating')

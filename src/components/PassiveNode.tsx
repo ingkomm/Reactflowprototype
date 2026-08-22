@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { type CSSProperties } from 'react'
-import type { PassiveNodeData } from '../types'
+import type { FrameNodeData, PassiveNodeData } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
 import {
   completedStageCount,
@@ -19,9 +19,17 @@ import {
 } from './TrainingBands'
 import './PassiveNode.css'
 
-export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
+export type PassiveFlowNode =
+  | Node<PassiveNodeData, 'passive'>
+  | Node<FrameNodeData, 'frame'>
 
-export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
+export function isPassiveNode(
+  node: PassiveFlowNode,
+): node is Node<PassiveNodeData, 'passive'> {
+  return node.type !== 'frame' && 'kind' in (node.data as object)
+}
+
+export function PassiveNode({ data, selected }: NodeProps<Node<PassiveNodeData, 'passive'>>) {
   const { resolve } = usePassiveClasses()
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
@@ -33,6 +41,8 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const iconId = passiveClass.iconId
   const outerBandR = outermostBandRadius(bandCount, nodeSize)
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
+  /** Connect hit lives on the stage-band annulus (or a rim just outside the face). */
+  const connectR = Math.max(outerBandR + 8, nodeSize / 2 + 16)
 
   const glowBlur = bandCount === 0 ? 0 : 12 + bandLevel * 10
   const glowAlpha =
@@ -57,6 +67,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--band-level': String(bandLevel),
           '--band-count': String(bandCount),
           '--outer-band-r': `${outerBandR}px`,
+          '--connect-r': `${connectR}px`,
           '--icon-color': iconColor,
           '--label-offset': `${labelOffset}px`,
           '--orbit-r': `${orbitRadius}px`,
@@ -101,9 +112,6 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
         <p className="passive-node__tooltip-title">{data.label}</p>
         <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
         <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
-        <p className="passive-node__tooltip-meta">
-          숙련도 {data.proficiency} · 파워 {data.power}
-        </p>
         <p className="passive-node__tooltip-meta">
           단계 {done}/{stages.length} 완료
         </p>

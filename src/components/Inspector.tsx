@@ -55,16 +55,16 @@ type Props = {
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeClassId: (nodeId: string, classId: string) => void
-  onChangeProficiency: (nodeId: string, proficiency: number) => void
-  onChangePower: (nodeId: string, power: number) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeOrbitRadius: (nodeId: string, radius: number) => void
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onDetachFromMastery: (nodeId: string) => void
+  onDetachFromFrame: (nodeId: string) => void
   onRemoveLink: (edgeId: string) => void
   onAddLink: (peerId: string) => void
   onDeleteNode: (nodeId: string) => void
+  parentFrameId?: string | null
 }
 
 function reindexStages(stages: StageData[]): StageData[] {
@@ -84,16 +84,16 @@ export function Inspector({
   onRename,
   onChangeKind,
   onChangeClassId,
-  onChangeProficiency,
-  onChangePower,
   onChangeStages,
   onChangeOrbitRadius,
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
   onDetachFromMastery,
+  onDetachFromFrame,
   onRemoveLink,
   onAddLink,
   onDeleteNode,
+  parentFrameId = null,
 }: Props) {
   const { classes, resolve } = usePassiveClasses()
   const [addPeerId, setAddPeerId] = useState('')
@@ -112,7 +112,7 @@ export function Inspector({
       <aside className="inspector">
         <h2 className="inspector__title">Node Inspector</h2>
         <p className="inspector__empty">
-          노드를 선택하면 숙련도·파워·단계별 띠와 트레이닝 로그를 편집할 수 있습니다.
+          노드를 선택하면 클래스·단계별 띠와 트레이닝 로그를 편집할 수 있습니다.
         </p>
       </aside>
     )
@@ -260,27 +260,6 @@ export function Inspector({
         </select>
       </label>
 
-      <div className="stats-row">
-        <label className="field">
-          <span>숙련도</span>
-          <input
-            type="number"
-            min={0}
-            value={data.proficiency}
-            onChange={(e) => onChangeProficiency(nodeId, Number(e.target.value) || 0)}
-          />
-        </label>
-        <label className="field">
-          <span>파워</span>
-          <input
-            type="number"
-            min={0}
-            value={data.power}
-            onChange={(e) => onChangePower(nodeId, Number(e.target.value) || 0)}
-          />
-        </label>
-      </div>
-
       <div className="field">
         <span>클래스</span>
         <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
@@ -306,6 +285,22 @@ export function Inspector({
         </div>
         <p className="field-hint">아이콘·색상은 우측 상단 클래스 관리에서 편집합니다.</p>
       </div>
+
+      {parentFrameId && (
+        <div className="inspector__section">
+          <div className="inspector__section-head">
+            <h3>프레임</h3>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => onDetachFromFrame(nodeId)}
+            >
+              분리
+            </button>
+          </div>
+          <p className="inspector__empty">이 노드는 프레임 범위 안에서만 이동합니다.</p>
+        </div>
+      )}
 
       {data.kind === 'mastery' && (
         <>

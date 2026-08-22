@@ -49,13 +49,13 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   mastery: '#0F7B6C',
 }
 
+export type FrameNodeData = {
+  label: string
+}
+
 export type PassiveNodeData = {
   label: string
   kind: PassiveKind
-  /** 숙련도 — node-level rating the user can customize. */
-  proficiency: number
-  /** 파워 — node-level power rating. */
-  power: number
   /** Ordered stages; each owns a ring and its training log. */
   stages: StageData[]
   /**

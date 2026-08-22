@@ -116,10 +116,10 @@
     0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
 }
 
-/* Center drag zone */
+/* Center face = move; band annulus (overflowing ring) = connect */
 .passive-node__hit {
   position: absolute;
-  inset: 22%;
+  inset: 0;
   border-radius: 50%;
   z-index: 5;
   cursor: grab;
@@ -251,10 +251,10 @@
   color: #d5dde5;
 }
 
-/* Full-node invisible handles; center hit sits above so rim = connect */
+/* Band-area connect ring (outside face); circular cursor instead of crosshair */
 .passive-node__handle {
-  width: 100% !important;
-  height: 100% !important;
+  width: calc(var(--connect-r, var(--outer-band-r)) * 2) !important;
+  height: calc(var(--connect-r, var(--outer-band-r)) * 2) !important;
   min-width: 0 !important;
   min-height: 0 !important;
   border: none !important;
@@ -268,7 +268,10 @@
   opacity: 1;
   z-index: 3;
   pointer-events: all;
-  cursor: crosshair;
+  /* hollow circle cursor */
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7.5' fill='none' stroke='%23d5dde5' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%23d5dde5'/%3E%3C/svg%3E")
+      12 12,
+    pointer;
 }
 
 .passive-node__handle::before {

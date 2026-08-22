@@ -17,10 +17,11 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
+import { PassiveNode, isPassiveNode, type PassiveFlowNode } from './components/PassiveNode'
+import { FrameNode } from './components/FrameNode'
 import { CenterEdge } from './components/CenterEdge'
 import { Inspector } from './components/Inspector'
-import type { PassiveKind, PassiveNodeData, StageData } from './types'
+import type { FrameNodeData, PassiveKind, PassiveNodeData, StageData } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
@@ -45,12 +46,17 @@ import {
   shareSameOrbit,
   snapOrbitAngle,
   withMasteryDragFlags,
+  attachNodeToFrame,
+  detachNodeFromFrame,
+  findFrameContaining,
+  nodeCenter,
+  sortFramesFirst,
 } from './orbit'
 import { OrbitRotateController } from './components/OrbitRotateController'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
-const nodeTypes = { passive: PassiveNode }
+const nodeTypes = { passive: PassiveNode, frame: FrameNode }
 const edgeTypes = { center: CenterEdge }
 
 function uid(prefix: string) {
@@ -68,8 +74,6 @@ function createPassiveData(
       | 'orbitOrder'
       | 'masteryId'
       | 'classId'
-      | 'proficiency'
-      | 'power'
       | 'stages'
     >
   > = {},
@@ -77,8 +81,6 @@ function createPassiveData(
   return {
     label,
     kind,
-    proficiency: extras.proficiency ?? 0,
-    power: extras.power ?? 0,
     stages: extras.stages ?? [createStage(1)],
     classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
     ...(kind === 'mastery'
@@ -138,8 +140,6 @@ function buildPastedNode(
   const data: PassiveNodeData = {
     label,
     kind,
-    proficiency: source.proficiency,
-    power: source.power,
     stages,
     classId: source.classId,
     ...(kind === 'mastery'
@@ -219,8 +219,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 260, y: 300 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('mastery', '댄스', {
-        proficiency: 42,
-        power: 18,
         stages: defaultStagesForSeed([
           { label: '기초 그루브', goal: 4, logged: 4 },
           { label: '안무 리허설', goal: 5, logged: 3 },
@@ -238,8 +236,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('notable', '힙합', {
-        proficiency: 28,
-        power: 12,
         stages: defaultStagesForSeed([
           { label: '기초 스텝', goal: 5, logged: 4 },
           { label: '프리스타일', goal: 4, logged: 2 },
@@ -254,8 +250,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('notable', 'K-pop', {
-        proficiency: 35,
-        power: 14,
         stages: defaultStagesForSeed([
           { label: '안무 암기', goal: 6, logged: 5 },
           { label: '포인트 안무', goal: 3, logged: 3 },
@@ -270,8 +264,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '기본기', {
-        proficiency: 10,
-        power: 4,
         stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 3 }]),
         masteryId: danceMasteryId,
         classId: 's-basic',
@@ -283,8 +275,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '풋워크', {
-        proficiency: 8,
-        power: 5,
         stages: defaultStagesForSeed([{ label: '그루브', goal: 3, logged: 2 }]),
         masteryId: danceMasteryId,
         classId: 's-footwork',
@@ -296,8 +286,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '스트레칭', {
-        proficiency: 6,
-        power: 2,
         stages: defaultStagesForSeed([{ label: '유연성', goal: 3, logged: 1 }]),
         masteryId: danceMasteryId,
         classId: 's-stretch',
@@ -309,8 +297,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 760, y: 300 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('mastery', '운동', {
-        proficiency: 50,
-        power: 22,
         stages: defaultStagesForSeed([
           { label: '워밍업', goal: 4, logged: 4 },
           { label: '메인', goal: 5, logged: 2 },
@@ -328,8 +314,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('notable', '근력', {
-        proficiency: 40,
-        power: 20,
         stages: defaultStagesForSeed([
           { label: '스쿼트', goal: 6, logged: 6 },
           { label: '데드리프트', goal: 5, logged: 4 },
@@ -344,8 +328,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('notable', '유산소', {
-        proficiency: 30,
-        power: 11,
         stages: defaultStagesForSeed([
           { label: '러닝', goal: 5, logged: 5 },
           { label: '사이클', goal: 4, logged: 2 },
@@ -360,8 +342,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '하체', {
-        proficiency: 12,
-        power: 7,
         stages: defaultStagesForSeed([{ label: '런지', goal: 4, logged: 3 }]),
         masteryId: gymMasteryId,
         classId: 's-legs',
@@ -373,8 +353,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '등', {
-        proficiency: 14,
-        power: 8,
         stages: defaultStagesForSeed([{ label: '풀업', goal: 5, logged: 4 }]),
         masteryId: gymMasteryId,
         classId: 's-back',
@@ -386,8 +364,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '러닝', {
-        proficiency: 9,
-        power: 6,
         stages: defaultStagesForSeed([{ label: '인터벌', goal: 3, logged: 2 }]),
         masteryId: gymMasteryId,
         classId: 's-run',
@@ -399,8 +375,6 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '코어', {
-        proficiency: 11,
-        power: 5,
         stages: defaultStagesForSeed([{ label: '플랭크', goal: 4, logged: 3 }]),
         masteryId: gymMasteryId,
         classId: 's-core',
@@ -467,7 +441,8 @@ export default function App() {
   }, [])
 
   const stack = useCallback(
-    (nds: PassiveFlowNode[]) => withMasteryDragFlags(nds, selectedIdRef.current),
+    (nds: PassiveFlowNode[]) =>
+      sortFramesFirst(withMasteryDragFlags(nds, selectedIdRef.current)),
     [],
   )
 
@@ -483,7 +458,7 @@ export default function App() {
     const currentId = selectedIdRef.current
     if (!currentId) return false
     const node = nodesRef.current.find((n) => n.id === currentId)
-    if (!node) return false
+    if (!node || !isPassiveNode(node)) return false
     clipboardRef.current = {
       data: structuredClone(node.data as PassiveNodeData),
       position: { ...node.position },
@@ -568,7 +543,10 @@ export default function App() {
     [nodes, selectedId],
   )
 
-  const selectedData = (selectedNode?.data as PassiveNodeData | undefined) ?? null
+  const selectedData =
+    selectedNode && isPassiveNode(selectedNode) ? selectedNode.data : null
+  const selectedFrameData =
+    selectedNode?.type === 'frame' ? (selectedNode.data as FrameNodeData) : null
 
   const selectedMasteryLabel = useMemo(() => {
     const masteryId = selectedData?.masteryId
@@ -615,6 +593,8 @@ export default function App() {
         const source = nodes.find((n) => n.id === e.source)
         const target = nodes.find((n) => n.id === e.target)
         if (!source || !target) return true
+        if (source.type === 'frame' || target.type === 'frame') return true
+        if (!isPassiveNode(source) || !isPassiveNode(target)) return true
         return !shareSameOrbit(
           { data: source.data as PassiveNodeData },
           { data: target.data as PassiveNodeData },
@@ -630,7 +610,8 @@ export default function App() {
     const linked = new Set(selectedLinks.map((l) => l.peerId))
     return nodes
       .filter((n) => {
-        const d = n.data as PassiveNodeData
+        if (n.type === 'frame' || !isPassiveNode(n)) return false
+        const d = n.data
         if (n.id === selectedNode.id || linked.has(n.id) || !isSatelliteKind(d.kind)) return false
         // No links inside the same mastery orbit.
         if (shareSameOrbit({ data: selectedData }, { data: d })) return false
@@ -647,6 +628,8 @@ export default function App() {
       const source = nodes.find((n) => n.id === connection.source)
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
+      if (source.type === 'frame' || target.type === 'frame') return false
+      if (!isPassiveNode(source) || !isPassiveNode(target)) return false
       if (resolveMasteryPair(source, target) !== null) return true
       if (!isPassiveLinkPair(source, target)) return false
       return !shareSameOrbit(
@@ -894,8 +877,6 @@ export default function App() {
             const nextData: PassiveNodeData = {
               label: data.label,
               kind,
-              proficiency: data.proficiency,
-              power: data.power,
               stages: data.stages,
               classId: resolvePassiveClass(classes, data.classId, kind).id,
               ...(kind === 'mastery'
@@ -979,7 +960,8 @@ export default function App() {
       setNodes((nds) =>
         stack(
           nds.map((node) => {
-            const data = node.data as PassiveNodeData
+            if (!isPassiveNode(node)) return node
+            const data = node.data
             if (!removedIds.has(data.classId)) return node
             const fallback = resolvePassiveClass(next, null, data.kind)
             return { ...node, data: { ...data, classId: fallback.id } }
@@ -1005,6 +987,46 @@ export default function App() {
     setNodes((nds) => stack([...nds, newNode]))
     setSelectedId(id)
   }, [addKind, commit, nodes.length, setNodes, stack])
+
+  const addFrame = useCallback(() => {
+    const id = uid('frame')
+    const offset = nodes.filter((n) => n.type === 'frame').length * 24
+    commit()
+    const frame: PassiveFlowNode = {
+      id,
+      type: 'frame',
+      position: { x: 100 + offset, y: 60 + offset },
+      style: { width: 340, height: 260 },
+      data: { label: '프레임' },
+    }
+    setNodes((nds) => stack([frame, ...nds]))
+    setSelectedId(id)
+  }, [commit, nodes, setNodes, stack])
+
+  const applyFrameMembership = useCallback(
+    (nds: PassiveFlowNode[], nodeId: string) => {
+      const node = nds.find((n) => n.id === nodeId)
+      if (!node || node.type === 'frame') return nds
+      const center = nodeCenter(node, nds)
+      const frame = findFrameContaining(
+        nds.filter((n) => n.id !== nodeId),
+        center,
+      )
+      if (frame) {
+        if (node.parentId === frame.id) return nds
+        return nds.map((n) =>
+          n.id === nodeId ? attachNodeToFrame(n, frame, nds) : n,
+        )
+      }
+      if (node.parentId) {
+        return nds.map((n) =>
+          n.id === nodeId ? detachNodeFromFrame(n, nds) : n,
+        )
+      }
+      return nds
+    },
+    [],
+  )
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -1043,6 +1065,7 @@ export default function App() {
 
   const onNodeDrag = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
+      if (node.type === 'frame') return
       const data = node.data as PassiveNodeData
       if (data.kind !== 'mastery') return
       setNodes((nds) => {
@@ -1052,113 +1075,125 @@ export default function App() {
         return stack(layoutMasteryOrbit(synced, node.id))
       })
     },
-    [setNodes],
+    [setNodes, stack],
   )
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
-      const data = node.data as PassiveNodeData
-      if (!isSatelliteKind(data.kind)) return
+      if (node.type === 'frame') {
+        setNodes((nds) =>
+          stack(nds.map((n) => (n.id === node.id ? { ...n, position: node.position } : n))),
+        )
+        return
+      }
 
-      // Drag start already committed; snap/attach/detach here without a second commit.
+      const data = node.data as PassiveNodeData
+
       setNodes((nds) => {
         let next = nds.map((n) =>
           n.id === node.id ? { ...n, position: node.position } : n,
         )
-        const satellite = next.find((n) => n.id === node.id)
-        if (!satellite) return nds
 
-        const currentMasteryId = (satellite.data as PassiveNodeData).masteryId ?? null
+        if (isSatelliteKind(data.kind)) {
+          const satellite = next.find((n) => n.id === node.id)
+          if (!satellite) return nds
 
-        if (currentMasteryId) {
-          const mastery = next.find((n) => n.id === currentMasteryId)
-          if (mastery) {
-            const parentDist =
-              findNearestMastery([mastery, satellite], satellite)?.dist ?? Infinity
-            const radius =
-              (mastery.data as PassiveNodeData).orbitRadius ?? DEFAULT_ORBIT_RADIUS
+          const currentMasteryId = (satellite.data as PassiveNodeData).masteryId ?? null
 
-            if (parentDist > radius + ORBIT_DETACH_SLACK) {
-              next = next.map((n) => {
-                const d = n.data as PassiveNodeData
-                if (n.id === satellite.id) {
-                  return { ...n, data: { ...d, masteryId: null }, draggable: true }
-                }
-                if (n.id === currentMasteryId && d.kind === 'mastery') {
-                  return {
-                    ...n,
-                    data: {
-                      ...d,
-                      orbitOrder: (d.orbitOrder ?? []).filter((id) => id !== satellite.id),
-                    },
-                  }
-                }
-                return n
-              })
-              next = layoutMasteryOrbit(next, currentMasteryId)
+          if (currentMasteryId) {
+            const mastery = next.find((n) => n.id === currentMasteryId)
+            if (mastery) {
+              const parentDist =
+                findNearestMastery([mastery, satellite], satellite)?.dist ?? Infinity
+              const radius =
+                (mastery.data as PassiveNodeData).orbitRadius ?? DEFAULT_ORBIT_RADIUS
 
-              const freeSat = next.find((n) => n.id === satellite.id)!
-              const other = findNearestMastery(next, freeSat)
-              if (
-                other &&
-                other.mastery.id !== currentMasteryId &&
-                other.dist <= other.radius + ORBIT_ATTACH_SLACK
-              ) {
-                const order = orbitOrderByDropAngle(next, other.mastery.id, freeSat.id)
+              if (parentDist > radius + ORBIT_DETACH_SLACK) {
                 next = next.map((n) => {
                   const d = n.data as PassiveNodeData
-                  if (n.id === freeSat.id) {
+                  if (n.id === satellite.id) {
+                    return { ...n, data: { ...d, masteryId: null }, draggable: true }
+                  }
+                  if (n.id === currentMasteryId && d.kind === 'mastery') {
                     return {
                       ...n,
-                      data: { ...d, masteryId: other.mastery.id },
-                      draggable: true,
+                      data: {
+                        ...d,
+                        orbitOrder: (d.orbitOrder ?? []).filter((id) => id !== satellite.id),
+                      },
                     }
-                  }
-                  if (n.id === other.mastery.id && d.kind === 'mastery') {
-                    return { ...n, data: { ...d, orbitOrder: order } }
                   }
                   return n
                 })
-                next = layoutMasteryOrbit(next, other.mastery.id)
+                next = layoutMasteryOrbit(next, currentMasteryId)
+
+                const freeSat = next.find((n) => n.id === satellite.id)!
+                const other = findNearestMastery(next, freeSat)
+                if (
+                  other &&
+                  other.mastery.id !== currentMasteryId &&
+                  other.dist <= other.radius + ORBIT_ATTACH_SLACK
+                ) {
+                  const order = orbitOrderByDropAngle(next, other.mastery.id, freeSat.id)
+                  next = next.map((n) => {
+                    const d = n.data as PassiveNodeData
+                    if (n.id === freeSat.id) {
+                      return {
+                        ...n,
+                        data: { ...d, masteryId: other.mastery.id },
+                        draggable: true,
+                      }
+                    }
+                    if (n.id === other.mastery.id && d.kind === 'mastery') {
+                      return { ...n, data: { ...d, orbitOrder: order } }
+                    }
+                    return n
+                  })
+                  next = layoutMasteryOrbit(next, other.mastery.id)
+                }
+              } else {
+                const order = orbitOrderByDropAngle(next, currentMasteryId, satellite.id)
+                next = next.map((n) => {
+                  if (n.id !== currentMasteryId) return n
+                  const d = n.data as PassiveNodeData
+                  return { ...n, data: { ...d, orbitOrder: order } }
+                })
+                next = layoutMasteryOrbit(next, currentMasteryId)
               }
-
-              return stack(next)
             }
-
-            const order = orbitOrderByDropAngle(next, currentMasteryId, satellite.id)
-            next = next.map((n) => {
-              if (n.id !== currentMasteryId) return n
-              const d = n.data as PassiveNodeData
-              return { ...n, data: { ...d, orbitOrder: order } }
-            })
-            return stack(layoutMasteryOrbit(next, currentMasteryId))
+          } else {
+            const nearest = findNearestMastery(next, satellite)
+            if (nearest && nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK) {
+              const order = orbitOrderByDropAngle(next, nearest.mastery.id, satellite.id)
+              next = next.map((n) => {
+                const d = n.data as PassiveNodeData
+                if (n.id === satellite.id) {
+                  return {
+                    ...n,
+                    data: { ...d, masteryId: nearest.mastery.id },
+                    draggable: true,
+                  }
+                }
+                if (n.id === nearest.mastery.id && d.kind === 'mastery') {
+                  return { ...n, data: { ...d, orbitOrder: order } }
+                }
+                return n
+              })
+              next = layoutMasteryOrbit(next, nearest.mastery.id)
+            }
           }
         }
 
-        const nearest = findNearestMastery(next, satellite)
-        if (nearest && nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK) {
-          const order = orbitOrderByDropAngle(next, nearest.mastery.id, satellite.id)
-          next = next.map((n) => {
-            const d = n.data as PassiveNodeData
-            if (n.id === satellite.id) {
-              return {
-                ...n,
-                data: { ...d, masteryId: nearest.mastery.id },
-                draggable: true,
-              }
-            }
-            if (n.id === nearest.mastery.id && d.kind === 'mastery') {
-              return { ...n, data: { ...d, orbitOrder: order } }
-            }
-            return n
-          })
-          return stack(layoutMasteryOrbit(next, nearest.mastery.id))
+        next = applyFrameMembership(next, node.id)
+        if (data.kind === 'mastery') {
+          next = layoutMasteryOrbit(next, node.id)
+        } else if (data.masteryId) {
+          next = layoutMasteryOrbit(next, data.masteryId)
         }
-
         return stack(next)
       })
     },
-    [setNodes],
+    [applyFrameMembership, setNodes, stack],
   )
 
   return (
@@ -1189,6 +1224,9 @@ export default function App() {
           </label>
           <button type="button" className="btn btn--primary" onClick={addNode}>
             Add Node
+          </button>
+          <button type="button" className="btn" onClick={addFrame}>
+            프레임
           </button>
           <button
             type="button"
@@ -1256,8 +1294,9 @@ export default function App() {
               pannable
               zoomable
               nodeColor={(node) => {
+                if (node.type === 'frame') return '#3a4552'
                 const d = node.data as PassiveNodeData | undefined
-                if (!d) return '#9B9A97'
+                if (!d?.kind) return '#9B9A97'
                 return resolvePassiveClass(classes, d.classId, d.kind).iconColor
               }}
               maskColor="rgba(8, 12, 16, 0.7)"
@@ -1265,7 +1304,8 @@ export default function App() {
           </ReactFlow>
 
           <p className="canvas-hint">
-            가운데 드래그 = 이동 · 오르빗 빈 공간 드래그 = 회전(15°) · 가장자리 = 링크 · Ctrl+C/V · Ctrl+Z/Y
+            가운데 드래그 = 이동 · 띠 영역 = 링크 · 프레임 안 = 범위 내 배치 · 오르빗 빈 공간 =
+            회전(15°)
           </p>
         </section>
 
@@ -1277,31 +1317,81 @@ export default function App() {
             title="드래그해서 편집 창 너비 조절"
             onMouseDown={onInspectorResizeStart}
           />
-          <Inspector
-            nodeId={selectedNode?.id ?? null}
-            data={selectedData}
-            masteryLabel={selectedMasteryLabel}
-            orbitMembers={orbitMembers}
-            links={selectedLinks}
-            linkCandidates={linkCandidates}
-            onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
-            onChangeKind={changeKind}
-            onChangeClassId={(nodeId, classId) =>
-              updateNodeData(nodeId, (d) => ({ ...d, classId }))
-            }
-            onChangeProficiency={(nodeId, proficiency) =>
-              updateNodeData(nodeId, (d) => ({ ...d, proficiency }))
-            }
-            onChangePower={(nodeId, power) => updateNodeData(nodeId, (d) => ({ ...d, power }))}
-            onChangeStages={(nodeId, stages) => updateNodeData(nodeId, (d) => ({ ...d, stages }))}
-            onChangeOrbitRadius={changeOrbitRadius}
-            onChangeOrbitStartAngle={changeOrbitStartAngle}
-            onChangeOrbitOrder={changeOrbitOrder}
-            onDetachFromMastery={detachFromMastery}
-            onRemoveLink={removeLink}
-            onAddLink={addLink}
-            onDeleteNode={deleteNode}
-          />
+          {selectedFrameData && selectedNode ? (
+            <aside className="inspector">
+              <div className="inspector__header">
+                <h2 className="inspector__title">Frame</h2>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  onClick={() => deleteNode(selectedNode.id)}
+                >
+                  Delete
+                </button>
+              </div>
+              <label className="field">
+                <span>이름</span>
+                <input
+                  value={selectedFrameData.label}
+                  onChange={(e) => {
+                    const label = e.target.value
+                    commit()
+                    setNodes((nds) =>
+                      stack(
+                        nds.map((n): PassiveFlowNode => {
+                          if (n.id === selectedNode.id && n.type === 'frame') {
+                            return { ...n, data: { label } }
+                          }
+                          return n
+                        }),
+                      ),
+                    )
+                  }}
+                />
+              </label>
+              <p className="field-hint">
+                노드를 프레임 안으로 드롭하면 범위 안에서만 위치를 조절할 수 있습니다. 선택 후
+                Inspector의 분리로 빼낼 수 있습니다.
+              </p>
+            </aside>
+          ) : (
+            <Inspector
+              nodeId={selectedNode?.id ?? null}
+              data={selectedData}
+              masteryLabel={selectedMasteryLabel}
+              orbitMembers={orbitMembers}
+              links={selectedLinks}
+              linkCandidates={linkCandidates}
+              parentFrameId={selectedNode?.parentId ?? null}
+              onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
+              onChangeKind={changeKind}
+              onChangeClassId={(nodeId, classId) =>
+                updateNodeData(nodeId, (d) => ({ ...d, classId }))
+              }
+              onChangeStages={(nodeId, stages) =>
+                updateNodeData(nodeId, (d) => ({ ...d, stages }))
+              }
+              onChangeOrbitRadius={changeOrbitRadius}
+              onChangeOrbitStartAngle={changeOrbitStartAngle}
+              onChangeOrbitOrder={changeOrbitOrder}
+              onDetachFromMastery={detachFromMastery}
+              onDetachFromFrame={(nodeId) => {
+                commit()
+                setNodes((nds) => {
+                  const node = nds.find((n) => n.id === nodeId)
+                  if (!node) return nds
+                  return stack(
+                    nds.map((n) =>
+                      n.id === nodeId ? detachNodeFromFrame(n, nds) : n,
+                    ),
+                  )
+                })
+              }}
+              onRemoveLink={removeLink}
+              onAddLink={addLink}
+              onDeleteNode={deleteNode}
+            />
+          )}
         </div>
       </main>
 
