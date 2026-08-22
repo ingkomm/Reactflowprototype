@@ -575,19 +575,16 @@ export default function App() {
     [nodes, edges],
   )
 
-  // Orbit links must stay adjacent-only (no skip links like A→C on A-B-C-D ring).
+  // Drop edges that no longer match link rules (orbit adjacency, no Notable↔Notable, etc.).
   useEffect(() => {
     setEdges((eds) => {
       const next = eds.filter((e) => {
-        if (e.type !== 'orbit') return true
-        const edgeData = e.data as { masteryId?: string } | undefined
         const source = nodes.find((n) => n.id === e.source)
         const target = nodes.find((n) => n.id === e.target)
         if (!source || !target) return false
-        const sd = source.data as PassiveNodeData
-        const masteryId = edgeData?.masteryId ?? sd.masteryId
-        if (!masteryId) return false
-        return areOrbitAdjacent(nodes, masteryId, e.source, e.target)
+        const linkKind = classifyLink(source, target, nodes)
+        if (e.type === 'orbit') return linkKind === 'orbit'
+        return linkKind === 'center'
       })
       return next.length === eds.length ? eds : next
     })

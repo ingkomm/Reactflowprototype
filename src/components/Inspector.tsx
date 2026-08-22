@@ -365,6 +365,11 @@ export function Inspector({
               같은 오르빗의 Notable과 직선 링크가 있어야 파워가 공급됩니다.
             </p>
           )}
+          {(data.kind === 'small' || data.kind === 'notable') && (
+            <p className="inspector__empty">
+              오르빗 안 = 인접 노드만 호 링크 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
+            </p>
+          )}
           {links.length === 0 ? (
             <p className="inspector__empty">No passive links yet.</p>
           ) : (

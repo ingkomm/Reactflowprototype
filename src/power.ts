@@ -1,7 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { PassiveNodeData } from './types'
-import { getOrderedOrbitSatellites, shareSameOrbit } from './orbit'
+import { getOrderedOrbitSatellites, isSatelliteKind, shareSameOrbit } from './orbit'
 
 export type LinkKind = 'center' | 'orbit'
 
@@ -128,13 +128,28 @@ export function classifyPassiveConnection(
     return 'attach'
   }
 
+  // Notable ↔ Notable direct links are never allowed.
+  if (sd.kind === 'notable' && td.kind === 'notable') return null
+
   if (
     shareSameOrbit({ data: sd }, { data: td }) &&
-    (sd.kind === 'small' || sd.kind === 'notable') &&
-    (td.kind === 'small' || td.kind === 'notable')
+    isSatelliteKind(sd.kind) &&
+    isSatelliteKind(td.kind)
   ) {
     const masteryId = sd.masteryId!
     if (areAdjacent(masteryId, source.id, target.id)) return 'orbit'
+    return null
+  }
+
+  // Off-orbit / cross-orbit: straight center links (orbit-internal stays arc-only above).
+  if (!shareSameOrbit({ data: sd }, { data: td })) {
+    if (sd.kind === 'small' && td.kind === 'small') return 'center'
+    if (
+      (sd.kind === 'small' && td.kind === 'notable') ||
+      (sd.kind === 'notable' && td.kind === 'small')
+    ) {
+      return 'center'
+    }
   }
 
   return null
