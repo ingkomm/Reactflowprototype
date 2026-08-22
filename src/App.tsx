@@ -36,6 +36,7 @@ import { ClassManager } from './components/ClassManager'
 import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
 import {
+  applySatelliteOrbitPlacement,
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
   getOrderedOrbitSatellites,
@@ -620,7 +621,7 @@ export default function App() {
       if (next.length === eds.length && next.every((e, i) => e.id === eds[i]?.id)) return eds
       return next
     })
-  }, [nodes, setEdges])
+  }, [nodes, edges, setEdges])
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
@@ -753,21 +754,16 @@ export default function App() {
         return node
       })
 
-      const order = orbitOrderByDropAngle(next, masteryId, satelliteId)
-      next = next.map((node) => {
-        if (node.id !== masteryId) return node
-        const data = node.data as PassiveNodeData
-        if (!isMasteryKind(data.kind)) return node
-        return { ...node, data: { ...data, orbitOrder: order } }
-      })
-
+      next = applySatelliteOrbitPlacement(next, masteryId, satelliteId)
       next = layoutMasteryOrbit(next, masteryId)
       if (oldMasteryId) {
         next = layoutMasteryOrbit(next, oldMasteryId)
       }
-      return stack(next)
+      const stacked = stack(next)
+      setEdges((eds) => sanitizeEdges(stacked, eds))
+      return stacked
     })
-  }, [commit, nodes, setNodes, stack])
+  }, [commit, nodes, setEdges, setNodes, stack])
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -789,16 +785,18 @@ export default function App() {
       setEdges((eds) => {
         const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
         const existing = findLinkEdge(eds, source.id, target.id, edgeType)
+        let next: Edge[]
         if (existing) {
-          return eds.filter((e) => e.id !== existing.id)
-        }
-        if (linkKind === 'orbit') {
+          next = eds.filter((e) => e.id !== existing.id)
+        } else if (linkKind === 'orbit') {
           const sd = source.data as PassiveNodeData
           const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
           if (!masteryId) return eds
-          return [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+          next = [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+        } else {
+          next = [...eds, passiveLinkEdge(source.id, target.id)]
         }
-        return [...eds, passiveLinkEdge(source.id, target.id)]
+        return sanitizeEdges(nodes, next)
       })
     },
     [attachSatellite, commit, nodes, setEdges],
@@ -959,13 +957,16 @@ export default function App() {
       setEdges((eds) => {
         const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
         if (findLinkEdge(eds, source.id, target.id, edgeType)) return eds
+        let next: Edge[]
         if (linkKind === 'orbit') {
           const sd = source.data as PassiveNodeData
           const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
           if (!masteryId) return eds
-          return [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+          next = [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+        } else {
+          next = [...eds, passiveLinkEdge(source.id, target.id)]
         }
-        return [...eds, passiveLinkEdge(source.id, target.id)]
+        return sanitizeEdges(nodes, next)
       })
     },
     [commit, nodes, selectedId, setEdges],
@@ -1224,19 +1225,41 @@ export default function App() {
     [commit, setEdges],
   )
 
+  const relayoutOrbitSatellite = useCallback(
+    (nds: PassiveFlowNode[], masteryId: string, satelliteId: string) => {
+      let next = applySatelliteOrbitPlacement(nds, masteryId, satelliteId)
+      next = layoutMasteryOrbit(next, masteryId)
+      return stack(next)
+    },
+    [stack],
+  )
+
   const onNodeDrag = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const data = node.data as PassiveNodeData
-      if (!isMasteryKind(data.kind)) return
-      const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
-      setNodes((nds) => {
-        const synced = nds.map((n) =>
-          n.id === node.id ? { ...n, position } : n,
-        )
-        return stack(layoutMasteryOrbit(synced, node.id))
-      })
+
+      if (isMasteryKind(data.kind)) {
+        const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
+        setNodes((nds) => {
+          const synced = nds.map((n) =>
+            n.id === node.id ? { ...n, position } : n,
+          )
+          return stack(layoutMasteryOrbit(synced, node.id))
+        })
+        return
+      }
+
+      if (isOrbitMemberKind(data.kind) && data.masteryId) {
+        if (isMasteryOrbitLocked(nodes, data.masteryId)) return
+        setNodes((nds) => {
+          const synced = nds.map((n) =>
+            n.id === node.id ? { ...n, position: node.position } : n,
+          )
+          return relayoutOrbitSatellite(synced, data.masteryId!, node.id)
+        })
+      }
     },
-    [gridSnapEnabled, setNodes, stack],
+    [gridSnapEnabled, nodes, relayoutOrbitSatellite, setNodes, stack],
   )
 
   const onNodeDragStop = useCallback(
@@ -1334,12 +1357,7 @@ export default function App() {
               return stack(next)
             }
 
-            const order = orbitOrderByDropAngle(next, currentMasteryId, satellite.id)
-            next = next.map((n) => {
-              if (n.id !== currentMasteryId) return n
-              const d = n.data as PassiveNodeData
-              return { ...n, data: { ...d, orbitOrder: order } }
-            })
+            next = applySatelliteOrbitPlacement(next, currentMasteryId, satellite.id)
             return stack(layoutMasteryOrbit(next, currentMasteryId))
           }
         }
@@ -1350,7 +1368,6 @@ export default function App() {
           !isMasteryOrbitLocked(next, nearest.mastery.id) &&
           nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK
         ) {
-          const order = orbitOrderByDropAngle(next, nearest.mastery.id, satellite.id)
           next = next.map((n) => {
             const d = n.data as PassiveNodeData
             if (n.id === satellite.id) {
@@ -1360,11 +1377,9 @@ export default function App() {
                 draggable: true,
               }
             }
-            if (n.id === nearest.mastery.id && isMasteryKind(d.kind)) {
-              return { ...n, data: { ...d, orbitOrder: order } }
-            }
             return n
           })
+          next = applySatelliteOrbitPlacement(next, nearest.mastery.id, satellite.id)
           return stack(layoutMasteryOrbit(next, nearest.mastery.id))
         }
 
@@ -1494,7 +1509,7 @@ export default function App() {
           </PowerProvider>
 
           <p className="canvas-hint">
-            1단계 완료 후 파워 전달 · Void = 링크 차단 · Mastery 오르빗 Lock 가능
+            Initial 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 단 간 호 링크 제한 없음
           </p>
         </section>
 

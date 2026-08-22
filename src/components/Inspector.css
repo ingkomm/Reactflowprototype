@@ -502,11 +502,6 @@
 
 .orbit-item select {
   flex-shrink: 0;
-}
-
-.orbit-item select + select {
-  margin-left: 4px;
-}
   width: 72px;
   border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
   background: #0f151c;
@@ -515,6 +510,10 @@
   padding: 6px 8px;
   font: inherit;
   font-size: 0.85rem;
+}
+
+.orbit-item select + select {
+  margin-left: 4px;
 }
 
 .link-add {

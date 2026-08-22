@@ -21,8 +21,10 @@ export function isStealthPassiveKind(kind: PassiveKind) {
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180
-/** Radial gap between consecutive orbit tiers. */
-export const ORBIT_TIER_STEP = 40
+/** Radial gap between tier rings — enough for Notable + bands on adjacent tiers. */
+export const ORBIT_TIER_STEP = Math.ceil(
+  (outermostBandRadius(2, NODE_SIZE.notable) + BAND_STROKE / 2) * 2 + 24,
+)
 
 export function normalizeOrbitTierCount(count: number | undefined): OrbitTierCount {
   if (count === 2) return 2
@@ -37,13 +39,9 @@ export function normalizeOrbitTier(tier: number | undefined, tierCount: OrbitTie
   return 1
 }
 
-/** Radius for a tier ring given how many tiers the mastery exposes. */
-export function orbitTierRadius(tierCount: OrbitTierCount, tier: OrbitTier): number {
-  if (tierCount === 1) return DEFAULT_ORBIT_RADIUS
-  if (tierCount === 2) {
-    return tier === 1 ? DEFAULT_ORBIT_RADIUS - ORBIT_TIER_STEP / 2 : DEFAULT_ORBIT_RADIUS + ORBIT_TIER_STEP / 2
-  }
-  return DEFAULT_ORBIT_RADIUS + (tier - 2) * ORBIT_TIER_STEP
+/** Tier 1 is always at DEFAULT_ORBIT_RADIUS; higher tiers expand outward only. */
+export function orbitTierRadius(_tierCount: OrbitTierCount, tier: OrbitTier): number {
+  return DEFAULT_ORBIT_RADIUS + (tier - 1) * ORBIT_TIER_STEP
 }
 
 export function masteryOuterOrbitRadius(data: PassiveNodeData): number {
@@ -62,6 +60,49 @@ export function getSatelliteOrbitTier(
   const md = mastery.data as PassiveNodeData
   const sd = satellite.data as PassiveNodeData
   return normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount))
+}
+
+/** Pick the nearest tier ring for a satellite based on distance from mastery center. */
+export function inferOrbitTierFromDistance(
+  dist: number,
+  tierCount: OrbitTierCount,
+): OrbitTier {
+  let best: { tier: OrbitTier; err: number } | null = null
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    const err = Math.abs(dist - orbitTierRadius(tierCount, tier))
+    if (!best || err < best.err) best = { tier, err }
+  }
+  return best?.tier ?? 1
+}
+
+/** Update satellite tier (by radial drag) and clockwise slot (by angle). */
+export function applySatelliteOrbitPlacement(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+): PassiveFlowNode[] {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  if (!mastery || !satellite) return nodes
+
+  const md = mastery.data as PassiveNodeData
+  const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
+  const dist = distanceBetweenCenters(satellite, mastery, nodes)
+  const tier = tierCount > 1 ? inferOrbitTierFromDistance(dist, tierCount) : 1
+
+  let next = nodes.map((node) => {
+    if (node.id !== satelliteId) return node
+    const data = node.data as PassiveNodeData
+    return { ...node, data: { ...data, orbitTier: tier } }
+  })
+
+  const order = orbitOrderByDropAngle(next, masteryId, satelliteId)
+  return next.map((node) => {
+    if (node.id !== masteryId) return node
+    const data = node.data as PassiveNodeData
+    return { ...node, data: { ...data, orbitOrder: order } }
+  })
 }
 /** Degrees. -90 = top of the circle; layout advances clockwise. */
 export const DEFAULT_ORBIT_START_ANGLE = -90
