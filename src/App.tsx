@@ -64,6 +64,7 @@ import {
   withMasteryDragFlags,
 } from './orbit'
 import { OrbitRotateController } from './components/OrbitRotateController'
+import { ZoomKeyboardController } from './components/ZoomKeyboardController'
 import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { VoidHighlightProvider } from './VoidHighlightContext'
 import { useGraphHistory } from './useGraphHistory'
@@ -1543,6 +1544,7 @@ export default function App() {
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onEdgeDoubleClick={onEdgeDoubleClick}
+            zoomOnDoubleClick={false}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
@@ -1572,6 +1574,7 @@ export default function App() {
               stack={stack}
               restoreSelection={restoreFlowSelection}
             />
+            <ZoomKeyboardController />
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
             <Controls position="top-left" />
             <MiniMap

@@ -64,8 +64,8 @@ export function CenterEdge({
     sourceCY,
     targetCX,
     targetCY,
-    linkEndpointPad(sd, sourceLit, lit),
-    linkEndpointPad(td, targetLit, lit),
+    linkEndpointPad(sd, sourceLit, lit, 'source'),
+    linkEndpointPad(td, targetLit, lit, 'target'),
   )
 
   const hitPath = getStraightPath({
@@ -81,7 +81,7 @@ export function CenterEdge({
     notableCY,
     masteryCX,
     masteryCY,
-    linkEndpointPad(notableData, sourceLit || targetLit, lit),
+    linkEndpointPad(notableData, sourceLit || targetLit, lit, 'source'),
     NODE_SIZE.mastery / 2 + 2,
   )
   const [beamPath] = getStraightPath({
@@ -91,7 +91,7 @@ export function CenterEdge({
     targetY: beamEnd.targetY,
   })
 
-  const masteryR = NODE_SIZE.mastery / 2 + 8
+  const masteryR = NODE_SIZE.mastery / 2
   const gradId = `mastery-beam-${id}`
 
   return (
@@ -113,58 +113,80 @@ export function CenterEdge({
               x2={masteryCX}
               y2={masteryCY}
             >
-              <stop offset="0%" stopColor="#c8fff5" stopOpacity="0.95" />
-              <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.7" />
-              <stop offset="100%" stopColor="#3db8a8" stopOpacity="0" />
+              <stop offset="0%" stopColor="#b8f5ec" stopOpacity="0.55" />
+              <stop offset="45%" stopColor="#9fe8dd" stopOpacity="0.38" />
+              <stop offset="100%" stopColor="#7fd4c8" stopOpacity="0" />
             </linearGradient>
             <radialGradient
-              id={`${gradId}-halo`}
+              id={`${gradId}-flare-outer`}
               gradientUnits="userSpaceOnUse"
               cx={masteryCX}
               cy={masteryCY}
-              r={masteryR + 22}
+              r={masteryR + 28}
             >
-              <stop offset="0%" stopColor="#d4fff8" stopOpacity="0.42" />
-              <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.16" />
-              <stop offset="100%" stopColor="#3db8a8" stopOpacity="0" />
+              <stop offset="0%" stopColor="#d8fff8" stopOpacity="0.5" />
+              <stop offset="42%" stopColor="#9fe8dd" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#5ec4b4" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient
+              id={`${gradId}-flare-mid`}
+              gradientUnits="userSpaceOnUse"
+              cx={masteryCX}
+              cy={masteryCY}
+              r={masteryR + 16}
+            >
+              <stop offset="0%" stopColor="#eafffb" stopOpacity="0.65" />
+              <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#7fd4c8" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient
+              id={`${gradId}-flare-inner`}
+              gradientUnits="userSpaceOnUse"
+              cx={masteryCX}
+              cy={masteryCY}
+              r={masteryR + 6}
+            >
+              <stop offset="0%" stopColor="#f4fffd" stopOpacity="0.45" />
+              <stop offset="70%" stopColor="#9fe8dd" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="#7fd4c8" stopOpacity="0" />
             </radialGradient>
           </defs>
-          <g className="mastery-stellar-glow" aria-hidden>
+          <g className="mastery-power-link" aria-hidden>
             <circle
               cx={masteryCX}
               cy={masteryCY}
-              r={masteryR + 22}
-              fill={`url(#${gradId}-halo)`}
-              className="mastery-stellar-glow__halo"
+              r={masteryR + 28}
+              fill={`url(#${gradId}-flare-outer)`}
+              className="mastery-power-link__flare mastery-power-link__flare--outer"
             />
             <circle
               cx={masteryCX}
               cy={masteryCY}
               r={masteryR + 16}
-              className="mastery-stellar-glow__ring mastery-stellar-glow__ring--c"
+              fill={`url(#${gradId}-flare-mid)`}
+              className="mastery-power-link__flare mastery-power-link__flare--mid"
             />
             <circle
               cx={masteryCX}
               cy={masteryCY}
-              r={masteryR + 10}
-              className="mastery-stellar-glow__ring mastery-stellar-glow__ring--b"
-            />
-            <circle
-              cx={masteryCX}
-              cy={masteryCY}
-              r={masteryR + 4}
-              className="mastery-stellar-glow__ring mastery-stellar-glow__ring--a"
-            />
-            <circle
-              cx={masteryCX}
-              cy={masteryCY}
-              r={masteryR}
-              className="mastery-stellar-glow__core"
+              r={masteryR + 6}
+              fill={`url(#${gradId}-flare-inner)`}
+              className="mastery-power-link__flare mastery-power-link__flare--inner"
             />
           </g>
           <path
             d={beamPath}
-            className="mastery-power-beam"
+            className="mastery-power-link__beam-wide"
+            stroke={`url(#${gradId})`}
+          />
+          <path
+            d={beamPath}
+            className="mastery-power-link__beam-mid"
+            stroke={`url(#${gradId})`}
+          />
+          <path
+            d={beamPath}
+            className="mastery-power-link__beam-core"
             stroke={`url(#${gradId})`}
           />
         </>

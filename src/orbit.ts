@@ -1,6 +1,7 @@
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
+import { isStageComplete } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
@@ -428,12 +429,12 @@ export function orbitLinkSpec(
   const trimA = orbitBandAngularTrim(
     sd,
     orbitR,
-    linkLit && bandsVisibleForLink(sd, options?.sourcePowered ?? false),
+    linkLit && bandsVisibleForLinkTrim(sd, options?.sourcePowered ?? false, 'source'),
   )
   const trimB = orbitBandAngularTrim(
     td,
     orbitR,
-    linkLit && bandsVisibleForLink(td, options?.targetPowered ?? false),
+    linkLit && bandsVisibleForLinkTrim(td, options?.targetPowered ?? false, 'target'),
   )
 
   const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
@@ -467,13 +468,33 @@ export function bandsVisibleForLink(data: PassiveNodeData, nodePowered: boolean)
   return (data.stages?.length ?? 0) > 0
 }
 
+/** Outgoing links skip in-progress bands until at least one stage is complete. */
+function nodeCanSupplyPower(data: PassiveNodeData): boolean {
+  if (data.kind === 'initial') return true
+  if (isStealthPassiveKind(data.kind)) return false
+  const stages = data.stages ?? []
+  if (stages.length === 0) return false
+  return stages.some(isStageComplete)
+}
+
+export function bandsVisibleForLinkTrim(
+  data: PassiveNodeData,
+  nodePowered: boolean,
+  role: 'source' | 'target',
+): boolean {
+  if (!bandsVisibleForLink(data, nodePowered)) return false
+  if (role === 'source' && !nodeCanSupplyPower(data)) return false
+  return true
+}
+
 /** Pad link endpoints; unpowered link or hidden bands → trim to node face. */
 export function linkEndpointPad(
   data: PassiveNodeData,
   nodePowered = false,
   linkPowered = true,
+  role: 'source' | 'target' = 'target',
 ) {
-  const bands = linkPowered && bandsVisibleForLink(data, nodePowered)
+  const bands = linkPowered && bandsVisibleForLinkTrim(data, nodePowered, role)
   return nodeLinkTrimRadius(data, bands) + (bands ? 4 : 2)
 }
 

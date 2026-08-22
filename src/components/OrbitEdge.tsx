@@ -94,8 +94,8 @@ export function OrbitEdge({
       sourceCY,
       targetCX,
       targetCY,
-      linkEndpointPad(sd!, sourceLit, lit),
-      linkEndpointPad(td, targetLit, lit),
+      linkEndpointPad(sd!, sourceLit, lit, 'source'),
+      linkEndpointPad(td, targetLit, lit, 'target'),
     )
     const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
     const hitPath = getStraightPath({
