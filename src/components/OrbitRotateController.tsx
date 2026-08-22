@@ -4,7 +4,6 @@ import {
   DEFAULT_ORBIT_START_ANGLE,
   findMasteryOrbitRingAt,
   isMasteryKind,
-  isMasteryOrbitLocked,
   layoutMasteryOrbit,
   nodeCenter,
   normalizeAngleDelta,
@@ -82,7 +81,6 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
 
       const mastery = nodesRef.current.find((n) => n.id === hit.masteryId)
       if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return
-      if (isMasteryOrbitLocked(nodesRef.current, hit.masteryId)) return
 
       e.preventDefault()
       e.stopPropagation()

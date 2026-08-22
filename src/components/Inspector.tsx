@@ -331,7 +331,7 @@ export function Inspector({
             />
           </label>
           <p className="field-hint">
-            Lock 시 오르빗 회전·멤버 추가/제거·순서 변경이 불가합니다.
+            Lock 시 멤버 추가/제거·순서 변경만 불가합니다. 오르빗 회전은 가능합니다.
           </p>
 
           <label className="field">
