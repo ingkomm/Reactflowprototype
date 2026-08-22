@@ -1,7 +1,6 @@
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
-import { isStageComplete } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
@@ -363,22 +362,15 @@ export function satelliteBandOuterRadius(data: PassiveNodeData): number {
   return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2
 }
 
-/** Radius used to trim links toward a node; uses face when bands are not shown (unpowered). */
-export function nodeLinkTrimRadius(data: PassiveNodeData, bandsVisible = true): number {
-  const nodeSize = NODE_SIZE[data.kind]
-  const stageCount = data.stages?.length ?? 0
-  if (!bandsVisible || stageCount <= 0) return nodeSize / 2
-  return satelliteBandOuterRadius(data)
+/** Radius used to trim links toward a node — always the node face, never bands. */
+export function nodeLinkTrimRadius(data: PassiveNodeData): number {
+  return NODE_SIZE[data.kind] / 2
 }
 
-/** Angular trim (radians) so an orbit arc at orbitRadius clears the visible node rim. */
-function orbitBandAngularTrim(
-  data: PassiveNodeData,
-  orbitRadius: number,
-  bandsVisible = true,
-) {
-  const bandOuter = nodeLinkTrimRadius(data, bandsVisible)
-  return Math.asin(Math.min(1, (bandOuter + 2) / orbitRadius))
+/** Angular trim (radians) so an orbit arc at orbitRadius clears the node rim. */
+function orbitBandAngularTrim(data: PassiveNodeData, orbitRadius: number) {
+  const rim = nodeLinkTrimRadius(data) + 2
+  return Math.asin(Math.min(1, rim / orbitRadius))
 }
 
 function orbitSlotAngle(
@@ -397,7 +389,6 @@ export function orbitLinkSpec(
   masteryId: string,
   sourceId: string,
   targetId: string,
-  options?: { sourcePowered?: boolean; targetPowered?: boolean },
 ): OrbitLinkSpec | null {
   if (!canOrbitLink(nodes, masteryId, sourceId, targetId)) return null
 
@@ -424,18 +415,8 @@ export function orbitLinkSpec(
   const a1Raw = orbitSlotAngle(md, tierA, ia, n)
   const a2Raw = orbitSlotAngle(md, tierA, ib, n)
   const clockwise = (ia + 1) % n === ib
-  const linkLit =
-    Boolean(options?.sourcePowered) && Boolean(options?.targetPowered)
-  const trimA = orbitBandAngularTrim(
-    sd,
-    orbitR,
-    linkLit && bandsVisibleForLinkTrim(sd, options?.sourcePowered ?? false, 'source'),
-  )
-  const trimB = orbitBandAngularTrim(
-    td,
-    orbitR,
-    linkLit && bandsVisibleForLinkTrim(td, options?.targetPowered ?? false, 'target'),
-  )
+  const trimA = orbitBandAngularTrim(sd, orbitR)
+  const trimB = orbitBandAngularTrim(td, orbitR)
 
   const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
   const a2 = clockwise ? a2Raw - trimB : a2Raw + trimB
@@ -461,41 +442,9 @@ export function orbitAdjacentArcSpec(
   return spec
 }
 
-/** True when training bands are rendered on this node (matches PassiveNode). */
-export function bandsVisibleForLink(data: PassiveNodeData, nodePowered: boolean): boolean {
-  if (!nodePowered) return false
-  if (isStealthPassiveKind(data.kind)) return false
-  return (data.stages?.length ?? 0) > 0
-}
-
-/** Outgoing links skip in-progress bands until at least one stage is complete. */
-function nodeCanSupplyPower(data: PassiveNodeData): boolean {
-  if (data.kind === 'initial') return true
-  if (isStealthPassiveKind(data.kind)) return false
-  const stages = data.stages ?? []
-  if (stages.length === 0) return false
-  return stages.some(isStageComplete)
-}
-
-export function bandsVisibleForLinkTrim(
-  data: PassiveNodeData,
-  nodePowered: boolean,
-  role: 'source' | 'target',
-): boolean {
-  if (!bandsVisibleForLink(data, nodePowered)) return false
-  if (role === 'source' && !nodeCanSupplyPower(data)) return false
-  return true
-}
-
-/** Pad link endpoints; unpowered link or hidden bands → trim to node face. */
-export function linkEndpointPad(
-  data: PassiveNodeData,
-  nodePowered = false,
-  linkPowered = true,
-  role: 'source' | 'target' = 'target',
-) {
-  const bands = linkPowered && bandsVisibleForLinkTrim(data, nodePowered, role)
-  return nodeLinkTrimRadius(data, bands) + (bands ? 4 : 2)
+/** Pad straight/orbit link endpoints at the node face (links never enter band rings). */
+export function linkEndpointPad(data: PassiveNodeData) {
+  return nodeLinkTrimRadius(data) + 2
 }
 
 export function trimStraightEndpoints(

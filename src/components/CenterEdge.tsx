@@ -64,8 +64,8 @@ export function CenterEdge({
     sourceCY,
     targetCX,
     targetCY,
-    linkEndpointPad(sd, sourceLit, lit, 'source'),
-    linkEndpointPad(td, targetLit, lit, 'target'),
+    linkEndpointPad(sd),
+    linkEndpointPad(td),
   )
 
   const hitPath = getStraightPath({
@@ -81,7 +81,7 @@ export function CenterEdge({
     notableCY,
     masteryCX,
     masteryCY,
-    linkEndpointPad(notableData, sourceLit || targetLit, lit, 'source'),
+    linkEndpointPad(notableData),
     NODE_SIZE.mastery / 2 + 2,
   )
   const [beamPath] = getStraightPath({
