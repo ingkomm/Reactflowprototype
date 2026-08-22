@@ -7,7 +7,7 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
   small: 48,
   notable: 68,
   mastery: 76,
-  void: 40,
+  void: 36,
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180

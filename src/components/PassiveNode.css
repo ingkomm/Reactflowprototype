@@ -60,22 +60,63 @@
 }
 
 .passive-node--void {
-  --node-size: 40px;
-  --ring: #5a6570;
+  --node-size: 36px;
+  --ring: transparent;
   --core: transparent;
   --accent: #6a7580;
 }
 
+.passive-node--void .passive-node__halo {
+  display: none;
+}
+
 .passive-node--void .passive-node__ring {
   background: transparent;
-  border: 1.5px dashed color-mix(in srgb, #9aa8b5 35%, transparent);
+  border: none;
+  box-shadow: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.passive-node--void.is-unpowered .passive-node__ring {
+  background: transparent;
   box-shadow: none;
 }
 
+.passive-node--void:hover .passive-node__ring,
+.passive-node--void.is-selected .passive-node__ring {
+  opacity: 1;
+  border: 1px dashed color-mix(in srgb, #9aa8b5 14%, transparent);
+}
+
 .passive-node--void .passive-node__title {
-  color: #6a7580;
-  text-shadow: none;
-  font-size: 0.65rem;
+  opacity: 0;
+  visibility: hidden;
+  color: #8a949e;
+  text-shadow:
+    -1px 0 0 rgba(0, 0, 0, 0.92),
+    1px 0 0 rgba(0, 0, 0, 0.92),
+    0 -1px 0 rgba(0, 0, 0, 0.92),
+    0 1px 0 rgba(0, 0, 0, 0.92);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.passive-node--void:hover .passive-node__title,
+.passive-node--void.is-selected .passive-node__title {
+  opacity: 1;
+  visibility: visible;
+}
+
+.passive-node--void .passive-node__tooltip {
+  display: none;
+}
+
+.passive-node--void:hover .passive-node__tooltip,
+.passive-node--void.is-selected:hover .passive-node__tooltip {
+  display: none;
 }
 
 .passive-node.is-unpowered .passive-node__ring {

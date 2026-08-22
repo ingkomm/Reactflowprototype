@@ -112,6 +112,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       <p className="passive-node__title">{data.label}</p>
 
+      {!isVoid && (
       <div className="passive-node__tooltip" role="tooltip">
         <p className="passive-node__tooltip-title">{data.label}</p>
         <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
@@ -138,6 +139,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           </p>
         )}
       </div>
+      )}
     </div>
   )
 }
