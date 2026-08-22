@@ -75,6 +75,8 @@ export type PassiveNodeData = {
   orbitLocked?: boolean
   /** Small/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
+  /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
+  voidPassing?: boolean
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {

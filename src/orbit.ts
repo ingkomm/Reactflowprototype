@@ -34,20 +34,35 @@ export function isOrbitMemberKind(kind: PassiveKind) {
   return kind === 'small' || kind === 'notable' || kind === 'void'
 }
 
+export function isVoidPassing(data: PassiveNodeData) {
+  return data.kind === 'void' && Boolean(data.voidPassing)
+}
+
+/** Orbit order with passing void nodes removed (used for link adjacency). */
+export function getOrbitAdjacencyMembers(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+): PassiveFlowNode[] {
+  return getOrderedOrbitSatellites(nodes, masteryId).filter(
+    (sat) => !isVoidPassing(sat.data as PassiveNodeData),
+  )
+}
+
 export function isMasteryOrbitLocked(nodes: PassiveFlowNode[], masteryId: string) {
   const mastery = nodes.find((n) => n.id === masteryId)
   if (!mastery) return false
   return Boolean((mastery.data as PassiveNodeData).orbitLocked)
 }
 
-/** Clockwise neighbors on a mastery orbit ring (including wrap). */
+/** Clockwise neighbors on a mastery orbit ring (passing voids collapse out). */
 export function areOrbitAdjacent(
   nodes: PassiveFlowNode[],
   masteryId: string,
   aId: string,
   bId: string,
 ): boolean {
-  const ordered = getOrderedOrbitSatellites(nodes, masteryId).map((s) => s.id)
+  const collapsed = getOrbitAdjacencyMembers(nodes, masteryId)
+  const ordered = collapsed.map((s) => s.id)
   const ia = ordered.indexOf(aId)
   const ib = ordered.indexOf(bId)
   if (ia < 0 || ib < 0) return false

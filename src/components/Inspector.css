@@ -28,6 +28,17 @@
   color: #9fe8dd;
 }
 
+.inspector__passing-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.inspector__passing-toggle .btn.is-active {
+  border-color: color-mix(in srgb, #6cb6ea 45%, transparent);
+  color: #9fd4ff;
+  background: color-mix(in srgb, #0b6e99 18%, #0a0e14);
+}
+
 .inspector__title {
   margin: 0;
   font-size: 0.95rem;

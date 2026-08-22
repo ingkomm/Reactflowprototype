@@ -22,7 +22,6 @@ import { CenterEdge } from './components/CenterEdge'
 import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
-import { GraphActionsProvider } from './GraphActionsContext'
 import { classifyPassiveConnection, computePoweredNodeIds } from './power'
 import type { PassiveKind, PassiveNodeData, StageData } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
@@ -76,6 +75,7 @@ function createPassiveData(
       | 'orbitOrder'
       | 'orbitLocked'
       | 'masteryId'
+      | 'voidPassing'
       | 'classId'
       | 'stages'
     >
@@ -95,9 +95,14 @@ function createPassiveData(
           orbitOrder: extras.orbitOrder ?? [],
           orbitLocked: extras.orbitLocked ?? false,
         }
-      : kind === 'initial' || isStealthPassiveKind(kind)
-        ? {}
-        : { masteryId: extras.masteryId ?? null }),
+      : kind === 'void'
+        ? {
+            masteryId: extras.masteryId ?? null,
+            voidPassing: extras.voidPassing ?? false,
+          }
+        : kind === 'initial'
+          ? {}
+          : { masteryId: extras.masteryId ?? null }),
   }
 }
 
@@ -175,9 +180,11 @@ function buildPastedNode(
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: [],
         }
-      : kind === 'initial' || isStealthPassiveKind(kind)
-        ? {}
-        : { masteryId: null }),
+      : kind === 'void'
+        ? { masteryId: null, voidPassing: source.voidPassing ?? false }
+        : kind === 'initial'
+          ? {}
+          : { masteryId: null }),
   }
 
   return {
@@ -224,6 +231,17 @@ function classifyLink(
   return classifyPassiveConnection(source, target, nodes, (masteryId, a, b) =>
     areOrbitAdjacent(nodes, masteryId, a, b),
   )
+}
+
+function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
+  return edges.filter((e) => {
+    const source = nodes.find((n) => n.id === e.source)
+    const target = nodes.find((n) => n.id === e.target)
+    if (!source || !target) return false
+    const linkKind = classifyLink(source, target, nodes)
+    if (e.type === 'orbit') return linkKind === 'orbit'
+    return linkKind === 'center'
+  })
 }
 
 const danceMasteryId = 'mastery-dance'
@@ -923,14 +941,26 @@ export default function App() {
     [updateNodeData],
   )
 
-  const toggleOrbitLock = useCallback(
-    (masteryId: string) => {
-      const node = nodes.find((n) => n.id === masteryId)
-      if (!node) return
-      const locked = (node.data as PassiveNodeData).orbitLocked ?? false
-      changeOrbitLocked(masteryId, !locked)
+  const changeVoidPassing = useCallback(
+    (nodeId: string, passing: boolean) => {
+      commit()
+      setNodes((nds) => {
+        const next = nds.map((node) =>
+          node.id === nodeId
+            ? {
+                ...node,
+                data: {
+                  ...(node.data as PassiveNodeData),
+                  voidPassing: passing,
+                },
+              }
+            : node,
+        )
+        setEdges((eds) => pruneInvalidEdges(next, eds))
+        return next
+      })
     },
-    [changeOrbitLocked, nodes],
+    [commit, setEdges, setNodes],
   )
 
   const changeKind = useCallback(
@@ -967,7 +997,15 @@ export default function App() {
                     orbitLocked: data.orbitLocked ?? false,
                     masteryId: null,
                   }
-                : kind === 'initial' || isStealthPassiveKind(kind)
+                : kind === 'void'
+                  ? {
+                      masteryId:
+                        isOrbitMemberKind(kind) && !isMasteryKind(prev.kind)
+                          ? data.masteryId ?? null
+                          : null,
+                      voidPassing: prev.kind === 'void' ? (data.voidPassing ?? false) : false,
+                    }
+                : kind === 'initial'
                   ? {}
                   : {
                       masteryId:
@@ -1330,7 +1368,6 @@ export default function App() {
       >
         <section className="canvas-pane" aria-label="Passive tree canvas">
           <PowerProvider poweredIds={poweredIds}>
-          <GraphActionsProvider toggleOrbitLock={toggleOrbitLock}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1381,7 +1418,6 @@ export default function App() {
               maskColor="rgba(8, 12, 16, 0.7)"
             />
           </ReactFlow>
-          </GraphActionsProvider>
           </PowerProvider>
 
           <p className="canvas-hint">
@@ -1416,6 +1452,7 @@ export default function App() {
             onChangeOrbitStartAngle={changeOrbitStartAngle}
             onChangeOrbitOrder={changeOrbitOrder}
             onChangeOrbitLocked={changeOrbitLocked}
+            onChangeVoidPassing={changeVoidPassing}
             onDetachFromMastery={detachFromMastery}
             onRemoveLink={removeLink}
             onAddLink={addLink}

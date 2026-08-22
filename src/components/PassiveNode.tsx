@@ -18,7 +18,6 @@ import {
   nodeInteractRadius,
 } from '../orbit'
 import { usePassiveClasses } from '../PassiveClassContext'
-import { useGraphActions } from '../GraphActionsContext'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
 import { IconGlyph } from './IconGlyph'
@@ -36,7 +35,6 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
-  const graphActions = useGraphActions()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const isStealth = isStealthPassiveKind(data.kind)
   const isMastery = isMasteryKind(data.kind)
@@ -77,7 +75,9 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         powered ? '' : ' is-unpowered'
       }${bandCount > 0 && powered ? ' has-bands' : ''}${
         isStealth ? ' is-stealth' : ''
-      }${isAmbientVisible ? ' is-ambient-visible' : ''}`}
+      }${isAmbientVisible ? ' is-ambient-visible' : ''}${
+        data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
+      }`}
       style={
         {
           '--glow-blur': `${glowBlur}px`,
@@ -100,23 +100,6 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           style={{ width: orbitRadius * 2, height: orbitRadius * 2 }}
           aria-hidden
         />
-      )}
-
-      {isMastery && graphActions && (
-        <button
-          type="button"
-          className={`passive-node__orbit-lock${data.orbitLocked ? ' is-locked' : ''}`}
-          aria-label={data.orbitLocked ? '오르빗 잠금 해제' : '오르빗 잠금'}
-          aria-pressed={data.orbitLocked ?? false}
-          title={data.orbitLocked ? '오르빗 잠금 해제' : '오르빗 잠금'}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation()
-            graphActions.toggleOrbitLock(id)
-          }}
-        >
-          {data.orbitLocked ? '🔒' : '🔓'}
-        </button>
       )}
 
       <div className="passive-node__halo" aria-hidden />

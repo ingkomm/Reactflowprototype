@@ -64,6 +64,7 @@ type Props = {
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
+  onChangeVoidPassing: (nodeId: string, passing: boolean) => void
   onDetachFromMastery: (nodeId: string) => void
   onRemoveLink: (edgeId: string) => void
   onAddLink: (peerId: string) => void
@@ -92,6 +93,7 @@ export function Inspector({
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
   onChangeOrbitLocked,
+  onChangeVoidPassing,
   onDetachFromMastery,
   onRemoveLink,
   onAddLink,
@@ -307,10 +309,36 @@ export function Inspector({
       </div>
 
       {data.kind === 'void' && (
-        <p className="inspector__empty">
-          Void Node — 오르빗 배치·링크 차단용. 파워·링크·띠 없음. 오르빗에 속하지 않을 때만
-          표시됩니다.
-        </p>
+        <>
+          <p className="inspector__empty">
+            Void Node — 오르빗 배치용. 파워·직접 링크·띠 없음. 오르빗에 속하지 않을 때만
+            표시됩니다.
+          </p>
+          <div className="field">
+            <span>Passing</span>
+            <div className="inspector__passing-toggle" role="group" aria-label="Passing">
+              <button
+                type="button"
+                className={`btn btn--ghost${data.voidPassing ? ' is-active' : ''}`}
+                aria-pressed={Boolean(data.voidPassing)}
+                onClick={() => onChangeVoidPassing(nodeId, true)}
+              >
+                On
+              </button>
+              <button
+                type="button"
+                className={`btn btn--ghost${!data.voidPassing ? ' is-active' : ''}`}
+                aria-pressed={!data.voidPassing}
+                onClick={() => onChangeVoidPassing(nodeId, false)}
+              >
+                Off
+              </button>
+            </div>
+            <p className="field-hint">
+              On이면 Passing Void를 사이에 둔 Small/Notable끼리 오르빗 링크가 가능합니다.
+            </p>
+          </div>
+        </>
       )}
 
       {data.kind === 'voidMastery' && (
