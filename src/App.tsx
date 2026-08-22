@@ -54,11 +54,13 @@ import {
   ORBIT_DETACH_SLACK,
   removeSatelliteFromOrbitOrders,
   setMasteryTierOrbitOrder,
+  setMasteryTierStartAngle,
   removeNodesAndRelayout,
   snapOrbitAngle,
   withMasteryDragFlags,
 } from './orbit'
 import { OrbitRotateController } from './components/OrbitRotateController'
+import { VoidHighlightProvider } from './VoidHighlightContext'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
@@ -77,6 +79,7 @@ function createPassiveData(
       PassiveNodeData,
       | 'orbitTierCount'
       | 'orbitStartAngle'
+      | 'orbitStartAngleByTier'
       | 'orbitOrder'
       | 'orbitOrderByTier'
       | 'orbitLocked'
@@ -98,6 +101,7 @@ function createPassiveData(
     ...(isMasteryKind(kind)
       ? {
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+          orbitStartAngleByTier: extras.orbitStartAngleByTier,
           orbitOrder: extras.orbitOrder ?? [],
           orbitOrderByTier: extras.orbitOrderByTier,
           orbitLocked: extras.orbitLocked ?? false,
@@ -265,6 +269,10 @@ const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
   2: ['small-footwork', 'small-stretch'],
 }
 const danceOrbitOrder = mergeOrbitOrderFromTiers(2, danceOrbitOrderByTier)
+const danceOrbitStartAngleByTier: Partial<Record<OrbitTier, number>> = {
+  1: -90,
+  2: 0,
+}
 const gymOrbitOrder = [
   'notable-strength',
   'notable-cardio',
@@ -295,6 +303,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '공연', goal: 3, logged: 1 },
         ]),
         orbitStartAngle: -90,
+        orbitStartAngleByTier: danceOrbitStartAngleByTier,
         orbitOrder: danceOrbitOrder,
         orbitOrderByTier: danceOrbitOrderByTier,
         orbitTierCount: 2,
@@ -480,6 +489,7 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState<string | null>(danceMasteryId)
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
+  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
   const [addKind, setAddKind] = useState<PassiveKind>('small')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
@@ -928,19 +938,19 @@ export default function App() {
   )
 
   const changeOrbitStartAngle = useCallback(
-    (masteryId: string, degrees: number) => {
+    (masteryId: string, tier: OrbitTier, degrees: number) => {
       const snapped = snapOrbitAngle(degrees)
       commit()
       setNodes((nds) => {
         const next = nds.map((node) => {
           if (node.id !== masteryId) return node
           const data = node.data as PassiveNodeData
-          return { ...node, data: { ...data, orbitStartAngle: snapped } }
+          return { ...node, data: setMasteryTierStartAngle(data, tier, snapped) }
         })
         return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
-    [commit, setNodes],
+    [commit, setNodes, stack],
   )
 
   const changeOrbitOrder = useCallback(
@@ -1079,6 +1089,9 @@ export default function App() {
               ...(isMasteryKind(kind)
                 ? {
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+                    orbitStartAngleByTier: isMasteryKind(prev.kind)
+                      ? data.orbitStartAngleByTier
+                      : undefined,
                     orbitOrder: isMasteryKind(prev.kind) ? (data.orbitOrder ?? []) : [],
                     orbitOrderByTier: isMasteryKind(prev.kind)
                       ? data.orbitOrderByTier
@@ -1457,6 +1470,14 @@ export default function App() {
             />
             <span>그리드 스냅</span>
           </label>
+          <label className="topbar__toggle">
+            <input
+              type="checkbox"
+              checked={voidHighlightEnabled}
+              onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
+            />
+            <span>보이드 표시</span>
+          </label>
           <button
             type="button"
             className="btn btn--danger"
@@ -1481,6 +1502,7 @@ export default function App() {
       >
         <section className="canvas-pane" aria-label="Passive tree canvas">
           <PowerProvider poweredIds={poweredIds}>
+          <VoidHighlightProvider enabled={voidHighlightEnabled}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1531,10 +1553,11 @@ export default function App() {
               maskColor="rgba(8, 12, 16, 0.7)"
             />
           </ReactFlow>
+          </VoidHighlightProvider>
           </PowerProvider>
 
           <p className="canvas-hint">
-            Initial 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 단 간 호 링크 제한 없음
+            Initial 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 단 간 호 링크 불가 · 단별 독립 회전
           </p>
         </section>
 

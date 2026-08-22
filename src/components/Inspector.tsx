@@ -18,7 +18,7 @@ import {
   withNormalizedStage,
 } from '../stage'
 import {
-  DEFAULT_ORBIT_START_ANGLE,
+  getTierStartAngle,
   isMasteryKind,
   isStealthPassiveKind,
   normalizeOrbitTierCount,
@@ -67,7 +67,7 @@ type Props = {
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
-  onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
+  onChangeOrbitStartAngle: (masteryId: string, tier: OrbitTier, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onChangeVoidPassing: (nodeId: string, passing: boolean) => void
@@ -131,7 +131,6 @@ export function Inspector({
   }
 
   const angleOptions = orbitAngleOptions()
-  const startAngle = data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const stages = sortedStages(data.stages ?? [])
   const kindClasses = classesForKind(classes, data.kind)
@@ -368,7 +367,7 @@ export function Inspector({
             />
           </label>
           <p className="field-hint">
-            Lock 시 멤버 추가/제거·순서 변경만 불가합니다. 오르빗 회전은 가능합니다.
+            Lock 시 멤버 추가/제거·순서 변경만 불가합니다. 빈 오르빗 링을 드래그하면 해당 단만 회전합니다.
           </p>
 
           <label className="field">
@@ -388,19 +387,28 @@ export function Inspector({
             1단 직경 고정 · 2·3단은 바깥으로 추가 · 멤버 드래그로 단 배치
           </p>
 
-          <label className="field">
-            <span>Orbit start angle</span>
-            <select
-              value={startAngle}
-              onChange={(e) => onChangeOrbitStartAngle(nodeId, Number(e.target.value))}
-            >
-              {angleOptions.map((deg) => (
-                <option key={deg} value={deg}>
-                  {deg}°
-                </option>
-              ))}
-            </select>
-          </label>
+          {Array.from({ length: orbitTierCount }, (_, index) => {
+            const tier = (index + 1) as OrbitTier
+            const startAngle = getTierStartAngle(data, tier)
+            return (
+              <label key={tier} className="field">
+                <span>{tier}단 시작 각도</span>
+                <select
+                  value={startAngle}
+                  onChange={(e) =>
+                    onChangeOrbitStartAngle(nodeId, tier, Number(e.target.value))
+                  }
+                >
+                  {angleOptions.map((deg) => (
+                    <option key={deg} value={deg}>
+                      {deg}°
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          })}
+          <p className="field-hint">각 단은 독립 각도 · 캔버스에서 해당 단 링 드래그로 회전</p>
 
           <div className="inspector__section">
             <div className="inspector__section-head">
@@ -477,7 +485,7 @@ export function Inspector({
           )}
           {(data.kind === 'small' || data.kind === 'notable') && (
             <p className="inspector__empty">
-              같은 단 = 인접 노드만 호 링크 · 다른 단 = 제한 없음 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
+              같은 단 = 인접 노드만 호 링크 · 다른 단 = 호 링크 불가 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
             </p>
           )}
           {links.length === 0 ? (

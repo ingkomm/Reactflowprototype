@@ -70,10 +70,13 @@ export type PassiveNodeData = {
   /** Mastery / Void Master: number of concentric orbit tiers (1–3). */
   orbitTierCount?: OrbitTierCount
   /**
-   * Mastery / Void Master: starting angle in degrees for orbit slot #1.
+   * Mastery / Void Master: starting angle in degrees for orbit slot #1 on tier 1.
    * Snapped to 15° steps. Default -90 (top). Clockwise from there.
+   * @deprecated Prefer orbitStartAngleByTier for per-tier rotation.
    */
   orbitStartAngle?: number
+  /** Mastery / Void Master: per-tier starting angles (independent rotation per ring). */
+  orbitStartAngleByTier?: Partial<Record<OrbitTier, number>>
   /** Mastery / Void Master: satellite node ids in clockwise orbit order (1-based UI). */
   orbitOrder?: string[]
   /** Mastery / Void Master: per-tier clockwise order (independent spacing per ring). */

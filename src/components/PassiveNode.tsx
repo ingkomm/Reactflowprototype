@@ -28,7 +28,7 @@ import {
   labelBelowBandOffset,
   outermostBandRadius,
 } from './TrainingBands'
-import './PassiveNode.css'
+import { useVoidHighlight } from '../VoidHighlightContext'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 
@@ -38,8 +38,10 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
+  const voidHighlight = useVoidHighlight()
   const isStealth = isStealthPassiveKind(data.kind)
   const isMastery = isMasteryKind(data.kind)
+  const showVoidHighlight = voidHighlight && isStealth
   const orbitSatelliteCount = useMemo(() => {
     if (data.kind !== 'voidMastery') return 0
     return getOrderedOrbitSatellites(nodes, id).length
@@ -79,6 +81,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${bandCount > 0 && powered ? ' has-bands' : ''}${
         isStealth ? ' is-stealth' : ''
       }${isAmbientVisible ? ' is-ambient-visible' : ''}${
+        showVoidHighlight ? ' is-void-highlighted' : ''
+      }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }`}
       style={

@@ -253,7 +253,31 @@ export function areOrbitAdjacent(
   return diff === 1 || diff === n - 1
 }
 
-/** Orbit arc link allowed: same tier needs adjacency; cross-tier has no adjacency limit. */
+/** Starting angle (degrees) for one orbit tier; falls back to tier 1 / default. */
+export function getTierStartAngle(data: PassiveNodeData, tier: OrbitTier): number {
+  const fromTier = data.orbitStartAngleByTier?.[tier]
+  if (fromTier != null) return fromTier
+  if (tier === 1) return data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
+  return DEFAULT_ORBIT_START_ANGLE
+}
+
+/** Set snapped start angle for one tier; tier 1 also updates legacy orbitStartAngle. */
+export function setMasteryTierStartAngle(
+  data: PassiveNodeData,
+  tier: OrbitTier,
+  degrees: number,
+): PassiveNodeData {
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const normalizedTier = normalizeOrbitTier(tier, tierCount)
+  const snapped = snapOrbitAngle(degrees)
+  const byTier = { ...(data.orbitStartAngleByTier ?? {}) }
+  byTier[normalizedTier] = snapped
+  const next: PassiveNodeData = { ...data, orbitStartAngleByTier: byTier }
+  if (normalizedTier === 1) next.orbitStartAngle = snapped
+  return next
+}
+
+/** Orbit arc link allowed: same tier only; must be adjacent on that ring. */
 export function canOrbitLink(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -270,13 +294,17 @@ export function canOrbitLink(
 
   const tierA = getSatelliteOrbitTier(nodes, masteryId, aId)
   const tierB = getSatelliteOrbitTier(nodes, masteryId, bId)
-  if (tierA !== tierB) return true
+  if (tierA !== tierB) return false
   return areOrbitAdjacent(nodes, masteryId, aId, bId)
 }
 
-export type OrbitLinkSpec =
-  | { kind: 'arc'; a1: number; a2: number; arcRadius: number; clockwise: boolean }
-  | { kind: 'chord' }
+export type OrbitLinkSpec = {
+  kind: 'arc'
+  a1: number
+  a2: number
+  arcRadius: number
+  clockwise: boolean
+}
 
 /** Outermost training-band edge radius from the satellite node center. */
 export function satelliteBandOuterRadius(data: PassiveNodeData): number {
@@ -292,13 +320,17 @@ function orbitBandAngularTrim(data: PassiveNodeData, orbitRadius: number) {
   return Math.asin(Math.min(1, (bandOuter + 2) / orbitRadius))
 }
 
-function orbitSlotAngle(masteryData: PassiveNodeData, index: number, count: number) {
-  const startRad =
-    ((masteryData.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) * Math.PI) / 180
+function orbitSlotAngle(
+  masteryData: PassiveNodeData,
+  tier: OrbitTier,
+  index: number,
+  count: number,
+) {
+  const startRad = (getTierStartAngle(masteryData, tier) * Math.PI) / 180
   return startRad + (2 * Math.PI * index) / count
 }
 
-/** Orbit link geometry: arc on a tier ring, or straight chord across tiers. */
+/** Orbit link geometry: arc on a tier ring (same tier only). */
 export function orbitLinkSpec(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -318,8 +350,7 @@ export function orbitLinkSpec(
   const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
   const tierA = getSatelliteOrbitTier(nodes, masteryId, sourceId)
   const tierB = getSatelliteOrbitTier(nodes, masteryId, targetId)
-
-  if (tierA !== tierB) return { kind: 'chord' }
+  if (tierA !== tierB) return null
 
   const orbitR = orbitTierRadius(tierCount, tierA)
   const ordered = getOrderedTierSatellites(nodes, masteryId, tierA).map((s) => s.id)
@@ -327,8 +358,8 @@ export function orbitLinkSpec(
   const ib = ordered.indexOf(targetId)
   const n = ordered.length
 
-  const a1Raw = orbitSlotAngle(md, ia, n)
-  const a2Raw = orbitSlotAngle(md, ib, n)
+  const a1Raw = orbitSlotAngle(md, tierA, ia, n)
+  const a2Raw = orbitSlotAngle(md, tierA, ib, n)
   const clockwise = (ia + 1) % n === ib
   const trimA = orbitBandAngularTrim(sd, orbitR)
   const trimB = orbitBandAngularTrim(td, orbitR)
@@ -464,7 +495,7 @@ export function nodeInteractRadius(data: PassiveNodeData) {
 export function findMasteryOrbitRingAt(
   nodes: PassiveFlowNode[],
   flowPoint: { x: number; y: number },
-): { masteryId: string; pointerDeg: number } | null {
+): { masteryId: string; tier: OrbitTier; pointerDeg: number } | null {
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
     if (!data?.kind) continue
@@ -474,27 +505,31 @@ export function findMasteryOrbitRingAt(
     }
   }
 
-  let best: { masteryId: string; pointerDeg: number; err: number } | null = null
+  let best: { masteryId: string; tier: OrbitTier; pointerDeg: number; err: number } | null = null
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
     if (!isMasteryKind(data.kind)) continue
     const c = nodeCenter(node, nodes)
     const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
     for (let tier = 1; tier <= tierCount; tier++) {
-      const radius = orbitTierRadius(tierCount, tier as OrbitTier)
+      const orbitTier = tier as OrbitTier
+      const radius = orbitTierRadius(tierCount, orbitTier)
       const dist = Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y)
       const err = Math.abs(dist - radius)
       if (err > ORBIT_HIT_HALF_WIDTH) continue
       if (!best || err < best.err) {
         best = {
           masteryId: node.id,
+          tier: orbitTier,
           pointerDeg: pointerAngleDeg(c.x, c.y, flowPoint.x, flowPoint.y),
           err,
         }
       }
     }
   }
-  return best ? { masteryId: best.masteryId, pointerDeg: best.pointerDeg } : null
+  return best
+    ? { masteryId: best.masteryId, tier: best.tier, pointerDeg: best.pointerDeg }
+    : null
 }
 
 /** Walk parentId chain to absolute top-left in flow coords. */
@@ -628,8 +663,6 @@ export function layoutMasteryOrbit(
 
   const data = mastery.data as PassiveNodeData
   const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
-  const startDeg = data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
-  const startRad = (startDeg * Math.PI) / 180
   const center = nodeCenter(mastery, synced)
   const positioned = new Map<string, { x: number; y: number }>()
 
@@ -638,6 +671,7 @@ export function layoutMasteryOrbit(
     const tierSatellites = getOrderedTierSatellites(synced, masteryId, tier)
     if (tierSatellites.length === 0) continue
 
+    const startRad = (getTierStartAngle(data, tier) * Math.PI) / 180
     const radius = orbitTierRadius(tierCount, tier)
     tierSatellites.forEach((sat, index) => {
       const satData = sat.data as PassiveNodeData
@@ -809,9 +843,8 @@ export function orbitOrderByDropAngleInTier(
 
   const tier = getSatelliteOrbitTier(nodes, masteryId, satelliteId)
   const mc = nodeCenter(mastery, nodes)
-  const start =
-    (((mastery.data as PassiveNodeData).orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) * Math.PI) /
-    180
+  const md = mastery.data as PassiveNodeData
+  const start = (getTierStartAngle(md, tier) * Math.PI) / 180
 
   const norm = (angle: number) => {
     let rel = angle - start

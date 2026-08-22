@@ -1,17 +1,18 @@
 import { useEffect, useRef } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import {
-  DEFAULT_ORBIT_START_ANGLE,
   findMasteryOrbitRingAt,
+  getTierStartAngle,
   isMasteryKind,
   layoutMasteryOrbit,
   nodeCenter,
   normalizeAngleDelta,
   pointerAngleDeg,
+  setMasteryTierStartAngle,
   snapOrbitAngle,
 } from '../orbit'
 import type { PassiveFlowNode } from './PassiveNode'
-import type { PassiveNodeData } from '../types'
+import type { OrbitTier, PassiveNodeData } from '../types'
 
 type Props = {
   commit: () => void
@@ -20,7 +21,7 @@ type Props = {
 }
 
 /**
- * Drag empty mastery orbit ring (pane space, not node faces) to rotate orbitStartAngle.
+ * Drag empty mastery orbit ring (pane space, not node faces) to rotate that tier's start angle.
  * Angle snaps every ORBIT_ANGLE_STEP degrees.
  */
 export function OrbitRotateController({ commit, setNodes, stack }: Props) {
@@ -32,6 +33,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
   const dragRef = useRef<{
     pointerId: number
     masteryId: string
+    tier: OrbitTier
     originPointerDeg: number
     originStartDeg: number
   } | null>(null)
@@ -40,18 +42,16 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
     const pane = document.querySelector('.react-flow__pane')
     if (!pane) return
 
-    const applyAngle = (masteryId: string, angleDeg: number) => {
+    const applyAngle = (masteryId: string, tier: OrbitTier, angleDeg: number) => {
       const snapped = snapOrbitAngle(angleDeg)
       setNodes((nds) => {
         const mastery = nds.find((n) => n.id === masteryId)
         if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return nds
         const data = mastery.data as PassiveNodeData
-        if ((data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) === snapped) {
-          return nds
-        }
+        if (getTierStartAngle(data, tier) === snapped) return nds
         const next = nds.map((n) =>
           n.id === masteryId
-            ? { ...n, data: { ...data, orbitStartAngle: snapped } }
+            ? { ...n, data: setMasteryTierStartAngle(data, tier, snapped) }
             : n,
         )
         return stack(layoutMasteryOrbit(next, masteryId))
@@ -72,7 +72,6 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (dragRef.current) return
 
       const target = e.target as Element | null
-      // Node face / band / link handle always wins over orbit rotate.
       if (target?.closest?.('.react-flow__node, .passive-node')) return
 
       const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
@@ -85,12 +84,13 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       e.preventDefault()
       e.stopPropagation()
 
+      const md = mastery.data as PassiveNodeData
       dragRef.current = {
         pointerId: e.pointerId,
         masteryId: hit.masteryId,
+        tier: hit.tier,
         originPointerDeg: hit.pointerDeg,
-        originStartDeg:
-          (mastery.data as PassiveNodeData).orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+        originStartDeg: getTierStartAngle(md, hit.tier),
       }
       commit()
       pane.classList.add('is-orbit-rotating')
@@ -112,7 +112,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       const pointerDeg = angleFromPointer(drag.masteryId, e.clientX, e.clientY)
       if (pointerDeg == null) return
       const delta = normalizeAngleDelta(pointerDeg - drag.originPointerDeg)
-      applyAngle(drag.masteryId, drag.originStartDeg + delta)
+      applyAngle(drag.masteryId, drag.tier, drag.originStartDeg + delta)
     }
 
     const endDrag = (event: Event) => {
@@ -125,7 +125,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       const pointerDeg = angleFromPointer(drag.masteryId, e.clientX, e.clientY)
       if (pointerDeg == null) return
       const delta = normalizeAngleDelta(pointerDeg - drag.originPointerDeg)
-      applyAngle(drag.masteryId, drag.originStartDeg + delta)
+      applyAngle(drag.masteryId, drag.tier, drag.originStartDeg + delta)
     }
 
     pane.addEventListener('pointerdown', onPointerDown, true)

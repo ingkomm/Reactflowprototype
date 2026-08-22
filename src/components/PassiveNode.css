@@ -73,6 +73,33 @@
   --accent: #6a7580;
 }
 
+.passive-node.is-stealth.is-void-highlighted .passive-node__ring {
+  opacity: 1;
+  border: 1px dashed color-mix(in srgb, #6cb6ea 62%, transparent);
+  box-shadow:
+    0 0 10px color-mix(in srgb, #6cb6ea 40%, transparent),
+    0 0 22px color-mix(in srgb, #6cb6ea 18%, transparent);
+}
+
+.passive-node.is-stealth.is-void-highlighted .passive-node__title {
+  opacity: 1;
+  visibility: visible;
+  color: #9ed4f0;
+}
+
+.passive-node.is-stealth.is-void-highlighted .passive-node__orbit {
+  opacity: 1;
+  border-color: color-mix(in srgb, #6cb6ea 38%, transparent);
+}
+
+.passive-node--voidMastery.is-void-highlighted .passive-node__ring {
+  border-style: dashed;
+}
+
+.passive-node--void.is-void-passing.is-void-highlighted .passive-node__ring {
+  border-style: dotted;
+}
+
 .passive-node.is-stealth .passive-node__halo {
   display: none;
 }
