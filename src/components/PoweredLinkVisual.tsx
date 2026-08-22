@@ -7,16 +7,15 @@ type Props = {
   sy: number
   tx: number
   ty: number
-  sourceFlareR?: number
   targetFlareR?: number
   selected?: boolean
 }
 
 function flareLayers(nodeR: number) {
   return {
-    outer: nodeR + 28,
-    mid: nodeR + 16,
-    inner: nodeR + 6,
+    outer: nodeR + 14,
+    mid: nodeR + 8,
+    inner: nodeR + 3,
   }
 }
 
@@ -102,7 +101,7 @@ function radialStops(prefix: string, gradId: string, cx: number, cy: number, nod
   )
 }
 
-/** Wide transparent power beam with endpoint flares (Notable–Mastery style). */
+/** Wide transparent power beam with a flare at the target end only. */
 export function PoweredLinkVisual({
   id,
   pathD,
@@ -110,7 +109,6 @@ export function PoweredLinkVisual({
   sy,
   tx,
   ty,
-  sourceFlareR = 24,
   targetFlareR = 24,
   selected = false,
 }: Props) {
@@ -127,18 +125,16 @@ export function PoweredLinkVisual({
           x2={tx}
           y2={ty}
         >
-          <stop offset="0%" stopColor="#b8f5ec" stopOpacity="0.55" />
-          <stop offset="50%" stopColor="#9fe8dd" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="#b8f5ec" stopOpacity="0.55" />
+          <stop offset="0%" stopColor="#b8f5ec" stopOpacity="0.38" />
+          <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#b8f5ec" stopOpacity="0.52" />
         </linearGradient>
-        {radialStops('src', gradId, sx, sy, sourceFlareR)}
         {radialStops('tgt', gradId, tx, ty, targetFlareR)}
       </defs>
       <g
         className={`powered-link${selected ? ' powered-link--selected' : ''}`}
         aria-hidden
       >
-        <EndpointFlares gradId={gradId} prefix="src" cx={sx} cy={sy} nodeR={sourceFlareR} />
         <EndpointFlares gradId={gradId} prefix="tgt" cx={tx} cy={ty} nodeR={targetFlareR} />
         <path d={pathD} className="powered-link__beam-wide" stroke={`url(#${gradId})`} />
         <path d={pathD} className="powered-link__beam-mid" stroke={`url(#${gradId})`} />

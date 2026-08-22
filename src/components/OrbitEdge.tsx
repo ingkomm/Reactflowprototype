@@ -124,7 +124,6 @@ export function OrbitEdge({
             sy={sourceY}
             tx={targetX}
             ty={targetY}
-            sourceFlareR={NODE_SIZE[sd.kind] / 2}
             targetFlareR={NODE_SIZE[td.kind] / 2}
             selected={Boolean(selected)}
           />
@@ -160,7 +159,6 @@ export function OrbitEdge({
           sy={start.y}
           tx={end.x}
           ty={end.y}
-          sourceFlareR={NODE_SIZE[sd.kind] / 2}
           targetFlareR={NODE_SIZE[td.kind] / 2}
           selected={Boolean(selected)}
         />
