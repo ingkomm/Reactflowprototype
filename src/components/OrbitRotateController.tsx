@@ -36,11 +36,8 @@ type Props = {
 export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, restoreSelection }: Props) {
   const { screenToFlowPosition } = useReactFlow()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
-  const edges = useStore((s) => s.edges)
   const nodesRef = useRef(nodes)
-  const edgesRef = useRef(edges)
   nodesRef.current = nodes
-  edgesRef.current = edges
 
   const dragRef = useRef<{
     pointerId: number
@@ -107,7 +104,7 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       if (target?.closest?.('.react-flow__node, .passive-node')) return
 
       const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      const hit = findMasteryOrbitRingAt(nodesRef.current, flow, edgesRef.current)
+      const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
       if (!hit) return
 
       const mastery = nodesRef.current.find((n) => n.id === hit.masteryId)
@@ -155,7 +152,7 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       if (!drag || drag.pointerId !== e.pointerId) {
         if (dragRef.current) return
         const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-        const hit = findMasteryOrbitRingAt(nodesRef.current, flow, edgesRef.current)
+        const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
         pane.classList.toggle('is-orbit-hover', Boolean(hit))
         return
       }
@@ -167,6 +164,11 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
     const finishDrag = (e: PointerEvent, drag: NonNullable<typeof dragRef.current>) => {
       e.preventDefault()
       e.stopPropagation()
+      try {
+        pane.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
       dragRef.current = null
       pane.classList.remove('is-orbit-rotating')
       applyDragDelta(drag, e.clientX, e.clientY)

@@ -11,7 +11,6 @@ import {
 } from '../stage'
 import {
   getOrderedOrbitSatellites,
-  getOrbitTiersWithRingLinks,
   isMasteryKind,
   isStealthPassiveKind,
   normalizeOrbitTierCount,
@@ -40,7 +39,6 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
-  const edges = useStore((s) => s.edges)
   const voidHighlight = useVoidHighlight()
   const isStealth = isStealthPassiveKind(data.kind)
   const isMastery = isMasteryKind(data.kind)
@@ -61,10 +59,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const bandLevel = stageBandLevel(stages)
   const bandCount = stages.length
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
-  const linkedOrbitTiers = useMemo(() => {
-    if (!isMastery || !data.orbitLocked) return null
-    return getOrbitTiersWithRingLinks(nodes, edges, id)
-  }, [nodes, edges, id, isMastery, data.orbitLocked])
+  const showOrbitRings = isMastery && !data.orbitLocked
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
@@ -112,11 +107,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         } as CSSProperties
       }
     >
-      {isMastery && (
+      {showOrbitRings && (
         <>
           {Array.from({ length: orbitTierCount }, (_, index) => {
             const tier = (index + 1) as OrbitTier
-            if (linkedOrbitTiers && !linkedOrbitTiers.has(tier)) return null
             const tierR = orbitTierRadius(orbitTierCount, tier)
             return (
               <div

@@ -308,50 +308,6 @@ export function rotateAllMasteryTiersByDelta(
   }
 }
 
-type OrbitEdgeLike = {
-  type?: string
-  source: string
-  target: string
-  data?: { masteryId?: string }
-}
-
-/** Tiers with at least one same-tier orbit arc (ring link on that tier). */
-export function getOrbitTiersWithRingLinks(
-  nodes: PassiveFlowNode[],
-  edges: OrbitEdgeLike[],
-  masteryId: string,
-): Set<OrbitTier> {
-  const tiers = new Set<OrbitTier>()
-  for (const edge of edges) {
-    if (edge.type !== 'orbit') continue
-    if (edge.data?.masteryId !== masteryId) continue
-    const tierA = getSatelliteOrbitTier(nodes, masteryId, edge.source)
-    const tierB = getSatelliteOrbitTier(nodes, masteryId, edge.target)
-    if (tierA === tierB) tiers.add(tierA)
-  }
-  return tiers
-}
-
-/** @deprecated Use getOrbitTiersWithRingLinks for locked orbit ring visibility. */
-export function getOrbitTiersWithLinks(
-  nodes: PassiveFlowNode[],
-  edges: OrbitEdgeLike[],
-  masteryId: string,
-): Set<OrbitTier> {
-  return getOrbitTiersWithRingLinks(nodes, edges, masteryId)
-}
-
-/** When locked, only tiers with on-ring arc links show rings / accept rotate hit-test. */
-export function visibleOrbitTiersForMastery(
-  nodes: PassiveFlowNode[],
-  edges: OrbitEdgeLike[],
-  masteryId: string,
-): Set<OrbitTier> | null {
-  const mastery = nodes.find((n) => n.id === masteryId)
-  if (!mastery || !isMasteryOrbitLocked(nodes, masteryId)) return null
-  return getOrbitTiersWithRingLinks(nodes, edges, masteryId)
-}
-
 /** Set snapped start angle for one tier; tier 1 also updates legacy orbitStartAngle. */
 export function setMasteryTierStartAngle(
   data: PassiveNodeData,
@@ -588,7 +544,6 @@ export function nodeInteractRadius(data: PassiveNodeData) {
 export function findMasteryOrbitRingAt(
   nodes: PassiveFlowNode[],
   flowPoint: { x: number; y: number },
-  edges: OrbitEdgeLike[] = [],
 ): { masteryId: string; tier: OrbitTier; pointerDeg: number } | null {
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
@@ -605,10 +560,8 @@ export function findMasteryOrbitRingAt(
     if (!isMasteryKind(data.kind)) continue
     const c = nodeCenter(node, nodes)
     const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
-    const linkedTiers = visibleOrbitTiersForMastery(nodes, edges, node.id)
     for (let tier = 1; tier <= tierCount; tier++) {
       const orbitTier = tier as OrbitTier
-      if (linkedTiers && !linkedTiers.has(orbitTier)) continue
       const radius = orbitTierRadius(tierCount, orbitTier)
       const dist = Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y)
       const err = Math.abs(dist - radius)
