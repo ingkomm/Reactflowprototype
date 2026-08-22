@@ -1,4 +1,4 @@
-export type PassiveKind = 'small' | 'notable' | 'mastery'
+export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery'
 
 /** One training log entry within a stage. Counts are capped by the stage goal. */
 export type TrainingLog = {
@@ -44,6 +44,7 @@ export const NODE_ICON_COLORS = [
 export type NodeIconColor = (typeof NODE_ICON_COLORS)[number]
 
 export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
+  initial: '#FFE066',
   small: '#9B9A97',
   notable: '#D9730D',
   mastery: '#0F7B6C',
@@ -73,6 +74,7 @@ export type PassiveNodeData = {
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
+  initial: 'Initial Node',
   small: 'Small Passive',
   notable: 'Notable Passive',
   mastery: 'Mastery',

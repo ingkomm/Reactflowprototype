@@ -3,6 +3,7 @@ import type { PassiveFlowNode } from './components/PassiveNode'
 import { outermostBandRadius } from './components/TrainingBands'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
+  initial: 56,
   small: 48,
   notable: 68,
   mastery: 76,
@@ -15,6 +16,23 @@ export const ORBIT_ANGLE_STEP = 15
 
 export function isSatelliteKind(kind: PassiveKind) {
   return kind === 'small' || kind === 'notable'
+}
+
+/** Clockwise neighbors on a mastery orbit ring (including wrap). */
+export function areOrbitAdjacent(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  aId: string,
+  bId: string,
+): boolean {
+  const ordered = getOrderedOrbitSatellites(nodes, masteryId).map((s) => s.id)
+  const ia = ordered.indexOf(aId)
+  const ib = ordered.indexOf(bId)
+  if (ia < 0 || ib < 0) return false
+  const n = ordered.length
+  if (n < 2) return false
+  const diff = Math.abs(ia - ib)
+  return diff === 1 || diff === n - 1
 }
 
 export function snapOrbitAngle(degrees: number) {

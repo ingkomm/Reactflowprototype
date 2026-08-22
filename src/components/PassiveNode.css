@@ -45,6 +45,40 @@
   --glow: rgba(61, 184, 168, 0.35);
 }
 
+.passive-node--initial {
+  --node-size: 56px;
+  --ring: #ffe066;
+  --core: #2a2418;
+  --accent: #ffe066;
+  --glow: rgba(255, 224, 102, 0.45);
+}
+
+.passive-node--initial .passive-node__ring {
+  box-shadow:
+    0 0 20px color-mix(in srgb, #ffe066 55%, transparent),
+    0 0 40px color-mix(in srgb, #ffe066 25%, transparent);
+}
+
+.passive-node.is-unpowered .passive-node__ring {
+  box-shadow: none;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.04), transparent 42%),
+    #151a20;
+}
+
+.passive-node.is-unpowered .passive-node__glyph {
+  opacity: 0.45;
+}
+
+.passive-node.is-unpowered .passive-node__title {
+  color: #6a7580;
+  text-shadow: none;
+}
+
+.passive-node.is-unpowered .passive-node__orbit {
+  opacity: 0.35;
+}
+
 .passive-node__orbit {
   position: absolute;
   left: 50%;

@@ -11,6 +11,7 @@ import {
 } from '../stage'
 import { DEFAULT_ORBIT_RADIUS, NODE_SIZE, nodeInteractRadius } from '../orbit'
 import { usePassiveClasses } from '../PassiveClassContext'
+import { useNodePowered } from '../PowerContext'
 import { IconGlyph } from './IconGlyph'
 import {
   TrainingBands,
@@ -21,25 +22,29 @@ import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 
-export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
+const UNPOWERED_ICON = '#4a5560'
+const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
+
+export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
+  const powered = useNodePowered(id) || data.kind === 'initial'
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
   const bandLevel = stageBandLevel(stages)
   const bandCount = stages.length
   const orbitRadius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
   const nodeSize = NODE_SIZE[data.kind]
-  const iconColor = passiveClass.iconColor
+  const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
   const iconId = passiveClass.iconId
   const outerBandR = outermostBandRadius(bandCount, nodeSize)
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = bandCount === 0 ? 0 : 12 + bandLevel * 10
+  const glowBlur = powered && bandCount > 0 ? 12 + bandLevel * 10 : 0
   const glowAlpha =
-    bandCount === 0 ? 0 : Math.min(0.95, 0.28 + bandLevel * 0.16)
+    powered && bandCount > 0 ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
   const haloStrength =
-    bandCount === 0 ? 0 : Math.min(0.92, 0.28 + bandLevel * 0.18)
+    powered && bandCount > 0 ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
 
   const ordered = sortedStages(stages)
   const done = completedStageCount(stages)
@@ -48,8 +53,8 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   return (
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
-        bandCount > 0 ? ' has-bands' : ''
-      }`}
+        powered ? '' : ' is-unpowered'
+      }${bandCount > 0 && powered ? ' has-bands' : ''}`}
       style={
         {
           '--glow-blur': `${glowBlur}px`,
@@ -62,6 +67,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
           '--icon-color': iconColor,
           '--label-offset': `${labelOffset}px`,
           '--orbit-r': `${orbitRadius}px`,
+          '--unpowered-glow': UNPOWERED_GLOW,
         } as CSSProperties
       }
     >
@@ -74,7 +80,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      <TrainingBands stages={stages} nodeSize={nodeSize} />
+      {powered && bandCount > 0 && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       <Handle
         id="center"
@@ -102,11 +108,18 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
       <div className="passive-node__tooltip" role="tooltip">
         <p className="passive-node__tooltip-title">{data.label}</p>
         <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
-        <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
-        <p className="passive-node__tooltip-meta">
-          단계 {done}/{stages.length} 완료
-        </p>
-        {active && (
+        {!powered && data.kind !== 'initial' && (
+          <p className="passive-node__tooltip-meta">파워 미공급</p>
+        )}
+        {data.kind !== 'initial' && (
+          <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
+        )}
+        {bandCount > 0 && (
+          <p className="passive-node__tooltip-meta">
+            단계 {done}/{stages.length} 완료
+          </p>
+        )}
+        {active && powered && (
           <p className="passive-node__tooltip-meta">
             {active.label}: {stageLoggedCount(active)}/{active.goal}
           </p>

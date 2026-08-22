@@ -37,12 +37,14 @@ export type LinkItem = {
   peerId: string
   peerLabel: string
   peerKind: PassiveKind
+  linkKind: 'center' | 'orbit'
 }
 
 export type LinkCandidate = {
   id: string
   label: string
   kind: PassiveKind
+  linkKind: 'center' | 'orbit'
 }
 
 type Props = {
@@ -347,6 +349,80 @@ export function Inspector({
         </>
       )}
 
+      {(data.kind === 'initial' ||
+        data.kind === 'small' ||
+        data.kind === 'notable' ||
+        data.kind === 'mastery') && (
+        <div className="inspector__section">
+          <div className="inspector__section-head">
+            <h3>Links</h3>
+          </div>
+          {data.kind === 'initial' && (
+            <p className="inspector__empty">Initial Node에서 Small/Notable로 직선 링크로 파워를 공급합니다.</p>
+          )}
+          {data.kind === 'mastery' && (
+            <p className="inspector__empty">
+              같은 오르빗의 Notable과 직선 링크가 있어야 파워가 공급됩니다.
+            </p>
+          )}
+          {links.length === 0 ? (
+            <p className="inspector__empty">No passive links yet.</p>
+          ) : (
+            <ul className="link-list">
+              {links.map((link) => (
+                <li key={link.edgeId} className="link-item">
+                  <span>
+                    {link.peerLabel}
+                    <small>
+                      {PASSIVE_KIND_LABEL[link.peerKind]}
+                      {link.linkKind === 'orbit' ? ' · 오르빗' : ' · 직선'}
+                    </small>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn--icon"
+                    onClick={() => onRemoveLink(link.edgeId)}
+                    aria-label={`Remove link to ${link.peerLabel}`}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="link-add">
+            <select
+              value={addPeerId}
+              onChange={(e) => setAddPeerId(e.target.value)}
+              disabled={linkCandidates.length === 0}
+            >
+              <option value="">
+                {linkCandidates.length === 0 ? 'No partners available' : 'Select partner…'}
+              </option>
+              {linkCandidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label} ({PASSIVE_KIND_LABEL[c.kind]}
+                  {c.linkKind === 'orbit' ? ', 오르빗' : ', 직선'})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={!addPeerId}
+              onClick={() => {
+                if (!addPeerId) return
+                onAddLink(addPeerId)
+                setAddPeerId('')
+              }}
+            >
+              + Link
+            </button>
+          </div>
+        </div>
+      )}
+
       {(data.kind === 'small' || data.kind === 'notable') && (
         <>
           <div className="inspector__section">
@@ -368,66 +444,10 @@ export function Inspector({
                 : 'Not on an orbit. Connect to a Mastery (membership only).'}
             </p>
           </div>
-
-          <div className="inspector__section">
-            <div className="inspector__section-head">
-              <h3>Links</h3>
-            </div>
-            {links.length === 0 ? (
-              <p className="inspector__empty">No passive links yet.</p>
-            ) : (
-              <ul className="link-list">
-                {links.map((link) => (
-                  <li key={link.edgeId} className="link-item">
-                    <span>
-                      {link.peerLabel}
-                      <small>{PASSIVE_KIND_LABEL[link.peerKind]}</small>
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn--icon"
-                      onClick={() => onRemoveLink(link.edgeId)}
-                      aria-label={`Remove link to ${link.peerLabel}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="link-add">
-              <select
-                value={addPeerId}
-                onChange={(e) => setAddPeerId(e.target.value)}
-                disabled={linkCandidates.length === 0}
-              >
-                <option value="">
-                  {linkCandidates.length === 0 ? 'No partners available' : 'Select partner…'}
-                </option>
-                {linkCandidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label} ({PASSIVE_KIND_LABEL[c.kind]})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                disabled={!addPeerId}
-                onClick={() => {
-                  if (!addPeerId) return
-                  onAddLink(addPeerId)
-                  setAddPeerId('')
-                }}
-              >
-                + Link
-              </button>
-            </div>
-          </div>
         </>
       )}
 
+      {data.kind !== 'initial' && (
       <div className="inspector__section">
         <div className="inspector__section-head">
           <h3>단계 (띠)</h3>
@@ -622,6 +642,7 @@ export function Inspector({
           </ul>
         )}
       </div>
+      )}
     </aside>
   )
 }

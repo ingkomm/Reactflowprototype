@@ -19,7 +19,10 @@ import '@xyflow/react/dist/style.css'
 
 import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
+import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
+import { PowerProvider } from './PowerContext'
+import { classifyPassiveConnection, computePoweredNodeIds } from './power'
 import type { PassiveKind, PassiveNodeData, StageData } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
 import {
@@ -32,6 +35,7 @@ import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
 import { createStage, defaultStagesForSeed, uid as stageUid } from './stage'
 import {
+  areOrbitAdjacent,
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
@@ -42,7 +46,6 @@ import {
   ORBIT_DETACH_SLACK,
   orbitOrderByDropAngle,
   removeNodesAndRelayout,
-  shareSameOrbit,
   snapOrbitAngle,
   withMasteryDragFlags,
 } from './orbit'
@@ -51,7 +54,7 @@ import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
 const nodeTypes = { passive: PassiveNode }
-const edgeTypes = { center: CenterEdge }
+const edgeTypes = { center: CenterEdge, orbit: OrbitEdge }
 
 function uid(prefix: string) {
   return stageUid(prefix)
@@ -75,7 +78,7 @@ function createPassiveData(
   return {
     label,
     kind,
-    stages: extras.stages ?? [createStage(1)],
+    stages: extras.stages ?? (kind === 'initial' ? [] : [createStage(1)]),
     classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
     ...(kind === 'mastery'
       ? {
@@ -96,6 +99,25 @@ function passiveLinkEdge(sourceId: string, targetId: string): Edge {
     sourceHandle: 'center',
     targetHandle: 'center-target',
   }
+}
+
+function orbitLinkEdge(sourceId: string, targetId: string, masteryId: string): Edge {
+  return {
+    id: `orbit-${sourceId}-${targetId}`,
+    type: 'orbit',
+    source: sourceId,
+    target: targetId,
+    data: { masteryId },
+    zIndex: 1,
+  }
+}
+
+function orbitAdjacentEdges(order: string[], masteryId: string): Edge[] {
+  if (order.length < 2) return []
+  return order.map((id, i) => {
+    const next = order[(i + 1) % order.length]!
+    return orbitLinkEdge(id, next, masteryId)
+  })
 }
 
 type NodeClipboard = {
@@ -142,7 +164,9 @@ function buildPastedNode(
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: [],
         }
-      : { masteryId: null }),
+      : kind === 'initial'
+        ? {}
+        : { masteryId: null }),
   }
 
   return {
@@ -174,16 +198,20 @@ function resolveMasteryPair(
   return null
 }
 
-function isPassiveLinkPair(source: PassiveFlowNode, target: PassiveFlowNode) {
-  const a = (source.data as PassiveNodeData).kind
-  const b = (target.data as PassiveNodeData).kind
-  return isSatelliteKind(a) && isSatelliteKind(b)
+function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit') {
+  return edges.find((e) => {
+    if (type && e.type !== type) return false
+    return (e.source === a && e.target === b) || (e.source === b && e.target === a)
+  })
 }
 
-function findLinkEdge(edges: Edge[], a: string, b: string) {
-  return edges.find(
-    (e) =>
-      (e.source === a && e.target === b) || (e.source === b && e.target === a),
+function classifyLink(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+  nodes: PassiveFlowNode[],
+) {
+  return classifyPassiveConnection(source, target, nodes, (masteryId, a, b) =>
+    areOrbitAdjacent(nodes, masteryId, a, b),
   )
 }
 
@@ -207,6 +235,13 @@ const gymOrbitOrder = [
 
 function buildSeedNodes(): PassiveFlowNode[] {
   const base: PassiveFlowNode[] = [
+    {
+      id: 'initial-main',
+      type: 'passive',
+      position: { x: 20, y: 300 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('initial', '시작', { stages: [], classId: 'i-default' }),
+    },
     {
       id: danceMasteryId,
       type: 'passive',
@@ -384,8 +419,12 @@ function buildSeedNodes(): PassiveFlowNode[] {
 const seedNodes = buildSeedNodes()
 
 const initialEdges: Edge[] = [
-  passiveLinkEdge('small-basic', 'small-legs'),
-  passiveLinkEdge('notable-hiphop', 'notable-strength'),
+  passiveLinkEdge('initial-main', 'notable-hiphop'),
+  passiveLinkEdge('initial-main', 'notable-strength'),
+  passiveLinkEdge('notable-hiphop', danceMasteryId),
+  passiveLinkEdge('notable-strength', gymMasteryId),
+  ...orbitAdjacentEdges(danceOrbitOrder, danceMasteryId),
+  ...orbitAdjacentEdges(gymOrbitOrder, gymMasteryId),
 ]
 
 export default function App() {
@@ -531,6 +570,11 @@ export default function App() {
     [commit, onEdgesChange],
   )
 
+  const poweredIds = useMemo(
+    () => computePoweredNodeIds(nodes, edges),
+    [nodes, edges],
+  )
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
@@ -560,9 +604,17 @@ export default function App() {
 
   const selectedLinks = useMemo(() => {
     if (!selectedNode || !selectedData) return []
-    if (!isSatelliteKind(selectedData.kind)) return []
+    const kind = selectedData.kind
+    if (kind !== 'initial' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
+      return []
+    }
     return edges
       .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
+      .filter((e) => {
+        if (kind === 'mastery') return e.type === 'center' || !e.type
+        if (kind === 'initial') return e.type === 'center' || !e.type
+        return true
+      })
       .map((e) => {
         const peerId = e.source === selectedNode.id ? e.target : e.source
         const peer = nodes.find((n) => n.id === peerId)
@@ -572,41 +624,33 @@ export default function App() {
           peerId,
           peerLabel: peerData?.label ?? peerId,
           peerKind: peerData?.kind ?? 'small',
+          linkKind: e.type === 'orbit' ? ('orbit' as const) : ('center' as const),
         }
       })
   }, [edges, nodes, selectedData, selectedNode])
 
-  // Drop any leftover same-orbit links (orbit membership is visual only).
-  useEffect(() => {
-    setEdges((eds) => {
-      const next = eds.filter((e) => {
-        const source = nodes.find((n) => n.id === e.source)
-        const target = nodes.find((n) => n.id === e.target)
-        if (!source || !target) return true
-        return !shareSameOrbit(
-          { data: source.data as PassiveNodeData },
-          { data: target.data as PassiveNodeData },
-        )
-      })
-      return next.length === eds.length ? eds : next
-    })
-  }, [nodes, setEdges])
-
   const linkCandidates = useMemo(() => {
     if (!selectedNode || !selectedData) return []
-    if (!isSatelliteKind(selectedData.kind)) return []
+    const kind = selectedData.kind
+    if (kind !== 'initial' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
+      return []
+    }
     const linked = new Set(selectedLinks.map((l) => l.peerId))
     return nodes
       .filter((n) => {
-        const d = n.data as PassiveNodeData
-        if (n.id === selectedNode.id || linked.has(n.id) || !isSatelliteKind(d.kind)) return false
-        // No links inside the same mastery orbit.
-        if (shareSameOrbit({ data: selectedData }, { data: d })) return false
-        return true
+        if (n.id === selectedNode.id || linked.has(n.id)) return false
+        const linkKind = classifyLink(selectedNode, n, nodes)
+        return linkKind === 'center' || linkKind === 'orbit'
       })
       .map((n) => {
         const d = n.data as PassiveNodeData
-        return { id: n.id, label: d.label, kind: d.kind }
+        const linkKind = classifyLink(selectedNode, n, nodes)
+        return {
+          id: n.id,
+          label: d.label,
+          kind: d.kind,
+          linkKind: linkKind === 'orbit' ? ('orbit' as const) : ('center' as const),
+        }
       })
   }, [nodes, selectedData, selectedLinks, selectedNode])
 
@@ -615,12 +659,8 @@ export default function App() {
       const source = nodes.find((n) => n.id === connection.source)
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
-      if (resolveMasteryPair(source, target) !== null) return true
-      if (!isPassiveLinkPair(source, target)) return false
-      return !shareSameOrbit(
-        { data: source.data as PassiveNodeData },
-        { data: target.data as PassiveNodeData },
-      )
+      const kind = classifyLink(source, target, nodes)
+      return kind === 'center' || kind === 'orbit' || kind === 'attach'
     },
     [nodes],
   )
@@ -676,28 +716,26 @@ export default function App() {
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target) return
 
-      const masteryPair = resolveMasteryPair(source, target)
-      if (masteryPair) {
-        attachSatellite(masteryPair.mastery.id, masteryPair.satellite.id)
+      const linkKind = classifyLink(source, target, nodes)
+      if (linkKind === 'attach') {
+        const pair = resolveMasteryPair(source, target)
+        if (pair) attachSatellite(pair.mastery.id, pair.satellite.id)
         return
       }
-
-      if (!isPassiveLinkPair(source, target)) return
-
-      if (
-        shareSameOrbit(
-          { data: source.data as PassiveNodeData },
-          { data: target.data as PassiveNodeData },
-        )
-      ) {
-        return
-      }
+      if (linkKind !== 'center' && linkKind !== 'orbit') return
 
       commit()
       setEdges((eds) => {
-        const existing = findLinkEdge(eds, source.id, target.id)
+        const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
+        const existing = findLinkEdge(eds, source.id, target.id, edgeType)
         if (existing) {
           return eds.filter((e) => e.id !== existing.id)
+        }
+        if (linkKind === 'orbit') {
+          const sd = source.data as PassiveNodeData
+          const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
+          if (!masteryId) return eds
+          return [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
         }
         return [...eds, passiveLinkEdge(source.id, target.id)]
       })
@@ -807,18 +845,19 @@ export default function App() {
       if (!selectedId) return
       const source = nodes.find((n) => n.id === selectedId)
       const target = nodes.find((n) => n.id === peerId)
-      if (!source || !target || !isPassiveLinkPair(source, target)) return
-      if (
-        shareSameOrbit(
-          { data: source.data as PassiveNodeData },
-          { data: target.data as PassiveNodeData },
-        )
-      ) {
-        return
-      }
+      if (!source || !target) return
+      const linkKind = classifyLink(source, target, nodes)
+      if (linkKind !== 'center' && linkKind !== 'orbit') return
       commit()
       setEdges((eds) => {
-        if (findLinkEdge(eds, source.id, target.id)) return eds
+        const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
+        if (findLinkEdge(eds, source.id, target.id, edgeType)) return eds
+        if (linkKind === 'orbit') {
+          const sd = source.data as PassiveNodeData
+          const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
+          if (!masteryId) return eds
+          return [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+        }
         return [...eds, passiveLinkEdge(source.id, target.id)]
       })
     },
@@ -862,7 +901,12 @@ export default function App() {
             const nextData: PassiveNodeData = {
               label: data.label,
               kind,
-              stages: data.stages,
+              stages:
+                kind === 'initial'
+                  ? []
+                  : data.stages.length > 0
+                    ? data.stages
+                    : [createStage(1)],
               classId: resolvePassiveClass(classes, data.classId, kind).id,
               ...(kind === 'mastery'
                 ? {
@@ -871,12 +915,14 @@ export default function App() {
                     orbitOrder: [],
                     masteryId: null,
                   }
-                : {
-                    masteryId:
-                      isSatelliteKind(kind) && prev.kind !== 'mastery'
-                        ? data.masteryId ?? null
-                        : null,
-                  }),
+                : kind === 'initial'
+                  ? {}
+                  : {
+                      masteryId:
+                        isSatelliteKind(kind) && prev.kind !== 'mastery'
+                          ? data.masteryId ?? null
+                          : null,
+                    }),
             }
             return { ...node, data: nextData }
           }
@@ -912,23 +958,28 @@ export default function App() {
 
       setEdges((eds) =>
         eds.filter((e) => {
-          if (e.source === nodeId || e.target === nodeId) {
-            if (kind === 'mastery' || prev.kind === 'mastery') return false
-          }
-          const sourceNode =
-            e.source === nodeId
-              ? { data: { kind } }
-              : nodes.find((n) => n.id === e.source)
-          const targetNode =
-            e.target === nodeId
-              ? { data: { kind } }
-              : nodes.find((n) => n.id === e.target)
+          const sourceNode = nodes.find((n) => n.id === e.source)
+          const targetNode = nodes.find((n) => n.id === e.target)
           if (!sourceNode || !targetNode) return false
-          const sk =
-            e.source === nodeId ? kind : (sourceNode.data as PassiveNodeData).kind
-          const tk =
-            e.target === nodeId ? kind : (targetNode.data as PassiveNodeData).kind
-          return isSatelliteKind(sk) && isSatelliteKind(tk)
+
+          const sourceData: PassiveNodeData =
+            e.source === nodeId
+              ? { ...(sourceNode.data as PassiveNodeData), kind }
+              : (sourceNode.data as PassiveNodeData)
+          const targetData: PassiveNodeData =
+            e.target === nodeId
+              ? { ...(targetNode.data as PassiveNodeData), kind }
+              : (targetNode.data as PassiveNodeData)
+
+          const linkKind = classifyPassiveConnection(
+            { ...sourceNode, data: sourceData },
+            { ...targetNode, data: targetData },
+            nodes,
+            (masteryId, a, b) => areOrbitAdjacent(nodes, masteryId, a, b),
+          )
+
+          if (e.type === 'orbit') return linkKind === 'orbit'
+          return linkKind === 'center'
         }),
       )
     },
@@ -1178,6 +1229,7 @@ export default function App() {
         style={{ gridTemplateColumns: `minmax(0, 1fr) ${inspectorWidth}px` }}
       >
         <section className="canvas-pane" aria-label="Passive tree canvas">
+          <PowerProvider poweredIds={poweredIds}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1228,9 +1280,10 @@ export default function App() {
               maskColor="rgba(8, 12, 16, 0.7)"
             />
           </ReactFlow>
+          </PowerProvider>
 
           <p className="canvas-hint">
-            가운데 드래그 = 이동 · 띠 영역 = 링크(원형 커서) · 오르빗 빈 공간 = 회전(15°)
+            Initial에서 파워 공급 · 오르빗 인접 = 호 링크 · Mastery↔Notable = 직선 링크
           </p>
         </section>
 

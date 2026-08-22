@@ -5,12 +5,15 @@ import {
   type Edge,
   type EdgeProps,
 } from '@xyflow/react'
+import { usePowerSet } from '../PowerContext'
 
 export type CenterFlowEdge = Edge<Record<string, never>, 'center'>
 
 /** Match quiet node/orbit edge: cool gray at low contrast. */
 const LINK_STROKE = 'color-mix(in srgb, #9aa8b5 22%, transparent)'
 const LINK_STROKE_SELECTED = 'color-mix(in srgb, #9aa8b5 38%, transparent)'
+const LINK_STROKE_POWERED = 'color-mix(in srgb, #9aa8b5 42%, transparent)'
+const LINK_STROKE_POWERED_SELECTED = 'color-mix(in srgb, #c5d0da 55%, transparent)'
 const LINK_WIDTH = 1
 /** Half-gap between the two parallel solid strokes. */
 const DOUBLE_OFFSET = 2
@@ -23,6 +26,8 @@ export function CenterEdge({
   interactionWidth = 28,
   selected,
 }: EdgeProps) {
+  const powered = usePowerSet()
+  const lit = powered.has(source) && powered.has(target)
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
 
@@ -58,7 +63,13 @@ export function CenterEdge({
     targetY: targetY - oy,
   })
 
-  const stroke = selected ? LINK_STROKE_SELECTED : LINK_STROKE
+  const stroke = lit
+    ? selected
+      ? LINK_STROKE_POWERED_SELECTED
+      : LINK_STROKE_POWERED
+    : selected
+      ? LINK_STROKE_SELECTED
+      : LINK_STROKE
   const lineStyle = {
     stroke,
     strokeWidth: LINK_WIDTH,
