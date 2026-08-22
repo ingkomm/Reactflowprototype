@@ -54,6 +54,7 @@ export function OrbitEdge({
   target,
   data,
   selected,
+  interactionWidth = 28,
 }: EdgeProps) {
   const powered = usePowerSet()
   const nodes = useStore((s) => s.nodes)
@@ -107,7 +108,12 @@ export function OrbitEdge({
 
     return (
       <>
-        <BaseEdge id={`${id}-hit`} path={hitPath} style={{ stroke: 'transparent', strokeWidth: 14 }} />
+        <BaseEdge
+          id={`${id}-hit`}
+          path={hitPath}
+          style={{ stroke: 'transparent', strokeWidth: 1 }}
+          interactionWidth={interactionWidth}
+        />
         <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
       </>
     )
@@ -122,7 +128,12 @@ export function OrbitEdge({
 
   return (
     <>
-      <BaseEdge id={`${id}-hit`} path={path} style={{ stroke: 'transparent', strokeWidth: 14 }} />
+      <BaseEdge
+        id={`${id}-hit`}
+        path={path}
+        style={{ stroke: 'transparent', strokeWidth: 1 }}
+        interactionWidth={interactionWidth}
+      />
       <BaseEdge id={id} path={path} style={lineStyle} interactionWidth={0} />
     </>
   )

@@ -101,7 +101,7 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       if (dragRef.current) return
 
       const target = e.target as Element | null
-      if (target?.closest?.('.react-flow__node, .passive-node')) return
+      if (target?.closest?.('.react-flow__node, .passive-node, .react-flow__edge')) return
 
       const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
       const hit = findMasteryOrbitRingAt(nodesRef.current, flow)

@@ -1291,7 +1291,8 @@ export default function App() {
   const onEdgeDoubleClick = useCallback(
     (_event: ReactMouseEvent, edge: Edge) => {
       commit()
-      setEdges((eds) => eds.filter((e) => e.id !== edge.id))
+      const edgeId = edge.id.replace(/-hit$/, '')
+      setEdges((eds) => eds.filter((e) => e.id !== edgeId))
     },
     [commit, setEdges],
   )
