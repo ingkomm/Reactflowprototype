@@ -1,5 +1,6 @@
 import type { PassiveKind, PassiveNodeData } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
+import { outermostBandRadius } from './components/TrainingBands'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   small: 48,
@@ -47,27 +48,35 @@ export function normalizeAngleDelta(degrees: number) {
 export const ORBIT_HIT_HALF_WIDTH = 20
 
 /**
+ * Radius of the node interaction disk (face + stage bands + link rim).
+ * Must stay in sync with PassiveNode `--connect-r`.
+ */
+export function nodeInteractRadius(data: PassiveNodeData) {
+  const nodeSize = NODE_SIZE[data.kind]
+  const outerBandR = outermostBandRadius(data.stages?.length ?? 0, nodeSize)
+  return Math.max(outerBandR + 8, nodeSize / 2 + 16)
+}
+
+/**
  * Hit-test empty mastery orbit ring space in flow coordinates.
- * Returns null when the point is on any node face (so face drag/connect wins).
+ * Returns null when the point is on any node (face / bands / link rim),
+ * so node drag and connect always win over orbit rotate.
  */
 export function findMasteryOrbitRingAt(
   nodes: PassiveFlowNode[],
   flowPoint: { x: number; y: number },
 ): { masteryId: string; pointerDeg: number } | null {
   for (const node of nodes) {
-    if (node.type && node.type !== 'passive') continue
     const data = node.data as PassiveNodeData
     if (!data?.kind) continue
     const c = nodeCenter(node, nodes)
-    const faceR = NODE_SIZE[data.kind] / 2
-    if (Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y) <= faceR + 6) {
+    if (Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y) <= nodeInteractRadius(data) + 4) {
       return null
     }
   }
 
   let best: { masteryId: string; pointerDeg: number; err: number } | null = null
   for (const node of nodes) {
-    if (node.type && node.type !== 'passive') continue
     const data = node.data as PassiveNodeData
     if (data.kind !== 'mastery') continue
     const c = nodeCenter(node, nodes)

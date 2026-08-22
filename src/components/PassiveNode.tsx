@@ -9,7 +9,7 @@ import {
   stageBandLevel,
   stageLoggedCount,
 } from '../stage'
-import { DEFAULT_ORBIT_RADIUS, NODE_SIZE } from '../orbit'
+import { DEFAULT_ORBIT_RADIUS, NODE_SIZE, nodeInteractRadius } from '../orbit'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { IconGlyph } from './IconGlyph'
 import {
@@ -33,8 +33,7 @@ export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const iconId = passiveClass.iconId
   const outerBandR = outermostBandRadius(bandCount, nodeSize)
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
-  /** Connect hit lives on the stage-band annulus (or a rim just outside the face). */
-  const connectR = Math.max(outerBandR + 8, nodeSize / 2 + 16)
+  const connectR = nodeInteractRadius(data)
 
   const glowBlur = bandCount === 0 ? 0 : 12 + bandLevel * 10
   const glowAlpha =

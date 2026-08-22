@@ -70,6 +70,10 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (e.button !== 0) return
       if (dragRef.current) return
 
+      const target = e.target as Element | null
+      // Node face / band / link handle always wins over orbit rotate.
+      if (target?.closest?.('.react-flow__node, .passive-node')) return
+
       const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
       const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
       if (!hit) return
