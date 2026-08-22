@@ -29,9 +29,37 @@ type Props = {
   restoreSelection: (nodeId: string) => void
 }
 
+type OrbitHit = { masteryId: string; tier: OrbitTier; pointerDeg: number }
+
+const DRAG_THRESHOLD_PX = 6
+
+/** Ignore clicks on node chrome; mastery orbit ring clicks are allowed. */
+function shouldIgnoreRotateTarget(target: Element | null): boolean {
+  if (!target) return true
+  if (
+    target.closest(
+      '.node-drag-handle, .passive-node__handle, .passive-node__ring, .passive-node__glyph, .passive-node__title, .passive-node__tooltip',
+    )
+  ) {
+    return true
+  }
+
+  const flowNode = target.closest('.react-flow__node')
+  if (!flowNode) return false
+
+  const isMasteryNode = Boolean(
+    flowNode.querySelector('.passive-node--mastery, .passive-node--voidMastery'),
+  )
+  if (isMasteryNode) {
+    return !target.closest('.passive-node__orbit')
+  }
+
+  return true
+}
+
 /**
- * Drag empty mastery orbit ring to rotate.
- * Unlocked: per-tier start angle. Locked: all tiers rotate together; only linked rings hit-test.
+ * Drag mastery orbit ring to rotate.
+ * Single click + drag rotates; double-click on a link still deletes (deferred start on edges).
  */
 export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, restoreSelection }: Props) {
   const { screenToFlowPosition } = useReactFlow()
@@ -47,6 +75,13 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
     originPointerDeg: number
     originStartDeg: number
     originAnglesByTier?: Partial<Record<OrbitTier, number>>
+  } | null>(null)
+
+  const pendingRef = useRef<{
+    pointerId: number
+    originX: number
+    originY: number
+    hit: OrbitHit
   } | null>(null)
 
   useEffect(() => {
@@ -95,18 +130,7 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       return pointerAngleDeg(c.x, c.y, flow.x, flow.y)
     }
 
-    const onPointerDown = (event: Event) => {
-      const e = event as PointerEvent
-      if (e.button !== 0) return
-      if (dragRef.current) return
-
-      const target = e.target as Element | null
-      if (target?.closest?.('.react-flow__node, .passive-node, .react-flow__edge')) return
-
-      const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
-      if (!hit) return
-
+    const beginRotate = (e: PointerEvent, hit: OrbitHit) => {
       const mastery = nodesRef.current.find((n) => n.id === hit.masteryId)
       if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return
 
@@ -145,15 +169,52 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       }
     }
 
+    const onPointerDown = (event: Event) => {
+      const e = event as PointerEvent
+      if (e.button !== 0) return
+      if (dragRef.current) return
+
+      const target = e.target as Element | null
+      if (shouldIgnoreRotateTarget(target)) return
+
+      const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
+      if (!hit) return
+
+      const onEdge = Boolean(target?.closest?.('.react-flow__edge'))
+      if (onEdge) {
+        pendingRef.current = {
+          pointerId: e.pointerId,
+          originX: e.clientX,
+          originY: e.clientY,
+          hit,
+        }
+        return
+      }
+
+      beginRotate(e, hit)
+    }
+
     const onPointerMove = (event: Event) => {
       const e = event as PointerEvent
       const drag = dragRef.current
+      const pending = pendingRef.current
+
+      if (pending && pending.pointerId === e.pointerId && !drag) {
+        const moved = Math.hypot(e.clientX - pending.originX, e.clientY - pending.originY)
+        if (moved >= DRAG_THRESHOLD_PX) {
+          pendingRef.current = null
+          beginRotate(e, pending.hit)
+          if (dragRef.current) applyDragDelta(dragRef.current, e.clientX, e.clientY)
+        }
+        return
+      }
 
       if (!drag || drag.pointerId !== e.pointerId) {
-        if (dragRef.current) return
+        if (dragRef.current || pendingRef.current) return
         const flow = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-        const hit = findMasteryOrbitRingAt(nodesRef.current, flow)
-        pane.classList.toggle('is-orbit-hover', Boolean(hit))
+        const ringHit = findMasteryOrbitRingAt(nodesRef.current, flow)
+        pane.classList.toggle('is-orbit-hover', Boolean(ringHit))
         return
       }
 
@@ -179,6 +240,9 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
 
     const endDrag = (event: Event) => {
       const e = event as PointerEvent
+      if (pendingRef.current?.pointerId === e.pointerId) {
+        pendingRef.current = null
+      }
       const drag = dragRef.current
       if (!drag || drag.pointerId !== e.pointerId) return
       finishDrag(e, drag)
@@ -194,6 +258,7 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', endDrag)
       window.removeEventListener('pointercancel', endDrag)
+      pendingRef.current = null
       pane.classList.remove('is-orbit-rotating', 'is-orbit-hover')
     }
   }, [commit, restoreSelection, screenToFlowPosition, selectedIdRef, setNodes, stack])
