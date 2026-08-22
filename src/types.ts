@@ -1,4 +1,4 @@
-export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery' | 'void'
+export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery' | 'voidMastery' | 'void'
 
 /** One training log entry within a stage. Counts are capped by the stage goal. */
 export type TrainingLog = {
@@ -48,6 +48,7 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   small: '#9B9A97',
   notable: '#D9730D',
   mastery: '#0F7B6C',
+  voidMastery: '#0F7B6C',
   void: '#6CB6EA',
 }
 
@@ -61,16 +62,16 @@ export type PassiveNodeData = {
    * Icon + color come from the class catalog (not stored per-node).
    */
   classId: string
-  /** Mastery only: radius of the circular orbit for attached passives. */
+  /** Mastery / Void Master: radius of the circular orbit for attached passives. */
   orbitRadius?: number
   /**
-   * Mastery only: starting angle in degrees for orbit slot #1.
+   * Mastery / Void Master: starting angle in degrees for orbit slot #1.
    * Snapped to 15° steps. Default -90 (top). Clockwise from there.
    */
   orbitStartAngle?: number
-  /** Mastery only: satellite node ids in clockwise orbit order (1-based UI). */
+  /** Mastery / Void Master: satellite node ids in clockwise orbit order (1-based UI). */
   orbitOrder?: string[]
-  /** Mastery only: when true, orbit membership count/order cannot change. */
+  /** Mastery / Void Master: when true, orbit membership count/order cannot change. */
   orbitLocked?: boolean
   /** Small/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
@@ -81,6 +82,7 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   small: 'Small Passive',
   notable: 'Notable Passive',
   mastery: 'Mastery',
+  voidMastery: 'Void Master Node',
   void: 'Void Node',
 }
 

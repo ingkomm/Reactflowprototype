@@ -3,6 +3,7 @@ import { useReactFlow, useStore } from '@xyflow/react'
 import {
   DEFAULT_ORBIT_START_ANGLE,
   findMasteryOrbitRingAt,
+  isMasteryKind,
   isMasteryOrbitLocked,
   layoutMasteryOrbit,
   nodeCenter,
@@ -44,7 +45,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       const snapped = snapOrbitAngle(angleDeg)
       setNodes((nds) => {
         const mastery = nds.find((n) => n.id === masteryId)
-        if (!mastery || (mastery.data as PassiveNodeData).kind !== 'mastery') return nds
+        if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return nds
         const data = mastery.data as PassiveNodeData
         if ((data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) === snapped) {
           return nds
@@ -80,7 +81,7 @@ export function OrbitRotateController({ commit, setNodes, stack }: Props) {
       if (!hit) return
 
       const mastery = nodesRef.current.find((n) => n.id === hit.masteryId)
-      if (!mastery || (mastery.data as PassiveNodeData).kind !== 'mastery') return
+      if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return
       if (isMasteryOrbitLocked(nodesRef.current, hit.masteryId)) return
 
       e.preventDefault()

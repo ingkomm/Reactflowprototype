@@ -18,6 +18,8 @@ import {
 import {
   DEFAULT_ORBIT_RADIUS,
   DEFAULT_ORBIT_START_ANGLE,
+  isMasteryKind,
+  isStealthPassiveKind,
   orbitAngleOptions,
 } from '../orbit'
 import { classesForKind } from '../passiveClass'
@@ -230,7 +232,7 @@ export function Inspector({
     <aside className="inspector">
       <div className="inspector__header">
         <h2 className="inspector__title">
-          {data.kind === 'mastery' ? 'Mastery Edit' : 'Node Inspector'}
+          {isMasteryKind(data.kind) ? 'Mastery Edit' : 'Node Inspector'}
         </h2>
         <button type="button" className="btn btn--danger" onClick={() => onDeleteNode(nodeId)}>
           Delete
@@ -262,7 +264,7 @@ export function Inspector({
 
       <div className="field">
         <span>클래스</span>
-        {data.kind !== 'initial' && data.kind !== 'void' ? (
+        {data.kind !== 'initial' && !isStealthPassiveKind(data.kind) ? (
           <>
             <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
               {kindClasses.map((cls) => {
@@ -294,11 +296,19 @@ export function Inspector({
 
       {data.kind === 'void' && (
         <p className="inspector__empty">
-          Void Node — 오르빗 배치·링크 차단용. 파워·링크·띠 없음.
+          Void Node — 오르빗 배치·링크 차단용. 파워·링크·띠 없음. 오르빗에 속하지 않을 때만
+          표시됩니다.
         </p>
       )}
 
-      {data.kind === 'mastery' && (
+      {data.kind === 'voidMastery' && (
+        <p className="inspector__empty">
+          Void Master Node — Mastery와 같이 오르빗을 갖지만 링크·파워·띠·아이콘 없음. 오르빗이
+          비어 있을 때만 표시됩니다.
+        </p>
+      )}
+
+      {isMasteryKind(data.kind) && (
         <>
           <label className="field field--row">
             <span>Orbit lock</span>
@@ -473,13 +483,13 @@ export function Inspector({
             <p className="inspector__empty">
               {data.masteryId
                 ? `Orbit of: ${masteryLabel ?? data.masteryId}`
-                : 'Not on an orbit. Connect to a Mastery (membership only).'}
+                : 'Not on an orbit. Connect to a Mastery or Void Master (membership only).'}
             </p>
           </div>
         </>
       )}
 
-      {data.kind !== 'initial' && data.kind !== 'void' && (
+      {data.kind !== 'initial' && !isStealthPassiveKind(data.kind) && (
       <div className="inspector__section">
         <div className="inspector__section-head">
           <h3>단계 (띠)</h3>

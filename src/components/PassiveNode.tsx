@@ -1,5 +1,5 @@
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { type CSSProperties } from 'react'
+import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react'
+import { useMemo, type CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
 import {
@@ -9,7 +9,14 @@ import {
   stageBandLevel,
   stageLoggedCount,
 } from '../stage'
-import { DEFAULT_ORBIT_RADIUS, NODE_SIZE, nodeInteractRadius } from '../orbit'
+import {
+  DEFAULT_ORBIT_RADIUS,
+  getOrderedOrbitSatellites,
+  isMasteryKind,
+  isStealthPassiveKind,
+  NODE_SIZE,
+  nodeInteractRadius,
+} from '../orbit'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
@@ -28,8 +35,17 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
-  const isVoid = data.kind === 'void'
-  const powered = !isVoid && (useNodePowered(id) || data.kind === 'initial')
+  const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
+  const isStealth = isStealthPassiveKind(data.kind)
+  const isMastery = isMasteryKind(data.kind)
+  const orbitSatelliteCount = useMemo(() => {
+    if (data.kind !== 'voidMastery') return 0
+    return getOrderedOrbitSatellites(nodes, id).length
+  }, [nodes, id, data.kind])
+  const isAmbientVisible =
+    (data.kind === 'void' && !data.masteryId) ||
+    (data.kind === 'voidMastery' && orbitSatelliteCount === 0)
+  const powered = !isStealth && (useNodePowered(id) || data.kind === 'initial')
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
@@ -57,7 +73,9 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
         powered ? '' : ' is-unpowered'
-      }${bandCount > 0 && powered ? ' has-bands' : ''}`}
+      }${bandCount > 0 && powered ? ' has-bands' : ''}${
+        isStealth ? ' is-stealth' : ''
+      }${isAmbientVisible ? ' is-ambient-visible' : ''}`}
       style={
         {
           '--glow-blur': `${glowBlur}px`,
@@ -74,7 +92,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         } as CSSProperties
       }
     >
-      {data.kind === 'mastery' && (
+      {isMastery && (
         <div
           className="passive-node__orbit"
           style={{ width: orbitRadius * 2, height: orbitRadius * 2 }}
@@ -83,9 +101,11 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {powered && bandCount > 0 && !isVoid && <TrainingBands stages={stages} nodeSize={nodeSize} />}
+      {powered && bandCount > 0 && !isStealth && (
+        <TrainingBands stages={stages} nodeSize={nodeSize} />
+      )}
 
-      {!isVoid && (
+      {!isStealth && (
         <>
           <Handle
             id="center"
@@ -105,40 +125,37 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__ring" aria-hidden>
-        {!isVoid && <IconGlyph iconId={iconId} className="passive-node__glyph" />}
+        {!isStealth && <IconGlyph iconId={iconId} className="passive-node__glyph" />}
       </div>
 
       <div className="passive-node__hit node-drag-handle" />
 
       <p className="passive-node__title">{data.label}</p>
 
-      {!isVoid && (
-      <div className="passive-node__tooltip" role="tooltip">
-        <p className="passive-node__tooltip-title">{data.label}</p>
-        <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
-        {!powered && data.kind !== 'initial' && data.kind !== 'void' && (
-          <p className="passive-node__tooltip-meta">파워 미공급</p>
-        )}
-        {powered && !canRelay && data.kind !== 'initial' && bandCount > 0 && (
-          <p className="passive-node__tooltip-meta">1단계 미완료 — 파워 전달 불가</p>
-        )}
-        {isVoid && (
-          <p className="passive-node__tooltip-meta">링크·파워 없음 (배치용)</p>
-        )}
-        {data.kind !== 'initial' && data.kind !== 'void' && (
-          <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
-        )}
-        {bandCount > 0 && (
-          <p className="passive-node__tooltip-meta">
-            단계 {done}/{stages.length} 완료
-          </p>
-        )}
-        {active && powered && (
-          <p className="passive-node__tooltip-meta">
-            {active.label}: {stageLoggedCount(active)}/{active.goal}
-          </p>
-        )}
-      </div>
+      {!isStealth && (
+        <div className="passive-node__tooltip" role="tooltip">
+          <p className="passive-node__tooltip-title">{data.label}</p>
+          <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
+          {!powered && data.kind !== 'initial' && (
+            <p className="passive-node__tooltip-meta">파워 미공급</p>
+          )}
+          {powered && !canRelay && data.kind !== 'initial' && bandCount > 0 && (
+            <p className="passive-node__tooltip-meta">1단계 미완료 — 파워 전달 불가</p>
+          )}
+          {data.kind !== 'initial' && (
+            <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
+          )}
+          {bandCount > 0 && (
+            <p className="passive-node__tooltip-meta">
+              단계 {done}/{stages.length} 완료
+            </p>
+          )}
+          {active && powered && (
+            <p className="passive-node__tooltip-meta">
+              {active.label}: {stageLoggedCount(active)}/{active.goal}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

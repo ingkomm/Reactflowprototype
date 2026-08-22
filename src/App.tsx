@@ -41,8 +41,10 @@ import {
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
   getOrderedOrbitSatellites,
+  isMasteryKind,
   isMasteryOrbitLocked,
   isOrbitMemberKind,
+  isStealthPassiveKind,
   layoutMasteryOrbit,
   ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
@@ -81,16 +83,18 @@ function createPassiveData(
   return {
     label,
     kind,
-    stages: extras.stages ?? (kind === 'initial' || kind === 'void' ? [] : [createStage(1)]),
+    stages:
+      extras.stages ??
+      (kind === 'initial' || isStealthPassiveKind(kind) ? [] : [createStage(1)]),
     classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
-    ...(kind === 'mastery'
+    ...(isMasteryKind(kind)
       ? {
           orbitRadius: extras.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: extras.orbitOrder ?? [],
           orbitLocked: extras.orbitLocked ?? false,
         }
-      : kind === 'initial' || kind === 'void'
+      : kind === 'initial' || isStealthPassiveKind(kind)
         ? {}
         : { masteryId: extras.masteryId ?? null }),
   }
@@ -164,13 +168,13 @@ function buildPastedNode(
     kind,
     stages,
     classId: source.classId,
-    ...(kind === 'mastery'
+    ...(isMasteryKind(kind)
       ? {
           orbitRadius: source.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: [],
         }
-      : kind === 'initial' || kind === 'void'
+      : kind === 'initial' || isStealthPassiveKind(kind)
         ? {}
         : { masteryId: null }),
   }
@@ -195,10 +199,10 @@ function resolveMasteryPair(
   const sourceData = source.data as PassiveNodeData
   const targetData = target.data as PassiveNodeData
 
-  if (sourceData.kind === 'mastery' && isOrbitMemberKind(targetData.kind)) {
+  if (isMasteryKind(sourceData.kind) && isOrbitMemberKind(targetData.kind)) {
     return { mastery: source, satellite: target }
   }
-  if (targetData.kind === 'mastery' && isOrbitMemberKind(sourceData.kind)) {
+  if (isMasteryKind(targetData.kind) && isOrbitMemberKind(sourceData.kind)) {
     return { mastery: target, satellite: source }
   }
   return null
@@ -612,7 +616,7 @@ export default function App() {
   }, [nodes, selectedData])
 
   const orbitMembers = useMemo(() => {
-    if (!selectedNode || selectedData?.kind !== 'mastery') return []
+    if (!selectedNode || !selectedData || !isMasteryKind(selectedData.kind)) return []
     return getOrderedOrbitSatellites(nodes, selectedNode.id).map((sat, index) => {
       const data = sat.data as PassiveNodeData
       return {
@@ -705,7 +709,7 @@ export default function App() {
             draggable: true,
           }
         }
-        if (oldMasteryId && node.id === oldMasteryId && data.kind === 'mastery') {
+        if (oldMasteryId && node.id === oldMasteryId && isMasteryKind(data.kind)) {
           return {
             ...node,
             data: {
@@ -721,7 +725,7 @@ export default function App() {
       next = next.map((node) => {
         if (node.id !== masteryId) return node
         const data = node.data as PassiveNodeData
-        if (data.kind !== 'mastery') return node
+        if (!isMasteryKind(data.kind)) return node
         return { ...node, data: { ...data, orbitOrder: order } }
       })
 
@@ -926,7 +930,7 @@ export default function App() {
       const affectedMasteries = new Set<string>()
 
       if (prev.masteryId) affectedMasteries.add(prev.masteryId)
-      if (prev.kind === 'mastery' && kind !== 'mastery') affectedMasteries.add(nodeId)
+      if (isMasteryKind(prev.kind) && !isMasteryKind(kind)) affectedMasteries.add(nodeId)
 
       commit()
       setNodes((nds) => {
@@ -938,25 +942,25 @@ export default function App() {
               label: data.label,
               kind,
               stages:
-                kind === 'initial' || kind === 'void'
+                kind === 'initial' || isStealthPassiveKind(kind)
                   ? []
                   : data.stages.length > 0
                     ? data.stages
                     : [createStage(1)],
               classId: resolvePassiveClass(classes, data.classId, kind).id,
-              ...(kind === 'mastery'
+              ...(isMasteryKind(kind)
                 ? {
                     orbitRadius: data.orbitRadius ?? DEFAULT_ORBIT_RADIUS,
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
-                    orbitOrder: [],
+                    orbitOrder: isMasteryKind(prev.kind) ? (data.orbitOrder ?? []) : [],
                     orbitLocked: data.orbitLocked ?? false,
                     masteryId: null,
                   }
-                : kind === 'initial' || kind === 'void'
+                : kind === 'initial' || isStealthPassiveKind(kind)
                   ? {}
                   : {
                       masteryId:
-                        isOrbitMemberKind(kind) && prev.kind !== 'mastery'
+                        isOrbitMemberKind(kind) && !isMasteryKind(prev.kind)
                           ? data.masteryId ?? null
                           : null,
                     }),
@@ -964,14 +968,14 @@ export default function App() {
             return { ...node, data: nextData }
           }
 
-          if (prev.kind === 'mastery' && kind !== 'mastery' && data.masteryId === nodeId) {
+          if (isMasteryKind(prev.kind) && !isMasteryKind(kind) && data.masteryId === nodeId) {
             return { ...node, data: { ...data, masteryId: null }, draggable: true }
           }
 
           if (
             prev.masteryId &&
             node.id === prev.masteryId &&
-            data.kind === 'mastery' &&
+            isMasteryKind(data.kind) &&
             !isOrbitMemberKind(kind)
           ) {
             return {
@@ -987,7 +991,7 @@ export default function App() {
         })
 
         for (const masteryId of affectedMasteries) {
-          if (prev.kind === 'mastery' && kind !== 'mastery' && masteryId === nodeId) continue
+          if (isMasteryKind(prev.kind) && !isMasteryKind(kind) && masteryId === nodeId) continue
           next = layoutMasteryOrbit(next, masteryId)
         }
         return stack(next)
@@ -1100,7 +1104,7 @@ export default function App() {
   const onNodeDrag = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const data = node.data as PassiveNodeData
-      if (data.kind !== 'mastery') return
+      if (!isMasteryKind(data.kind)) return
       const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
       setNodes((nds) => {
         const synced = nds.map((n) =>
@@ -1116,7 +1120,7 @@ export default function App() {
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const data = node.data as PassiveNodeData
 
-      if (data.kind === 'mastery') {
+      if (isMasteryKind(data.kind)) {
         setNodes((nds) => {
           const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
           const synced = nds.map((n) => (n.id === node.id ? { ...n, position } : n))
@@ -1166,7 +1170,7 @@ export default function App() {
                   const pos = gridSnapEnabled ? snapNodeTopLeft(n.position) : n.position
                   return { ...n, position: pos, data: { ...d, masteryId: null }, draggable: true }
                 }
-                if (n.id === currentMasteryId && d.kind === 'mastery') {
+                if (n.id === currentMasteryId && isMasteryKind(d.kind)) {
                   return {
                     ...n,
                     data: {
@@ -1197,7 +1201,7 @@ export default function App() {
                       draggable: true,
                     }
                   }
-                  if (n.id === other.mastery.id && d.kind === 'mastery') {
+                  if (n.id === other.mastery.id && isMasteryKind(d.kind)) {
                     return { ...n, data: { ...d, orbitOrder: order } }
                   }
                   return n
@@ -1234,7 +1238,7 @@ export default function App() {
                 draggable: true,
               }
             }
-            if (n.id === nearest.mastery.id && d.kind === 'mastery') {
+            if (n.id === nearest.mastery.id && isMasteryKind(d.kind)) {
               return { ...n, data: { ...d, orbitOrder: order } }
             }
             return n

@@ -214,13 +214,14 @@ export const NODE_ICONS: IconDef[] = [
 ]
 
 export const DEFAULT_ICON_ID_BY_KIND: Record<
-  'initial' | 'small' | 'notable' | 'mastery' | 'void',
+  'initial' | 'small' | 'notable' | 'mastery' | 'voidMastery' | 'void',
   string
 > = {
   initial: 'tr-bolt',
   small: 'tr-target',
   notable: 'tr-star',
   mastery: 'tr-shield',
+  voidMastery: 'tr-shield',
   void: 'fo-layers',
 }
 

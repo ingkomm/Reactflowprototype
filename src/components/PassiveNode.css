@@ -66,11 +66,18 @@
   --accent: #6a7580;
 }
 
-.passive-node--void .passive-node__halo {
+.passive-node--voidMastery {
+  --node-size: 76px;
+  --ring: transparent;
+  --core: transparent;
+  --accent: #6a7580;
+}
+
+.passive-node.is-stealth .passive-node__halo {
   display: none;
 }
 
-.passive-node--void .passive-node__ring {
+.passive-node.is-stealth .passive-node__ring {
   background: transparent;
   border: none;
   box-shadow: none;
@@ -78,18 +85,19 @@
   transition: opacity 0.15s ease, border-color 0.15s ease;
 }
 
-.passive-node--void.is-unpowered .passive-node__ring {
+.passive-node.is-stealth.is-unpowered .passive-node__ring {
   background: transparent;
   box-shadow: none;
 }
 
-.passive-node--void:hover .passive-node__ring,
-.passive-node--void.is-selected .passive-node__ring {
+.passive-node.is-stealth:hover .passive-node__ring,
+.passive-node.is-stealth.is-selected .passive-node__ring,
+.passive-node.is-stealth.is-ambient-visible .passive-node__ring {
   opacity: 1;
   border: 1px dashed color-mix(in srgb, #9aa8b5 14%, transparent);
 }
 
-.passive-node--void .passive-node__title {
+.passive-node.is-stealth .passive-node__title {
   opacity: 0;
   visibility: hidden;
   color: #8a949e;
@@ -104,19 +112,32 @@
   transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
-.passive-node--void:hover .passive-node__title,
-.passive-node--void.is-selected .passive-node__title {
+.passive-node--voidMastery .passive-node__title {
+  font-size: 0.78rem;
+  font-weight: 750;
+  max-width: min(12em, 168px);
+}
+
+.passive-node.is-stealth:hover .passive-node__title,
+.passive-node.is-stealth.is-selected .passive-node__title,
+.passive-node.is-stealth.is-ambient-visible .passive-node__title {
   opacity: 1;
   visibility: visible;
 }
 
-.passive-node--void .passive-node__tooltip {
+.passive-node.is-stealth .passive-node__tooltip {
   display: none;
 }
 
-.passive-node--void:hover .passive-node__tooltip,
-.passive-node--void.is-selected:hover .passive-node__tooltip {
-  display: none;
+.passive-node.is-stealth .passive-node__orbit {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.passive-node.is-stealth:hover .passive-node__orbit,
+.passive-node.is-stealth.is-selected .passive-node__orbit,
+.passive-node.is-stealth.is-ambient-visible .passive-node__orbit {
+  opacity: 1;
 }
 
 .passive-node.is-unpowered .passive-node__ring {

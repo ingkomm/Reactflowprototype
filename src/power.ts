@@ -4,8 +4,10 @@ import type { PassiveNodeData } from './types'
 import { isStageComplete } from './stage'
 import {
   getOrderedOrbitSatellites,
+  isMasteryKind,
   isOrbitMemberKind,
   isSatelliteKind,
+  isStealthPassiveKind,
   shareSameOrbit,
 } from './orbit'
 
@@ -23,14 +25,14 @@ function isMastery(data: PassiveNodeData) {
   return data.kind === 'mastery'
 }
 
-function isVoid(data: PassiveNodeData) {
-  return data.kind === 'void'
+function isStealth(data: PassiveNodeData) {
+  return isStealthPassiveKind(data.kind)
 }
 
 /** At least one stage band must be complete before power flows onward. */
 export function canTransmitPower(data: PassiveNodeData): boolean {
   if (data.kind === 'initial') return true
-  if (isVoid(data)) return false
+  if (isStealth(data)) return false
   if (data.stages.length === 0) return false
   return data.stages.some(isStageComplete)
 }
@@ -77,7 +79,7 @@ export function computePoweredNodeIds(
         if (!canTransmitPower(fromData)) continue
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
-        if (isVoid(toData)) continue
+        if (isStealth(toData)) continue
         if (!powered.has(to.id)) {
           powered.add(to.id)
           changed = true
@@ -124,7 +126,7 @@ export function classifyPassiveConnection(
   const sd = source.data as PassiveNodeData
   const td = target.data as PassiveNodeData
 
-  if (isVoid(sd) || isVoid(td)) return null
+  if (isStealth(sd) || isStealth(td)) return null
 
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
@@ -133,19 +135,19 @@ export function classifyPassiveConnection(
   }
 
   if (
-    (sd.kind === 'notable' && isMastery(td)) ||
-    (isMastery(sd) && td.kind === 'notable')
+    (sd.kind === 'notable' && isMasteryKind(td.kind) && td.kind === 'mastery') ||
+    (isMasteryKind(sd.kind) && sd.kind === 'mastery' && td.kind === 'notable')
   ) {
     const notable = sd.kind === 'notable' ? sd : td
-    const mastery = isMastery(sd) ? source : target
+    const mastery = sd.kind === 'mastery' ? source : target
     if (notable.masteryId === mastery.id) return 'center'
     return null
   }
 
-  if (isMastery(sd) && isOrbitMemberKind(td.kind)) {
+  if (isMasteryKind(sd.kind) && isOrbitMemberKind(td.kind)) {
     return 'attach'
   }
-  if (isMastery(td) && isOrbitMemberKind(sd.kind)) {
+  if (isMasteryKind(td.kind) && isOrbitMemberKind(sd.kind)) {
     return 'attach'
   }
 

@@ -7,7 +7,17 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
   small: 48,
   notable: 68,
   mastery: 76,
+  voidMastery: 76,
   void: 36,
+}
+
+export function isMasteryKind(kind: PassiveKind) {
+  return kind === 'mastery' || kind === 'voidMastery'
+}
+
+/** Void Node / Void Master — no icon, bands, links, or power. */
+export function isStealthPassiveKind(kind: PassiveKind) {
+  return kind === 'void' || kind === 'voidMastery'
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180
@@ -144,8 +154,8 @@ export function isSameOrbitNotableMasteryLink(
   sourceId: string,
   targetId: string,
 ) {
-  if (sd.kind === 'notable' && td.kind === 'mastery' && sd.masteryId === targetId) return true
-  if (td.kind === 'notable' && sd.kind === 'mastery' && td.masteryId === sourceId) return true
+  if (sd.kind === 'notable' && isMasteryKind(td.kind) && td.kind === 'mastery' && sd.masteryId === targetId) return true
+  if (td.kind === 'notable' && isMasteryKind(sd.kind) && sd.kind === 'mastery' && td.masteryId === sourceId) return true
   return false
 }
 
@@ -221,7 +231,7 @@ export function findMasteryOrbitRingAt(
   let best: { masteryId: string; pointerDeg: number; err: number } | null = null
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (data.kind !== 'mastery') continue
+    if (!isMasteryKind(data.kind)) continue
     const c = nodeCenter(node, nodes)
     const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
     const dist = Math.hypot(flowPoint.x - c.x, flowPoint.y - c.y)
@@ -356,7 +366,7 @@ export function layoutMasteryOrbit(
 ): PassiveFlowNode[] {
   const synced = syncOrbitOrder(nodes, masteryId)
   const mastery = synced.find((n) => n.id === masteryId)
-  if (!mastery || (mastery.data as PassiveNodeData).kind !== 'mastery') {
+  if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) {
     return synced
   }
 
@@ -405,7 +415,7 @@ export function withMasteryDragFlags(
   return nodes.map((node) => {
     const data = node.data as PassiveNodeData
     // Mastery orbits are large; keep them under satellite titles/links visually.
-    const baseZ = data.kind === 'mastery' ? 1 : 6
+    const baseZ = isMasteryKind(data.kind) ? 1 : 6
     return {
       ...node,
       dragHandle: '.node-drag-handle',
@@ -433,7 +443,7 @@ export function removeNodesAndRelayout(
     if (!ids.has(node.id)) continue
     const data = node.data as PassiveNodeData
     if (data.masteryId) affectedMasteries.add(data.masteryId)
-    if (data.kind === 'mastery') affectedMasteries.add(node.id)
+    if (isMasteryKind(data.kind)) affectedMasteries.add(node.id)
   }
 
   let next = nodes
@@ -447,7 +457,7 @@ export function removeNodesAndRelayout(
           draggable: true,
         }
       }
-      if (data.kind === 'mastery') {
+      if (isMasteryKind(data.kind)) {
         const pruned = (data.orbitOrder ?? []).filter((id) => !ids.has(id))
         if (pruned.length !== (data.orbitOrder ?? []).length) {
           affectedMasteries.add(node.id)
@@ -508,7 +518,7 @@ export function findNearestMastery(nodes: PassiveFlowNode[], satellite: PassiveF
   let best: { mastery: PassiveFlowNode; dist: number; radius: number } | null = null
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (data.kind !== 'mastery') continue
+    if (!isMasteryKind(data.kind)) continue
     const dist = distanceBetweenCenters(satellite, node, nodes)
     const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
     if (!best || dist < best.dist) {

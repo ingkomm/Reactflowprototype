@@ -16,6 +16,7 @@ export const DEFAULT_CLASS_ID_BY_KIND: Record<PassiveKind, string> = {
   mastery: 'm-default',
   notable: 'n-default',
   small: 's-default',
+  voidMastery: 'vm-default',
   void: 'v-default',
 }
 
@@ -141,6 +142,7 @@ export function buildSeedClasses(): PassiveClass[] {
     },
 
     buildDefaultClass('void', 'Void'),
+    buildDefaultClass('voidMastery', 'Void Master'),
   ]
 }
 
