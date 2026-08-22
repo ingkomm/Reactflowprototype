@@ -13,9 +13,9 @@ type Props = {
 
 function flareLayers(nodeR: number) {
   return {
-    outer: nodeR + 14,
-    mid: nodeR + 8,
-    inner: nodeR + 3,
+    outer: nodeR + 3,
+    mid: nodeR + 1.5,
+    inner: nodeR + 0.5,
   }
 }
 
@@ -71,8 +71,8 @@ function radialStops(prefix: string, gradId: string, cx: number, cy: number, nod
         cy={cy}
         r={layers.outer}
       >
-        <stop offset="0%" stopColor="#d8fff8" stopOpacity="0.5" />
-        <stop offset="42%" stopColor="#9fe8dd" stopOpacity="0.18" />
+        <stop offset="0%" stopColor="#d8fff8" stopOpacity="0.28" />
+        <stop offset="42%" stopColor="#9fe8dd" stopOpacity="0.1" />
         <stop offset="100%" stopColor="#5ec4b4" stopOpacity="0" />
       </radialGradient>
       <radialGradient
@@ -82,8 +82,8 @@ function radialStops(prefix: string, gradId: string, cx: number, cy: number, nod
         cy={cy}
         r={layers.mid}
       >
-        <stop offset="0%" stopColor="#eafffb" stopOpacity="0.65" />
-        <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.22" />
+        <stop offset="0%" stopColor="#eafffb" stopOpacity="0.35" />
+        <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.12" />
         <stop offset="100%" stopColor="#7fd4c8" stopOpacity="0" />
       </radialGradient>
       <radialGradient
@@ -93,8 +93,8 @@ function radialStops(prefix: string, gradId: string, cx: number, cy: number, nod
         cy={cy}
         r={layers.inner}
       >
-        <stop offset="0%" stopColor="#f4fffd" stopOpacity="0.45" />
-        <stop offset="70%" stopColor="#9fe8dd" stopOpacity="0.12" />
+        <stop offset="0%" stopColor="#f4fffd" stopOpacity="0.25" />
+        <stop offset="70%" stopColor="#9fe8dd" stopOpacity="0.08" />
         <stop offset="100%" stopColor="#7fd4c8" stopOpacity="0" />
       </radialGradient>
     </>
@@ -127,7 +127,7 @@ export function PoweredLinkVisual({
         >
           <stop offset="0%" stopColor="#b8f5ec" stopOpacity="0.38" />
           <stop offset="55%" stopColor="#9fe8dd" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#b8f5ec" stopOpacity="0.52" />
+          <stop offset="100%" stopColor="#b8f5ec" stopOpacity="0.42" />
         </linearGradient>
         {radialStops('tgt', gradId, tx, ty, targetFlareR)}
       </defs>

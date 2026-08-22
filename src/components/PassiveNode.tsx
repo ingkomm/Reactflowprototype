@@ -70,11 +70,27 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = powered && bandCount > 0 ? 12 + bandLevel * 10 : 0
-  const glowAlpha =
-    powered && bandCount > 0 ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
-  const haloStrength =
-    powered && bandCount > 0 ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
+  const glowBlur = powered
+    ? isMastery
+      ? 20 + bandLevel * 12
+      : bandCount > 0
+        ? 12 + bandLevel * 10
+        : 0
+    : 0
+  const glowAlpha = powered
+    ? isMastery
+      ? Math.min(0.98, Math.max(0.44, 0.34 + bandLevel * 0.18))
+      : bandCount > 0
+        ? Math.min(0.95, 0.28 + bandLevel * 0.16)
+        : 0
+    : 0
+  const haloStrength = powered
+    ? isMastery
+      ? Math.min(0.96, Math.max(0.4, 0.32 + bandLevel * 0.2))
+      : bandCount > 0
+        ? Math.min(0.92, 0.28 + bandLevel * 0.18)
+        : 0
+    : 0
 
   const ordered = sortedStages(stages)
   const done = completedStageCount(stages)

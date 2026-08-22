@@ -64,6 +64,7 @@ import {
   withMasteryDragFlags,
 } from './orbit'
 import { OrbitRotateController } from './components/OrbitRotateController'
+import { MiniMapCircleNode } from './components/MiniMapCircleNode'
 import { ZoomKeyboardController } from './components/ZoomKeyboardController'
 import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { VoidHighlightProvider } from './VoidHighlightContext'
@@ -1586,6 +1587,7 @@ export default function App() {
             <MiniMap
               pannable
               zoomable
+              nodeComponent={MiniMapCircleNode}
               nodeColor={(node) => {
                 const d = node.data as PassiveNodeData | undefined
                 if (!d?.kind) return '#9B9A97'

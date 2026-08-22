@@ -42,16 +42,16 @@
 }
 
 .powered-link__flare--outer {
-  filter: blur(10px);
-  opacity: 0.28;
+  filter: blur(3px);
+  opacity: 0.14;
 }
 
 .powered-link__flare--mid {
-  filter: blur(5px);
-  opacity: 0.38;
+  filter: blur(1.5px);
+  opacity: 0.18;
 }
 
 .powered-link__flare--inner {
-  filter: blur(2px);
-  opacity: 0.22;
+  filter: blur(0.5px);
+  opacity: 0.12;
 }
