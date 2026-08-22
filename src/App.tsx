@@ -39,18 +39,21 @@ import {
   applySatelliteOrbitPlacement,
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
-  getOrderedOrbitSatellites,
+  getOrderedTierSatellites,
+  getSatelliteOrbitTier,
   isMasteryKind,
   isMasteryOrbitLocked,
   isOrbitMemberKind,
   isStealthPassiveKind,
   layoutMasteryOrbit,
   masteryOuterOrbitRadius,
+  mergeOrbitOrderFromTiers,
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
-  orbitOrderByDropAngle,
+  removeSatelliteFromOrbitOrders,
+  setMasteryTierOrbitOrder,
   removeNodesAndRelayout,
   snapOrbitAngle,
   withMasteryDragFlags,
@@ -75,6 +78,7 @@ function createPassiveData(
       | 'orbitTierCount'
       | 'orbitStartAngle'
       | 'orbitOrder'
+      | 'orbitOrderByTier'
       | 'orbitLocked'
       | 'masteryId'
       | 'orbitTier'
@@ -95,6 +99,7 @@ function createPassiveData(
       ? {
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitOrder: extras.orbitOrder ?? [],
+          orbitOrderByTier: extras.orbitOrderByTier,
           orbitLocked: extras.orbitLocked ?? false,
           orbitTierCount: extras.orbitTierCount ?? 1,
         }
@@ -255,13 +260,11 @@ function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
 
 const danceMasteryId = 'mastery-dance'
 const gymMasteryId = 'mastery-gym'
-const danceOrbitOrder = [
-  'notable-hiphop',
-  'notable-kpop',
-  'small-basic',
-  'small-footwork',
-  'small-stretch',
-]
+const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
+  1: ['notable-hiphop', 'notable-kpop', 'small-basic'],
+  2: ['small-footwork', 'small-stretch'],
+}
+const danceOrbitOrder = mergeOrbitOrderFromTiers(2, danceOrbitOrderByTier)
 const gymOrbitOrder = [
   'notable-strength',
   'notable-cardio',
@@ -293,6 +296,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         ]),
         orbitStartAngle: -90,
         orbitOrder: danceOrbitOrder,
+        orbitOrderByTier: danceOrbitOrderByTier,
         orbitTierCount: 2,
         classId: 'm-dance',
       }),
@@ -308,6 +312,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '프리스타일', goal: 4, logged: 2 },
         ]),
         masteryId: danceMasteryId,
+        orbitTier: 1,
         classId: 'n-hiphop',
       }),
     },
@@ -322,6 +327,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
           { label: '포인트 안무', goal: 3, logged: 3 },
         ]),
         masteryId: danceMasteryId,
+        orbitTier: 1,
         classId: 'n-kpop',
       }),
     },
@@ -333,6 +339,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '기본기', {
         stages: defaultStagesForSeed([{ label: '아이솔레이션', goal: 4, logged: 4 }]),
         masteryId: danceMasteryId,
+        orbitTier: 1,
         classId: 's-basic',
       }),
     },
@@ -344,6 +351,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '풋워크', {
         stages: defaultStagesForSeed([{ label: '그루브', goal: 3, logged: 2 }]),
         masteryId: danceMasteryId,
+        orbitTier: 2,
         classId: 's-footwork',
       }),
     },
@@ -355,6 +363,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '스트레칭', {
         stages: defaultStagesForSeed([{ label: '유연성', goal: 3, logged: 1 }]),
         masteryId: danceMasteryId,
+        orbitTier: 2,
         classId: 's-stretch',
       }),
     },
@@ -461,7 +470,8 @@ const initialEdges: Edge[] = [
   passiveLinkEdge('initial-main', 'small-legs'),
   passiveLinkEdge('notable-hiphop', danceMasteryId),
   passiveLinkEdge('notable-strength', gymMasteryId),
-  ...orbitAdjacentEdges(danceOrbitOrder, danceMasteryId),
+  ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], danceMasteryId),
+  ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], danceMasteryId),
   ...orbitAdjacentEdges(gymOrbitOrder, gymMasteryId),
 ]
 
@@ -646,19 +656,31 @@ export default function App() {
 
   const orbitMembers = useMemo(() => {
     if (!selectedNode || !selectedData || !isMasteryKind(selectedData.kind)) return []
-    return getOrderedOrbitSatellites(nodes, selectedNode.id).map((sat, index) => {
-      const data = sat.data as PassiveNodeData
-      return {
-        id: sat.id,
-        label: data.label,
-        kind: data.kind,
-        order: index + 1,
-        tier: normalizeOrbitTier(
-          data.orbitTier,
-          normalizeOrbitTierCount(selectedData.orbitTierCount),
-        ),
-      }
-    })
+    const tierCount = normalizeOrbitTierCount(selectedData.orbitTierCount)
+    const members: {
+      id: string
+      label: string
+      kind: PassiveKind
+      order: number
+      tier: OrbitTier
+      tierSize: number
+    }[] = []
+    for (let t = 1; t <= tierCount; t++) {
+      const tier = t as OrbitTier
+      const tierSats = getOrderedTierSatellites(nodes, selectedNode.id, tier)
+      tierSats.forEach((sat, index) => {
+        const data = sat.data as PassiveNodeData
+        members.push({
+          id: sat.id,
+          label: data.label,
+          kind: data.kind,
+          order: index + 1,
+          tier,
+          tierSize: tierSats.length,
+        })
+      })
+    }
+    return members
   }, [nodes, selectedData?.kind, selectedData?.orbitTierCount, selectedNode])
 
   const selectedLinks = useMemo(() => {
@@ -745,10 +767,7 @@ export default function App() {
         if (oldMasteryId && node.id === oldMasteryId && isMasteryKind(data.kind)) {
           return {
             ...node,
-            data: {
-              ...data,
-              orbitOrder: (data.orbitOrder ?? []).filter((id) => id !== satelliteId),
-            },
+            data: removeSatelliteFromOrbitOrders(data, satelliteId),
           }
         }
         return node
@@ -826,10 +845,7 @@ export default function App() {
           const data = node.data as PassiveNodeData
           return {
             ...node,
-            data: {
-              ...data,
-              orbitOrder: (data.orbitOrder ?? []).filter((id) => id !== satelliteId),
-            },
+            data: removeSatelliteFromOrbitOrders(data, satelliteId),
           }
         })
         if (!oldMasteryId) return stack(next)
@@ -888,6 +904,20 @@ export default function App() {
             data: { ...data, orbitTier: normalizeOrbitTier(tier, tierCount) },
           }
         })
+        const masteryNode = next.find((n) => n.id === masteryId)
+        if (masteryNode) {
+          const md = masteryNode.data as PassiveNodeData
+          const oldTier = getSatelliteOrbitTier(nds, masteryId, satelliteId)
+          const newTier = normalizeOrbitTier(tier, tierCount)
+          if (oldTier !== newTier) {
+            let mdNext = removeSatelliteFromOrbitOrders(md, satelliteId)
+            const newTierOrder = [...(mdNext.orbitOrderByTier?.[newTier] ?? []), satelliteId]
+            mdNext = setMasteryTierOrbitOrder(mdNext, newTier, newTierOrder)
+            next = next.map((node) =>
+              node.id === masteryId ? { ...node, data: mdNext } : node,
+            )
+          }
+        }
         next = layoutMasteryOrbit(next, masteryId)
         const stacked = stack(next)
         setEdges((eds) => sanitizeEdges(stacked, eds))
@@ -921,14 +951,15 @@ export default function App() {
         const mastery = nds.find((n) => n.id === masteryId)
         if (!mastery) return nds
         const data = mastery.data as PassiveNodeData
-        const ordered = getOrderedOrbitSatellites(nds, masteryId).map((s) => s.id)
+        const tier = getSatelliteOrbitTier(nds, masteryId, satelliteId)
+        const ordered = getOrderedTierSatellites(nds, masteryId, tier).map((s) => s.id)
         const without = ordered.filter((id) => id !== satelliteId)
         const insertAt = Math.max(0, Math.min(without.length, order1Based - 1))
         without.splice(insertAt, 0, satelliteId)
 
         const next = nds.map((node) =>
           node.id === masteryId
-            ? { ...node, data: { ...data, orbitOrder: without } }
+            ? { ...node, data: setMasteryTierOrbitOrder(data, tier, without) }
             : node,
         )
         return stack(layoutMasteryOrbit(next, masteryId))
@@ -1049,6 +1080,9 @@ export default function App() {
                 ? {
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
                     orbitOrder: isMasteryKind(prev.kind) ? (data.orbitOrder ?? []) : [],
+                    orbitOrderByTier: isMasteryKind(prev.kind)
+                      ? data.orbitOrderByTier
+                      : undefined,
                     orbitLocked: data.orbitLocked ?? false,
                     orbitTierCount: isMasteryKind(prev.kind)
                       ? normalizeOrbitTierCount(data.orbitTierCount)
@@ -1105,10 +1139,7 @@ export default function App() {
           ) {
             return {
               ...node,
-              data: {
-                ...data,
-                orbitOrder: (data.orbitOrder ?? []).filter((id) => id !== nodeId),
-              },
+              data: removeSatelliteFromOrbitOrders(data, nodeId),
             }
           }
 
@@ -1318,10 +1349,7 @@ export default function App() {
                 if (n.id === currentMasteryId && isMasteryKind(d.kind)) {
                   return {
                     ...n,
-                    data: {
-                      ...d,
-                      orbitOrder: (d.orbitOrder ?? []).filter((id) => id !== satellite.id),
-                    },
+                    data: removeSatelliteFromOrbitOrders(d, satellite.id),
                   }
                 }
                 return n
@@ -1336,7 +1364,6 @@ export default function App() {
                 !isMasteryOrbitLocked(next, other.mastery.id) &&
                 other.dist <= other.radius + ORBIT_ATTACH_SLACK
               ) {
-                const order = orbitOrderByDropAngle(next, other.mastery.id, freeSat.id)
                 next = next.map((n) => {
                   const d = n.data as PassiveNodeData
                   if (n.id === freeSat.id) {
@@ -1346,11 +1373,9 @@ export default function App() {
                       draggable: true,
                     }
                   }
-                  if (n.id === other.mastery.id && isMasteryKind(d.kind)) {
-                    return { ...n, data: { ...d, orbitOrder: order } }
-                  }
                   return n
                 })
+                next = applySatelliteOrbitPlacement(next, other.mastery.id, freeSat.id)
                 next = layoutMasteryOrbit(next, other.mastery.id)
               }
 

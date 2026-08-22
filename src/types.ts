@@ -76,6 +76,8 @@ export type PassiveNodeData = {
   orbitStartAngle?: number
   /** Mastery / Void Master: satellite node ids in clockwise orbit order (1-based UI). */
   orbitOrder?: string[]
+  /** Mastery / Void Master: per-tier clockwise order (independent spacing per ring). */
+  orbitOrderByTier?: Partial<Record<OrbitTier, string[]>>
   /** Mastery / Void Master: when true, orbit membership count/order cannot change (rotation still allowed). */
   orbitLocked?: boolean
   /** Small/Notable/Void only: the single Mastery this passive belongs to. */

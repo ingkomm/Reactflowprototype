@@ -35,6 +35,7 @@ export type OrbitMember = {
   kind: PassiveKind
   order: number
   tier: OrbitTier
+  tierSize: number
 }
 
 export type LinkItem = {
@@ -423,11 +424,13 @@ export function Inspector({
                         onChangeOrbitOrder(nodeId, member.id, Number(e.target.value))
                       }
                     >
-                      {orbitMembers.map((_, i) => (
-                        <option key={i + 1} value={i + 1}>
-                          #{i + 1}
-                        </option>
-                      ))}
+                      {orbitMembers
+                        .filter((m) => m.tier === member.tier)
+                        .map((_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            #{i + 1}
+                          </option>
+                        ))}
                     </select>
                     {orbitTierCount > 1 && (
                       <select

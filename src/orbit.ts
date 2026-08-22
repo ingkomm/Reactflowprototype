@@ -97,11 +97,11 @@ export function applySatelliteOrbitPlacement(
     return { ...node, data: { ...data, orbitTier: tier } }
   })
 
-  const order = orbitOrderByDropAngle(next, masteryId, satelliteId)
+  const { tier: orderTier, order } = orbitOrderByDropAngleInTier(next, masteryId, satelliteId)
   return next.map((node) => {
     if (node.id !== masteryId) return node
     const data = node.data as PassiveNodeData
-    return { ...node, data: { ...data, orbitOrder: order } }
+    return { ...node, data: setMasteryTierOrbitOrder(data, orderTier, order) }
   })
 }
 /** Degrees. -90 = top of the circle; layout advances clockwise. */
@@ -121,12 +121,107 @@ export function isVoidPassing(data: PassiveNodeData) {
   return data.kind === 'void' && Boolean(data.voidPassing)
 }
 
-/** Orbit order with passing void nodes removed (used for link adjacency). */
+/** Merge tier orders into flat orbitOrder (tier 1 → tier N). */
+export function mergeOrbitOrderFromTiers(
+  tierCount: OrbitTierCount,
+  byTier: Partial<Record<OrbitTier, string[]>> | undefined,
+): string[] {
+  const merged: string[] = []
+  for (let t = 1; t <= tierCount; t++) {
+    for (const id of byTier?.[t as OrbitTier] ?? []) {
+      merged.push(id)
+    }
+  }
+  return merged
+}
+
+/** Remove a satellite from flat and per-tier orbit orders on a mastery. */
+export function removeSatelliteFromOrbitOrders(
+  data: PassiveNodeData,
+  satelliteId: string,
+): PassiveNodeData {
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const byTier = { ...(data.orbitOrderByTier ?? {}) }
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    if (byTier[tier]) {
+      byTier[tier] = byTier[tier]!.filter((id) => id !== satelliteId)
+    }
+  }
+  return {
+    ...data,
+    orbitOrder: (data.orbitOrder ?? []).filter((id) => id !== satelliteId),
+    orbitOrderByTier: byTier,
+  }
+}
+
+/** Set clockwise order for one tier and refresh the merged flat order. */
+export function setMasteryTierOrbitOrder(
+  data: PassiveNodeData,
+  tier: OrbitTier,
+  order: string[],
+): PassiveNodeData {
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const normalizedTier = normalizeOrbitTier(tier, tierCount)
+  const byTier = { ...(data.orbitOrderByTier ?? {}) }
+  byTier[normalizedTier] = order
+  return {
+    ...data,
+    orbitOrderByTier: byTier,
+    orbitOrder: mergeOrbitOrderFromTiers(tierCount, byTier),
+  }
+}
+
+/** Resolve clockwise order for satellites on one tier ring. */
+export function getOrderedTierSatellites(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+): PassiveFlowNode[] {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return []
+
+  const data = mastery.data as PassiveNodeData
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const normalizedTier = normalizeOrbitTier(tier, tierCount)
+  const satellites = getOrbitSatellites(nodes, masteryId).filter((sat) => {
+    const sd = sat.data as PassiveNodeData
+    return normalizeOrbitTier(sd.orbitTier, tierCount) === normalizedTier
+  })
+  const byId = new Map(satellites.map((s) => [s.id, s]))
+  const ordered: PassiveFlowNode[] = []
+
+  const tierOrder = data.orbitOrderByTier?.[normalizedTier]
+  if (tierOrder && tierOrder.length > 0) {
+    for (const id of tierOrder) {
+      const sat = byId.get(id)
+      if (sat) {
+        ordered.push(sat)
+        byId.delete(id)
+      }
+    }
+  } else {
+    for (const id of data.orbitOrder ?? []) {
+      const sat = byId.get(id)
+      if (sat) {
+        ordered.push(sat)
+        byId.delete(id)
+      }
+    }
+  }
+  for (const sat of byId.values()) {
+    ordered.push(sat)
+  }
+  return ordered
+}
+
+/** Orbit order with passing void nodes removed (used for link adjacency on one tier). */
 export function getOrbitAdjacencyMembers(
   nodes: PassiveFlowNode[],
   masteryId: string,
+  tier: OrbitTier,
 ): PassiveFlowNode[] {
-  return getOrderedOrbitSatellites(nodes, masteryId).filter(
+  return getOrderedTierSatellites(nodes, masteryId, tier).filter(
     (sat) => !isVoidPassing(sat.data as PassiveNodeData),
   )
 }
@@ -144,7 +239,10 @@ export function areOrbitAdjacent(
   aId: string,
   bId: string,
 ): boolean {
-  const collapsed = getOrbitAdjacencyMembers(nodes, masteryId)
+  const tierA = getSatelliteOrbitTier(nodes, masteryId, aId)
+  const tierB = getSatelliteOrbitTier(nodes, masteryId, bId)
+  if (tierA !== tierB) return false
+  const collapsed = getOrbitAdjacencyMembers(nodes, masteryId, tierA)
   const ordered = collapsed.map((s) => s.id)
   const ia = ordered.indexOf(aId)
   const ib = ordered.indexOf(bId)
@@ -224,7 +322,7 @@ export function orbitLinkSpec(
   if (tierA !== tierB) return { kind: 'chord' }
 
   const orbitR = orbitTierRadius(tierCount, tierA)
-  const ordered = getOrderedOrbitSatellites(nodes, masteryId).map((s) => s.id)
+  const ordered = getOrderedTierSatellites(nodes, masteryId, tierA).map((s) => s.id)
   const ia = ordered.indexOf(sourceId)
   const ib = ordered.indexOf(targetId)
   const n = ordered.length
@@ -463,7 +561,7 @@ export function getOrbitSatellites(
   })
 }
 
-/** Resolve clockwise order from mastery.orbitOrder, appending any missing satellites. */
+/** All orbit satellites in tier order (tier 1 → tier N). */
 export function getOrderedOrbitSatellites(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -471,20 +569,10 @@ export function getOrderedOrbitSatellites(
   const mastery = nodes.find((n) => n.id === masteryId)
   if (!mastery) return []
 
-  const data = mastery.data as PassiveNodeData
-  const satellites = getOrbitSatellites(nodes, masteryId)
-  const byId = new Map(satellites.map((s) => [s.id, s]))
+  const tierCount = normalizeOrbitTierCount((mastery.data as PassiveNodeData).orbitTierCount)
   const ordered: PassiveFlowNode[] = []
-
-  for (const id of data.orbitOrder ?? []) {
-    const sat = byId.get(id)
-    if (sat) {
-      ordered.push(sat)
-      byId.delete(id)
-    }
-  }
-  for (const sat of byId.values()) {
-    ordered.push(sat)
+  for (let t = 1; t <= tierCount; t++) {
+    ordered.push(...getOrderedTierSatellites(nodes, masteryId, t as OrbitTier))
   }
   return ordered
 }
@@ -493,20 +581,37 @@ export function syncOrbitOrder(
   nodes: PassiveFlowNode[],
   masteryId: string,
 ): PassiveFlowNode[] {
-  const ordered = getOrderedOrbitSatellites(nodes, masteryId)
-  const orderIds = ordered.map((s) => s.id)
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return nodes
+
+  const data = mastery.data as PassiveNodeData
+  const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+  const byTier: Partial<Record<OrbitTier, string[]>> = {}
+  let changed = false
+
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    const orderIds = getOrderedTierSatellites(nodes, masteryId, tier).map((s) => s.id)
+    byTier[tier] = orderIds
+    const prev = data.orbitOrderByTier?.[tier] ?? []
+    if (prev.length !== orderIds.length || !prev.every((id, i) => id === orderIds[i])) {
+      changed = true
+    }
+  }
+
+  const flatOrder = mergeOrbitOrderFromTiers(tierCount, byTier)
+  const prevFlat = data.orbitOrder ?? []
+  if (
+    !changed &&
+    prevFlat.length === flatOrder.length &&
+    prevFlat.every((id, i) => id === flatOrder[i])
+  ) {
+    return nodes
+  }
 
   return nodes.map((node) => {
     if (node.id !== masteryId) return node
-    const data = node.data as PassiveNodeData
-    const prev = data.orbitOrder ?? []
-    if (
-      prev.length === orderIds.length &&
-      prev.every((id, i) => id === orderIds[i])
-    ) {
-      return node
-    }
-    return { ...node, data: { ...data, orbitOrder: orderIds } }
+    return { ...node, data: { ...data, orbitOrderByTier: byTier, orbitOrder: flatOrder } }
   })
 }
 
@@ -526,29 +631,32 @@ export function layoutMasteryOrbit(
   const startDeg = data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE
   const startRad = (startDeg * Math.PI) / 180
   const center = nodeCenter(mastery, synced)
-  const satellites = getOrderedOrbitSatellites(synced, masteryId)
+  const positioned = new Map<string, { x: number; y: number }>()
 
-  if (satellites.length === 0) {
-    return synced
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    const tierSatellites = getOrderedTierSatellites(synced, masteryId, tier)
+    if (tierSatellites.length === 0) continue
+
+    const radius = orbitTierRadius(tierCount, tier)
+    tierSatellites.forEach((sat, index) => {
+      const satData = sat.data as PassiveNodeData
+      const angle = startRad + (2 * Math.PI * index) / tierSatellites.length
+      const abs = positionFromCenter(
+        center.x + radius * Math.cos(angle),
+        center.y + radius * Math.sin(angle),
+        satData.kind,
+      )
+      positioned.set(
+        sat.id,
+        sat.parentId ? toParentRelative(abs, sat.parentId, synced) : abs,
+      )
+    })
   }
 
-  const positioned = new Map<string, { x: number; y: number }>()
-  satellites.forEach((sat, index) => {
-    const satData = sat.data as PassiveNodeData
-    const tier = normalizeOrbitTier(satData.orbitTier, tierCount)
-    const radius = orbitTierRadius(tierCount, tier)
-    const angle = startRad + (2 * Math.PI * index) / satellites.length
-    const kind = satData.kind
-    const abs = positionFromCenter(
-      center.x + radius * Math.cos(angle),
-      center.y + radius * Math.sin(angle),
-      kind,
-    )
-    positioned.set(
-      sat.id,
-      sat.parentId ? toParentRelative(abs, sat.parentId, synced) : abs,
-    )
-  })
+  if (positioned.size === 0) {
+    return synced
+  }
 
   return synced.map((node) => {
     const next = positioned.get(node.id)
@@ -611,10 +719,18 @@ export function removeNodesAndRelayout(
         }
       }
       if (isMasteryKind(data.kind)) {
-        const pruned = (data.orbitOrder ?? []).filter((id) => !ids.has(id))
-        if (pruned.length !== (data.orbitOrder ?? []).length) {
+        let nextData = data
+        for (const id of ids) {
+          if ((data.orbitOrder ?? []).includes(id)) {
+            nextData = removeSatelliteFromOrbitOrders(nextData, id)
+          }
+        }
+        if (
+          nextData.orbitOrder?.length !== (data.orbitOrder ?? []).length ||
+          JSON.stringify(nextData.orbitOrderByTier) !== JSON.stringify(data.orbitOrderByTier)
+        ) {
           affectedMasteries.add(node.id)
-          return { ...node, data: { ...data, orbitOrder: pruned } }
+          return { ...node, data: nextData }
         }
       }
       return node
@@ -681,16 +797,17 @@ export function findNearestMastery(nodes: PassiveFlowNode[], satellite: PassiveF
   return best
 }
 
-/** Insert satellite into clockwise orbit order using drop angle around mastery. */
-export function orbitOrderByDropAngle(
+/** Insert satellite into tier-local clockwise order using drop angle around mastery. */
+export function orbitOrderByDropAngleInTier(
   nodes: PassiveFlowNode[],
   masteryId: string,
   satelliteId: string,
-): string[] {
+): { tier: OrbitTier; order: string[] } {
   const mastery = nodes.find((n) => n.id === masteryId)
   const satellite = nodes.find((n) => n.id === satelliteId)
-  if (!mastery || !satellite) return [satelliteId]
+  if (!mastery || !satellite) return { tier: 1, order: [satelliteId] }
 
+  const tier = getSatelliteOrbitTier(nodes, masteryId, satelliteId)
   const mc = nodeCenter(mastery, nodes)
   const start =
     (((mastery.data as PassiveNodeData).orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) * Math.PI) /
@@ -703,7 +820,9 @@ export function orbitOrderByDropAngle(
     return rel
   }
 
-  const others = getOrderedOrbitSatellites(nodes, masteryId).filter((s) => s.id !== satelliteId)
+  const others = getOrderedTierSatellites(nodes, masteryId, tier).filter(
+    (s) => s.id !== satelliteId,
+  )
   const items = [
     ...others.map((o) => {
       const c = nodeCenter(o, nodes)
@@ -715,5 +834,18 @@ export function orbitOrderByDropAngle(
     })(),
   ]
   items.sort((a, b) => a.rel - b.rel)
-  return items.map((i) => i.id)
+  return { tier, order: items.map((i) => i.id) }
+}
+
+/** @deprecated Use orbitOrderByDropAngleInTier */
+export function orbitOrderByDropAngle(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+): string[] {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return [satelliteId]
+  const { tier, order } = orbitOrderByDropAngleInTier(nodes, masteryId, satelliteId)
+  const data = mastery.data as PassiveNodeData
+  return setMasteryTierOrbitOrder(data, tier, order).orbitOrder ?? order
 }
