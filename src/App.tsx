@@ -575,6 +575,24 @@ export default function App() {
     [nodes, edges],
   )
 
+  // Orbit links must stay adjacent-only (no skip links like A→C on A-B-C-D ring).
+  useEffect(() => {
+    setEdges((eds) => {
+      const next = eds.filter((e) => {
+        if (e.type !== 'orbit') return true
+        const edgeData = e.data as { masteryId?: string } | undefined
+        const source = nodes.find((n) => n.id === e.source)
+        const target = nodes.find((n) => n.id === e.target)
+        if (!source || !target) return false
+        const sd = source.data as PassiveNodeData
+        const masteryId = edgeData?.masteryId ?? sd.masteryId
+        if (!masteryId) return false
+        return areOrbitAdjacent(nodes, masteryId, e.source, e.target)
+      })
+      return next.length === eds.length ? eds : next
+    })
+  }, [nodes, setEdges])
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],

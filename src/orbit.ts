@@ -1,6 +1,6 @@
 import type { PassiveKind, PassiveNodeData } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import { outermostBandRadius } from './components/TrainingBands'
+import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
@@ -33,6 +33,71 @@ export function areOrbitAdjacent(
   if (n < 2) return false
   const diff = Math.abs(ia - ib)
   return diff === 1 || diff === n - 1
+}
+
+/** Outermost training-band edge radius from the satellite node center. */
+export function satelliteBandOuterRadius(data: PassiveNodeData): number {
+  const nodeSize = NODE_SIZE[data.kind]
+  const stageCount = data.stages?.length ?? 0
+  if (stageCount <= 0) return nodeSize / 2
+  return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2
+}
+
+/** Orbit link arc radius from mastery center — sits outside both endpoints' outer bands. */
+export const ORBIT_LINK_BAND_CLEARANCE = 6
+
+export function orbitLinkDrawRadius(
+  orbitRadius: number,
+  sourceData: PassiveNodeData,
+  targetData: PassiveNodeData,
+): number {
+  const outer = Math.max(
+    satelliteBandOuterRadius(sourceData),
+    satelliteBandOuterRadius(targetData),
+  )
+  return orbitRadius + outer + ORBIT_LINK_BAND_CLEARANCE
+}
+
+function orbitSlotAngle(masteryData: PassiveNodeData, index: number, count: number) {
+  const startRad =
+    ((masteryData.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE) * Math.PI) / 180
+  return startRad + (2 * Math.PI * index) / count
+}
+
+/** Short adjacent arc along orbit order; null when nodes are not clockwise neighbors. */
+export function orbitAdjacentArcSpec(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  sourceId: string,
+  targetId: string,
+): { a1: number; a2: number; arcRadius: number; clockwise: boolean } | null {
+  if (!areOrbitAdjacent(nodes, masteryId, sourceId, targetId)) return null
+
+  const mastery = nodes.find((n) => n.id === masteryId)
+  const source = nodes.find((n) => n.id === sourceId)
+  const target = nodes.find((n) => n.id === targetId)
+  if (!mastery || !source || !target) return null
+
+  const md = mastery.data as PassiveNodeData
+  const sd = source.data as PassiveNodeData
+  const td = target.data as PassiveNodeData
+  const orbitR = md.orbitRadius ?? DEFAULT_ORBIT_RADIUS
+
+  const ordered = getOrderedOrbitSatellites(nodes, masteryId).map((s) => s.id)
+  const ia = ordered.indexOf(sourceId)
+  const ib = ordered.indexOf(targetId)
+  const n = ordered.length
+
+  const a1 = orbitSlotAngle(md, ia, n)
+  const a2 = orbitSlotAngle(md, ib, n)
+  const clockwise = (ia + 1) % n === ib
+
+  return {
+    a1,
+    a2,
+    arcRadius: orbitLinkDrawRadius(orbitR, sd, td),
+    clockwise,
+  }
 }
 
 export function snapOrbitAngle(degrees: number) {
