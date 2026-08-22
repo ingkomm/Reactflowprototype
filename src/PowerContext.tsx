@@ -1,22 +1,43 @@
 import { createContext, useContext, type ReactNode } from 'react'
+import type { PowerFlowMeta } from './power'
 
-const PowerContext = createContext<Set<string>>(new Set())
+type PowerContextValue = {
+  poweredIds: Set<string>
+  flowMeta: PowerFlowMeta
+}
+
+const EMPTY_FLOW: PowerFlowMeta = { depth: new Map(), parent: new Map() }
+
+const PowerContext = createContext<PowerContextValue>({
+  poweredIds: new Set(),
+  flowMeta: EMPTY_FLOW,
+})
 
 export function PowerProvider({
   poweredIds,
+  flowMeta,
   children,
 }: {
   poweredIds: Set<string>
+  flowMeta: PowerFlowMeta
   children: ReactNode
 }) {
-  return <PowerContext.Provider value={poweredIds}>{children}</PowerContext.Provider>
+  return (
+    <PowerContext.Provider value={{ poweredIds, flowMeta }}>{children}</PowerContext.Provider>
+  )
 }
 
 export function useNodePowered(nodeId: string) {
-  const powered = useContext(PowerContext)
-  return powered.has(nodeId)
+  const { poweredIds } = useContext(PowerContext)
+  return poweredIds.has(nodeId)
 }
 
 export function usePowerSet() {
-  return useContext(PowerContext)
+  const { poweredIds } = useContext(PowerContext)
+  return poweredIds
+}
+
+export function usePowerFlowMeta() {
+  const { flowMeta } = useContext(PowerContext)
+  return flowMeta
 }

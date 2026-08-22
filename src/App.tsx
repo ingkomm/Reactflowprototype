@@ -22,7 +22,7 @@ import { CenterEdge } from './components/CenterEdge'
 import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
-import { classifyPassiveConnection, computePoweredNodeIds, pruneEdgesReachableFromInitial } from './power'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from './types'
 import { PASSIVE_KIND_LABEL } from './types'
 import {
@@ -637,6 +637,11 @@ export default function App() {
 
   const poweredIds = useMemo(
     () => computePoweredNodeIds(nodes, edges),
+    [nodes, edges],
+  )
+
+  const powerFlowMeta = useMemo(
+    () => computePowerFlowMeta(nodes, edges),
     [nodes, edges],
   )
 
@@ -1529,7 +1534,7 @@ export default function App() {
         style={{ gridTemplateColumns: `minmax(0, 1fr) ${inspectorWidth}px` }}
       >
         <section className="canvas-pane" aria-label="Passive tree canvas">
-          <PowerProvider poweredIds={poweredIds}>
+          <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
           <VoidHighlightProvider enabled={voidHighlightEnabled}>
           <ReactFlow
             nodes={nodes}

@@ -11,11 +11,11 @@ import {
   CROSS_ORBIT_GLOW_COLOR,
   linkEndpointPad,
   linkGlowStyle,
-  NODE_SIZE,
   orbitLinkSpec,
   trimStraightEndpoints,
 } from '../orbit'
-import { usePowerSet } from '../PowerContext'
+import { usePowerSet, usePowerFlowMeta } from '../PowerContext'
+import { orientPowerLinkVisual } from '../powerLinkVisual'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
 
 export type OrbitEdgeData = {
@@ -59,6 +59,7 @@ export function OrbitEdge({
   interactionWidth = 28,
 }: EdgeProps) {
   const powered = usePowerSet()
+  const flowMeta = usePowerFlowMeta()
   const nodes = useStore((s) => s.nodes)
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -101,6 +102,15 @@ export function OrbitEdge({
       linkEndpointPad(td, targetLit),
     )
     const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+    const beam = orientPowerLinkVisual(
+      source,
+      target,
+      { x: sourceX, y: sourceY },
+      { x: targetX, y: targetY },
+      sd,
+      td,
+      flowMeta,
+    )
     const hitPath = getStraightPath({
       sourceX: sourceCX,
       sourceY: sourceCY,
@@ -120,11 +130,11 @@ export function OrbitEdge({
           <PoweredLinkVisual
             id={id}
             pathD={path}
-            sx={sourceX}
-            sy={sourceY}
-            tx={targetX}
-            ty={targetY}
-            targetFlareR={NODE_SIZE[td.kind] / 2}
+            sx={beam.sx}
+            sy={beam.sy}
+            tx={beam.tx}
+            ty={beam.ty}
+            targetFlareR={beam.targetFlareR}
             selected={Boolean(selected)}
           />
         ) : (
@@ -142,6 +152,15 @@ export function OrbitEdge({
   const path = orbitArcPath(mc.x, mc.y, spec.arcRadius, spec.a1, spec.a2, spec.clockwise)
   const start = polar(mc.x, mc.y, spec.arcRadius, spec.a1)
   const end = polar(mc.x, mc.y, spec.arcRadius, spec.a2)
+  const beam = orientPowerLinkVisual(
+    source,
+    target,
+    start,
+    end,
+    sd,
+    td,
+    flowMeta,
+  )
 
   return (
     <>
@@ -155,11 +174,11 @@ export function OrbitEdge({
         <PoweredLinkVisual
           id={id}
           pathD={path}
-          sx={start.x}
-          sy={start.y}
-          tx={end.x}
-          ty={end.y}
-          targetFlareR={NODE_SIZE[td.kind] / 2}
+          sx={beam.sx}
+          sy={beam.sy}
+          tx={beam.tx}
+          ty={beam.ty}
+          targetFlareR={beam.targetFlareR}
           selected={Boolean(selected)}
         />
       ) : (

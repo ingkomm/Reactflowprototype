@@ -10,10 +10,10 @@ import {
   CROSS_ORBIT_GLOW_COLOR,
   linkEndpointPad,
   linkGlowStyle,
-  NODE_SIZE,
   trimStraightEndpoints,
 } from '../orbit'
-import { usePowerSet } from '../PowerContext'
+import { usePowerSet, usePowerFlowMeta } from '../PowerContext'
+import { orientPowerLinkVisual } from '../powerLinkVisual'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
 
 export type CenterFlowEdge = Edge<Record<string, unknown>, 'center'>
@@ -26,6 +26,7 @@ export function CenterEdge({
   selected,
 }: EdgeProps) {
   const powered = usePowerSet()
+  const flowMeta = usePowerFlowMeta()
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
 
@@ -65,6 +66,15 @@ export function CenterEdge({
     targetY: targetCY,
   })[0]
   const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+  const beam = orientPowerLinkVisual(
+    source,
+    target,
+    { x: sourceX, y: sourceY },
+    { x: targetX, y: targetY },
+    sd,
+    td,
+    flowMeta,
+  )
 
   return (
     <>
@@ -78,11 +88,11 @@ export function CenterEdge({
         <PoweredLinkVisual
           id={id}
           pathD={path}
-          sx={sourceX}
-          sy={sourceY}
-          tx={targetX}
-          ty={targetY}
-          targetFlareR={NODE_SIZE[td.kind] / 2}
+          sx={beam.sx}
+          sy={beam.sy}
+          tx={beam.tx}
+          ty={beam.ty}
+          targetFlareR={beam.targetFlareR}
           selected={Boolean(selected)}
         />
       ) : (

@@ -108,6 +108,100 @@ export function computePoweredNodeIds(
   return powered
 }
 
+export type PowerFlowMeta = {
+  /** Hop distance from Initial along the power propagation path. */
+  depth: Map<string, number>
+  /** Node id that powered this node (toward Initial). */
+  parent: Map<string, string>
+}
+
+/** Depth/parent tree mirroring {@link computePoweredNodeIds} propagation. */
+export function computePowerFlowMeta(
+  nodes: PassiveFlowNode[],
+  edges: Edge[],
+): PowerFlowMeta {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const depth = new Map<string, number>()
+  const parent = new Map<string, string>()
+
+  for (const node of nodes) {
+    if (isInitial(node.data as PassiveNodeData)) {
+      depth.set(node.id, 0)
+    }
+  }
+
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const edge of edges) {
+      const kind = edgeLinkKind(edge)
+      if (kind !== 'center' && kind !== 'orbit') continue
+
+      const source = byId.get(edge.source)
+      const target = byId.get(edge.target)
+      if (!source || !target) continue
+      const sd = source.data as PassiveNodeData
+      const td = target.data as PassiveNodeData
+
+      for (const [from, fromData, to] of [
+        [source, sd, target] as const,
+        [target, td, source] as const,
+      ]) {
+        if (!depth.has(from.id)) continue
+        if (!canTransmitPower(fromData)) continue
+        const toData = to.data as PassiveNodeData
+        if (isMastery(toData)) continue
+        if (isStealth(toData)) continue
+        if (!depth.has(to.id)) {
+          depth.set(to.id, depth.get(from.id)! + 1)
+          parent.set(to.id, from.id)
+          changed = true
+        }
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (!isMastery(data)) continue
+    const satellites = getOrderedOrbitSatellites(nodes, node.id)
+    for (const sat of satellites) {
+      const satData = sat.data as PassiveNodeData
+      if (satData.kind !== 'notable') continue
+      if (!depth.has(sat.id)) continue
+      if (!canTransmitPower(satData)) continue
+      if (findCenterEdge(edges, node.id, sat.id)) {
+        const nextDepth = depth.get(sat.id)! + 1
+        if (!depth.has(node.id) || nextDepth > depth.get(node.id)!) {
+          depth.set(node.id, nextDepth)
+          parent.set(node.id, sat.id)
+        }
+        break
+      }
+    }
+  }
+
+  return { depth, parent }
+}
+
+/** Near-Initial → far-from-Initial orientation for powered link visuals. */
+export function resolvePowerFlowDirection(
+  aId: string,
+  bId: string,
+  { depth, parent }: PowerFlowMeta,
+): { fromId: string; toId: string } {
+  if (parent.get(aId) === bId) return { fromId: bId, toId: aId }
+  if (parent.get(bId) === aId) return { fromId: aId, toId: bId }
+
+  const da = depth.get(aId)
+  const db = depth.get(bId)
+  if (da != null && db != null && da !== db) {
+    return da < db ? { fromId: aId, toId: bId } : { fromId: bId, toId: aId }
+  }
+
+  return aId <= bId ? { fromId: aId, toId: bId } : { fromId: bId, toId: aId }
+}
+
 export function isEdgePowered(
   edge: Edge,
   powered: Set<string>,
