@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { type CSSProperties } from 'react'
-import type { FrameNodeData, PassiveNodeData } from '../types'
+import type { PassiveNodeData } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
 import {
   completedStageCount,
@@ -19,17 +19,9 @@ import {
 } from './TrainingBands'
 import './PassiveNode.css'
 
-export type PassiveFlowNode =
-  | Node<PassiveNodeData, 'passive'>
-  | Node<FrameNodeData, 'frame'>
+export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
 
-export function isPassiveNode(
-  node: PassiveFlowNode,
-): node is Node<PassiveNodeData, 'passive'> {
-  return node.type !== 'frame' && 'kind' in (node.data as object)
-}
-
-export function PassiveNode({ data, selected }: NodeProps<Node<PassiveNodeData, 'passive'>>) {
+export function PassiveNode({ data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []

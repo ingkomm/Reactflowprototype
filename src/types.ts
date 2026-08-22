@@ -49,10 +49,6 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   mastery: '#0F7B6C',
 }
 
-export type FrameNodeData = {
-  label: string
-}
-
 export type PassiveNodeData = {
   label: string
   kind: PassiveKind

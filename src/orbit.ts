@@ -145,7 +145,6 @@ export function getOrbitSatellites(
   masteryId: string,
 ): PassiveFlowNode[] {
   return nodes.filter((n) => {
-    if (n.type === 'frame') return false
     const data = n.data as PassiveNodeData
     return data.masteryId === masteryId && isSatelliteKind(data.kind)
   })
@@ -252,12 +251,6 @@ export function withMasteryDragFlags(
   selectedId: string | null = null,
 ): PassiveFlowNode[] {
   return nodes.map((node) => {
-    if (node.type === 'frame') {
-      return {
-        ...node,
-        zIndex: node.id === selectedId ? 2 : 0,
-      }
-    }
     const data = node.data as PassiveNodeData
     // Mastery orbits are large; keep them under satellite titles/links visually.
     const baseZ = data.kind === 'mastery' ? 1 : 6
@@ -286,22 +279,14 @@ export function removeNodesAndRelayout(
 
   for (const node of nodes) {
     if (!ids.has(node.id)) continue
-    if (node.type === 'frame') continue
     const data = node.data as PassiveNodeData
     if (data.masteryId) affectedMasteries.add(data.masteryId)
     if (data.kind === 'mastery') affectedMasteries.add(node.id)
   }
 
   let next = nodes
-    .map((node) => {
-      if (node.parentId && ids.has(node.parentId)) {
-        return detachNodeFromFrame(node, nodes)
-      }
-      return node
-    })
     .filter((n) => !ids.has(n.id))
     .map((node) => {
-      if (node.type === 'frame') return node
       const data = node.data as PassiveNodeData
       if (data.masteryId && ids.has(data.masteryId)) {
         return {
@@ -370,9 +355,8 @@ export function distanceBetweenCenters(
 export function findNearestMastery(nodes: PassiveFlowNode[], satellite: PassiveFlowNode) {
   let best: { mastery: PassiveFlowNode; dist: number; radius: number } | null = null
   for (const node of nodes) {
-    if (node.type === 'frame') continue
     const data = node.data as PassiveNodeData
-    if (!data || data.kind !== 'mastery') continue
+    if (data.kind !== 'mastery') continue
     const dist = distanceBetweenCenters(satellite, node, nodes)
     const radius = data.orbitRadius ?? DEFAULT_ORBIT_RADIUS
     if (!best || dist < best.dist) {
@@ -417,81 +401,4 @@ export function orbitOrderByDropAngle(
   ]
   items.sort((a, b) => a.rel - b.rel)
   return items.map((i) => i.id)
-}
-
-export function frameSize(node: {
-  width?: number
-  height?: number
-  style?: { width?: number | string; height?: number | string }
-}) {
-  const w = node.width ?? Number(node.style?.width) ?? 280
-  const h = node.height ?? Number(node.style?.height) ?? 200
-  return { width: w, height: h }
-}
-
-/** Topmost frame whose bounds contain the flow point. */
-export function findFrameContaining(
-  nodes: PassiveFlowNode[],
-  point: { x: number; y: number },
-) {
-  let best: PassiveFlowNode | null = null
-  let bestZ = -Infinity
-  for (const node of nodes) {
-    if (node.type !== 'frame') continue
-    const origin = absolutePosition(node, nodes)
-    const { width, height } = frameSize(node)
-    if (
-      point.x < origin.x ||
-      point.y < origin.y ||
-      point.x > origin.x + width ||
-      point.y > origin.y + height
-    ) {
-      continue
-    }
-    const z = node.zIndex ?? 0
-    if (!best || z >= bestZ) {
-      best = node
-      bestZ = z
-    }
-  }
-  return best
-}
-
-export function attachNodeToFrame(
-  node: PassiveFlowNode,
-  frame: PassiveFlowNode,
-  nodes: PassiveFlowNode[],
-): PassiveFlowNode {
-  const abs = absolutePosition(node, nodes)
-  const rel = toParentRelative(abs, frame.id, nodes)
-  return {
-    ...node,
-    parentId: frame.id,
-    extent: 'parent',
-    position: rel,
-  }
-}
-
-export function detachNodeFromFrame(
-  node: PassiveFlowNode,
-  nodes: PassiveFlowNode[],
-): PassiveFlowNode {
-  if (!node.parentId) return node
-  const abs = absolutePosition(node, nodes)
-  return {
-    ...node,
-    parentId: undefined,
-    extent: undefined,
-    position: abs,
-  }
-}
-
-/** Keep frame nodes before their children for React Flow subflows. */
-export function sortFramesFirst(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
-  const frames = nodes.filter((n) => n.type === 'frame')
-  const rest = nodes.filter((n) => n.type !== 'frame')
-  const frameIds = new Set(frames.map((f) => f.id))
-  const inFrame = rest.filter((n) => n.parentId && frameIds.has(n.parentId))
-  const free = rest.filter((n) => !n.parentId || !frameIds.has(n.parentId))
-  return [...frames, ...free, ...inFrame]
 }

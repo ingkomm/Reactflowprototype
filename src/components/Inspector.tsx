@@ -60,11 +60,9 @@ type Props = {
   onChangeOrbitStartAngle: (nodeId: string, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onDetachFromMastery: (nodeId: string) => void
-  onDetachFromFrame: (nodeId: string) => void
   onRemoveLink: (edgeId: string) => void
   onAddLink: (peerId: string) => void
   onDeleteNode: (nodeId: string) => void
-  parentFrameId?: string | null
 }
 
 function reindexStages(stages: StageData[]): StageData[] {
@@ -89,11 +87,9 @@ export function Inspector({
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
   onDetachFromMastery,
-  onDetachFromFrame,
   onRemoveLink,
   onAddLink,
   onDeleteNode,
-  parentFrameId = null,
 }: Props) {
   const { classes, resolve } = usePassiveClasses()
   const [addPeerId, setAddPeerId] = useState('')
@@ -285,22 +281,6 @@ export function Inspector({
         </div>
         <p className="field-hint">아이콘·색상은 우측 상단 클래스 관리에서 편집합니다.</p>
       </div>
-
-      {parentFrameId && (
-        <div className="inspector__section">
-          <div className="inspector__section-head">
-            <h3>프레임</h3>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => onDetachFromFrame(nodeId)}
-            >
-              분리
-            </button>
-          </div>
-          <p className="inspector__empty">이 노드는 프레임 범위 안에서만 이동합니다.</p>
-        </div>
-      )}
 
       {data.kind === 'mastery' && (
         <>
