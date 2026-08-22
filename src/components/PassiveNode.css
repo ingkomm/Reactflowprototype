@@ -191,6 +191,31 @@
   opacity: 0.35;
 }
 
+.passive-node--mastery.has-orbit-rings-visible .passive-node__orbit {
+  opacity: 1;
+  border: 1.5px dashed color-mix(in srgb, #9fe8dd 52%, transparent);
+  box-shadow:
+    inset 0 0 28px rgba(61, 184, 168, 0.12),
+    0 0 12px rgba(61, 184, 168, 0.06);
+}
+
+.passive-node.is-unpowered.has-orbit-rings-visible .passive-node__orbit {
+  opacity: 0.92;
+  border-color: color-mix(in srgb, #9aa8b5 55%, transparent);
+}
+
+.passive-node--mastery.is-orbit-forced-visible .passive-node__orbit {
+  opacity: 1;
+  border: 1.5px dashed color-mix(in srgb, #6cb6ea 58%, transparent);
+  box-shadow:
+    inset 0 0 28px rgba(108, 182, 234, 0.14),
+    0 0 14px rgba(108, 182, 234, 0.1);
+}
+
+.passive-node.is-unpowered.is-orbit-forced-visible .passive-node__orbit {
+  opacity: 1;
+}
+
 .passive-node--mastery.is-unpowered.is-orbit-highlighted .passive-node__orbit {
   opacity: 1;
   border-color: color-mix(in srgb, #9fe8dd 32%, transparent);

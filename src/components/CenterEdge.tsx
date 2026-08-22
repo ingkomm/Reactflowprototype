@@ -44,13 +44,16 @@ export function CenterEdge({
   const targetCY =
     targetNode.internals.positionAbsolute.y + (targetNode.measured.height ?? 0) / 2
 
+  const sourceLit = powered.has(source)
+  const targetLit = powered.has(target)
+
   const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
     sourceCX,
     sourceCY,
     targetCX,
     targetCY,
-    linkEndpointPad(sd),
-    linkEndpointPad(td),
+    linkEndpointPad(sd, sourceLit),
+    linkEndpointPad(td, targetLit),
   )
 
   const hitPath = getStraightPath({

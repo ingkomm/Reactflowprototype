@@ -362,9 +362,21 @@ export function satelliteBandOuterRadius(data: PassiveNodeData): number {
   return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2
 }
 
-/** Angular trim (radians) so an orbit arc at orbitRadius clears a node's outer band. */
-function orbitBandAngularTrim(data: PassiveNodeData, orbitRadius: number) {
-  const bandOuter = satelliteBandOuterRadius(data)
+/** Radius used to trim links toward a node; uses face when bands are not shown (unpowered). */
+export function nodeLinkTrimRadius(data: PassiveNodeData, bandsVisible = true): number {
+  const nodeSize = NODE_SIZE[data.kind]
+  const stageCount = data.stages?.length ?? 0
+  if (!bandsVisible || stageCount <= 0) return nodeSize / 2
+  return satelliteBandOuterRadius(data)
+}
+
+/** Angular trim (radians) so an orbit arc at orbitRadius clears the visible node rim. */
+function orbitBandAngularTrim(
+  data: PassiveNodeData,
+  orbitRadius: number,
+  bandsVisible = true,
+) {
+  const bandOuter = nodeLinkTrimRadius(data, bandsVisible)
   return Math.asin(Math.min(1, (bandOuter + 2) / orbitRadius))
 }
 
@@ -384,6 +396,7 @@ export function orbitLinkSpec(
   masteryId: string,
   sourceId: string,
   targetId: string,
+  options?: { sourcePowered?: boolean; targetPowered?: boolean },
 ): OrbitLinkSpec | null {
   if (!canOrbitLink(nodes, masteryId, sourceId, targetId)) return null
 
@@ -410,8 +423,8 @@ export function orbitLinkSpec(
   const a1Raw = orbitSlotAngle(md, tierA, ia, n)
   const a2Raw = orbitSlotAngle(md, tierA, ib, n)
   const clockwise = (ia + 1) % n === ib
-  const trimA = orbitBandAngularTrim(sd, orbitR)
-  const trimB = orbitBandAngularTrim(td, orbitR)
+  const trimA = orbitBandAngularTrim(sd, orbitR, options?.sourcePowered ?? true)
+  const trimB = orbitBandAngularTrim(td, orbitR, options?.targetPowered ?? true)
 
   const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
   const a2 = clockwise ? a2Raw - trimB : a2Raw + trimB
@@ -437,9 +450,9 @@ export function orbitAdjacentArcSpec(
   return spec
 }
 
-/** Pad straight links so strokes stop outside the outermost training band. */
-export function linkEndpointPad(data: PassiveNodeData) {
-  return satelliteBandOuterRadius(data) + 4
+/** Pad straight/orbit chord links; unpowered nodes trim to the face (no band gap). */
+export function linkEndpointPad(data: PassiveNodeData, bandsVisible = true) {
+  return nodeLinkTrimRadius(data, bandsVisible) + (bandsVisible ? 4 : 2)
 }
 
 export function trimStraightEndpoints(

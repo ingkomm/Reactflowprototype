@@ -66,10 +66,16 @@ export function OrbitEdge({
 
   if (!sourceNode || !targetNode || !masteryNode || !masteryId) return null
 
-  const spec = orbitLinkSpec(nodes as PassiveFlowNode[], masteryId, source, target)
+  const sourceLit = powered.has(source)
+  const targetLit = powered.has(target)
+
+  const spec = orbitLinkSpec(nodes as PassiveFlowNode[], masteryId, source, target, {
+    sourcePowered: sourceLit,
+    targetPowered: targetLit,
+  })
   if (!spec) return null
 
-  const lit = powered.has(source) && powered.has(target)
+  const lit = sourceLit && targetLit
   const lineStyle = linkGlowStyle(CROSS_ORBIT_GLOW_COLOR, Boolean(selected), lit)
 
   const sourceCX =
@@ -88,8 +94,8 @@ export function OrbitEdge({
       sourceCY,
       targetCX,
       targetCY,
-      linkEndpointPad(sd!),
-      linkEndpointPad(td),
+      linkEndpointPad(sd!, sourceLit),
+      linkEndpointPad(td, targetLit),
     )
     const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
     const hitPath = getStraightPath({

@@ -51,15 +51,16 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     (data.kind === 'void' && !data.masteryId) ||
     (data.kind === 'voidMastery' && orbitSatelliteCount === 0)
   const powered = !isStealth && (useNodePowered(id) || data.kind === 'initial')
-  const showOrbitHighlight =
-    voidHighlight && data.kind === 'mastery' && !powered && !data.orbitLocked
+  const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
   const bandLevel = stageBandLevel(stages)
   const bandCount = stages.length
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
-  const showOrbitRings = isMastery && !data.orbitLocked
+  const showOrbitRings = isMastery && (!data.orbitLocked || voidHighlight)
+  const orbitRingsUnlocked = showOrbitRings && !data.orbitLocked
+  const orbitRingsForced = showOrbitRings && Boolean(data.orbitLocked) && voidHighlight
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
@@ -88,6 +89,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         showVoidHighlight ? ' is-void-highlighted' : ''
       }${
         showOrbitHighlight ? ' is-orbit-highlighted' : ''
+      }${orbitRingsUnlocked ? ' has-orbit-rings-visible' : ''}${
+        orbitRingsForced ? ' is-orbit-forced-visible' : ''
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }`}
