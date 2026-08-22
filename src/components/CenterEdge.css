@@ -1,0 +1,183 @@
+.mastery-power-beam {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  pointer-events: none;
+  animation: mastery-beam-pulse 2.8s ease-in-out infinite;
+}
+
+.mastery-stellar-glow {
+  pointer-events: none;
+}
+
+.mastery-stellar-glow__halo {
+  pointer-events: none;
+  animation: stellar-halo-flicker 2.1s steps(10, end) infinite;
+}
+
+.mastery-stellar-glow__core {
+  fill: none;
+  stroke: #9fe8dd;
+  stroke-width: 2;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 6px rgba(159, 232, 221, 0.9))
+    drop-shadow(0 0 14px rgba(61, 184, 168, 0.55));
+  animation: stellar-core-flicker 1.7s steps(8, end) infinite;
+}
+
+.mastery-stellar-glow__ring {
+  fill: none;
+  stroke: #9fe8dd;
+  stroke-dasharray: 6 14 3 18 8 10;
+  filter: drop-shadow(0 0 8px rgba(159, 232, 221, 0.65));
+}
+
+.mastery-stellar-glow__ring--a {
+  stroke-width: 1.5;
+  opacity: 0.55;
+  animation: stellar-ring-a 2.3s ease-in-out infinite;
+}
+
+.mastery-stellar-glow__ring--b {
+  stroke-width: 1;
+  opacity: 0.35;
+  animation: stellar-ring-b 3.1s ease-in-out infinite;
+}
+
+.mastery-stellar-glow__ring--c {
+  stroke-width: 0.75;
+  opacity: 0.25;
+  stroke-dasharray: 4 20 2 12 6 16;
+  animation: stellar-ring-c 4.7s ease-in-out infinite;
+}
+
+@keyframes mastery-beam-pulse {
+  0%,
+  100% {
+    stroke-width: 2;
+    opacity: 0.65;
+  }
+  40% {
+    stroke-width: 3;
+    opacity: 1;
+  }
+  62% {
+    stroke-width: 1.5;
+    opacity: 0.45;
+  }
+  78% {
+    stroke-width: 2.5;
+    opacity: 0.9;
+  }
+}
+
+@keyframes stellar-halo-flicker {
+  0% {
+    opacity: 0.55;
+  }
+  14% {
+    opacity: 0.95;
+  }
+  29% {
+    opacity: 0.4;
+  }
+  43% {
+    opacity: 0.88;
+  }
+  57% {
+    opacity: 0.5;
+  }
+  71% {
+    opacity: 1;
+  }
+  86% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes stellar-core-flicker {
+  0% {
+    opacity: 0.5;
+    stroke-width: 1.5;
+  }
+  12% {
+    opacity: 1;
+    stroke-width: 2.5;
+  }
+  25% {
+    opacity: 0.35;
+    stroke-width: 1;
+  }
+  38% {
+    opacity: 0.92;
+    stroke-width: 2;
+  }
+  51% {
+    opacity: 0.6;
+    stroke-width: 1.75;
+  }
+  64% {
+    opacity: 1;
+    stroke-width: 2.25;
+  }
+  77% {
+    opacity: 0.4;
+    stroke-width: 1.25;
+  }
+  100% {
+    opacity: 0.75;
+    stroke-width: 2;
+  }
+}
+
+@keyframes stellar-ring-a {
+  0%,
+  100% {
+    opacity: 0.4;
+    stroke-dashoffset: 0;
+  }
+  33% {
+    opacity: 0.85;
+    stroke-dashoffset: 18;
+  }
+  66% {
+    opacity: 0.3;
+    stroke-dashoffset: -12;
+  }
+}
+
+@keyframes stellar-ring-b {
+  0%,
+  100% {
+    opacity: 0.2;
+    stroke-dashoffset: 0;
+  }
+  28% {
+    opacity: 0.55;
+    stroke-dashoffset: -24;
+  }
+  55% {
+    opacity: 0.15;
+    stroke-dashoffset: 14;
+  }
+  82% {
+    opacity: 0.45;
+    stroke-dashoffset: -8;
+  }
+}
+
+@keyframes stellar-ring-c {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  45% {
+    opacity: 0.4;
+  }
+  70% {
+    opacity: 0.1;
+  }
+}

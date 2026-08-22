@@ -58,9 +58,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const bandLevel = stageBandLevel(stages)
   const bandCount = stages.length
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
-  const showOrbitRings = isMastery && (!data.orbitLocked || voidHighlight)
-  const orbitRingsUnlocked = showOrbitRings && !data.orbitLocked
-  const orbitRingsForced = showOrbitRings && Boolean(data.orbitLocked) && voidHighlight
+  const showOrbitRings = isMastery
+  const orbitRingsUnlocked = isMastery && !data.orbitLocked
+  const orbitRingsLocked = isMastery && Boolean(data.orbitLocked) && !voidHighlight
+  const orbitRingsForced = isMastery && Boolean(data.orbitLocked) && voidHighlight
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
@@ -90,8 +91,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${
         showOrbitHighlight ? ' is-orbit-highlighted' : ''
       }${orbitRingsUnlocked ? ' has-orbit-rings-visible' : ''}${
-        orbitRingsForced ? ' is-orbit-forced-visible' : ''
-      }${
+        orbitRingsLocked ? ' has-orbit-rings-locked' : ''
+      }${orbitRingsForced ? ' is-orbit-forced-visible' : ''}${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }`}
       style={

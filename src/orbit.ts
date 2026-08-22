@@ -423,8 +423,18 @@ export function orbitLinkSpec(
   const a1Raw = orbitSlotAngle(md, tierA, ia, n)
   const a2Raw = orbitSlotAngle(md, tierA, ib, n)
   const clockwise = (ia + 1) % n === ib
-  const trimA = orbitBandAngularTrim(sd, orbitR, options?.sourcePowered ?? true)
-  const trimB = orbitBandAngularTrim(td, orbitR, options?.targetPowered ?? true)
+  const linkLit =
+    Boolean(options?.sourcePowered) && Boolean(options?.targetPowered)
+  const trimA = orbitBandAngularTrim(
+    sd,
+    orbitR,
+    linkLit && bandsVisibleForLink(sd, options?.sourcePowered ?? false),
+  )
+  const trimB = orbitBandAngularTrim(
+    td,
+    orbitR,
+    linkLit && bandsVisibleForLink(td, options?.targetPowered ?? false),
+  )
 
   const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
   const a2 = clockwise ? a2Raw - trimB : a2Raw + trimB
@@ -450,9 +460,21 @@ export function orbitAdjacentArcSpec(
   return spec
 }
 
-/** Pad straight/orbit chord links; unpowered nodes trim to the face (no band gap). */
-export function linkEndpointPad(data: PassiveNodeData, bandsVisible = true) {
-  return nodeLinkTrimRadius(data, bandsVisible) + (bandsVisible ? 4 : 2)
+/** True when training bands are rendered on this node (matches PassiveNode). */
+export function bandsVisibleForLink(data: PassiveNodeData, nodePowered: boolean): boolean {
+  if (!nodePowered) return false
+  if (isStealthPassiveKind(data.kind)) return false
+  return (data.stages?.length ?? 0) > 0
+}
+
+/** Pad link endpoints; unpowered link or hidden bands → trim to node face. */
+export function linkEndpointPad(
+  data: PassiveNodeData,
+  nodePowered = false,
+  linkPowered = true,
+) {
+  const bands = linkPowered && bandsVisibleForLink(data, nodePowered)
+  return nodeLinkTrimRadius(data, bands) + (bands ? 4 : 2)
 }
 
 export function trimStraightEndpoints(
