@@ -32,6 +32,8 @@ import { IconGlyph } from './IconGlyph'
 import {
   TrainingBands,
   labelBelowBandOffset,
+  masteryNeonLabelOffset,
+  masteryNeonOuterRadius,
   outermostBandRadius,
 } from './TrainingBands'
 import { useVoidHighlight } from '../VoidHighlightContext'
@@ -82,13 +84,26 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
   const iconId = passiveClass.iconId
-  const outerBandR = outermostBandRadius(bandCount, nodeSize)
-  const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
+  const masteryNeonLit = isMastery && powered
+  const outerBandR = masteryNeonLit
+    ? masteryNeonOuterRadius(nodeSize)
+    : outermostBandRadius(bandCount, nodeSize)
+  const labelOffset = masteryNeonLit
+    ? masteryNeonLabelOffset(nodeSize)
+    : labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = showBands ? 12 + bandLevel * 10 : 0
-  const glowAlpha = showBands ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
-  const haloStrength = showBands ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
+  const glowBlur = masteryNeonLit ? 16 + 8 : showBands ? 12 + bandLevel * 10 : 0
+  const glowAlpha = masteryNeonLit
+    ? 0.48
+    : showBands
+      ? Math.min(0.95, 0.28 + bandLevel * 0.16)
+      : 0
+  const haloStrength = masteryNeonLit
+    ? 0.62
+    : showBands
+      ? Math.min(0.92, 0.28 + bandLevel * 0.18)
+      : 0
 
   const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
   const done = fills.filter((f, i) => f >= (NOTABLE_BAND_GOALS[i] ?? 0)).length
@@ -106,7 +121,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
         powered ? '' : ' is-unpowered'
-      }${showBands ? ' has-bands' : ''}${
+      }${showBands || masteryNeonLit ? ' has-bands' : ''}${
         isStealth ? ' is-stealth' : ''
       }${isAmbientVisible ? ' is-ambient-visible' : ''}${
         showVoidHighlight ? ' is-void-highlighted' : ''
@@ -115,7 +130,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${orbitRingsUnlocked ? ' has-orbit-rings-visible' : ''}${
         orbitRingsLocked ? ' has-orbit-rings-locked' : ''
       }${orbitRingsForced ? ' is-orbit-forced-visible' : ''}${
-        isMastery && powered ? ' is-mastery-powered' : ''
+        masteryNeonLit ? ' is-mastery-powered' : ''
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }${connectGlowClass}`}
@@ -124,7 +139,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           '--glow-blur': `${glowBlur}px`,
           '--glow-alpha': String(glowAlpha),
           '--halo-strength': String(haloStrength),
-          '--band-level': String(bandLevel),
+          '--band-level': String(masteryNeonLit ? 1.2 : bandLevel),
           '--band-count': String(bandCount),
           '--outer-band-r': `${outerBandR}px`,
           '--connect-r': `${connectR}px`,
@@ -182,7 +197,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {isMastery && powered && <div className="passive-node__neon-rim" aria-hidden />}
+      {masteryNeonLit && <div className="passive-node__neon-rim" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       {!isStealth && (

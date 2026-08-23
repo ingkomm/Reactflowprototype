@@ -56,13 +56,13 @@
   --glow: rgba(61, 184, 168, 0.35);
 }
 
-/* Powered mastery: slow neon shimmer on the rim — spreads outward, icon face clear. */
+/* Powered mastery: slow neon shimmer on the rim only — icon face stays clear. */
 .passive-node--mastery.is-mastery-powered .passive-node__neon-rim {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(var(--node-size) + 36px);
-  height: calc(var(--node-size) + 36px);
+  width: calc(var(--node-size) + 14px);
+  height: calc(var(--node-size) + 14px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
@@ -85,29 +85,27 @@
   );
   -webkit-mask: radial-gradient(
     farthest-side,
-    transparent calc(100% - 14px),
-    #000 calc(100% - 9px),
-    #000 calc(100% - 2px),
+    transparent calc(100% - 5px),
+    #000 calc(100% - 3.5px),
+    #000 calc(100% - 1px),
     transparent 100%
   );
   mask: radial-gradient(
     farthest-side,
-    transparent calc(100% - 14px),
-    #000 calc(100% - 9px),
-    #000 calc(100% - 2px),
+    transparent calc(100% - 5px),
+    #000 calc(100% - 3.5px),
+    #000 calc(100% - 1px),
     transparent 100%
   );
-  filter: blur(1.2px)
-    drop-shadow(0 0 8px color-mix(in srgb, var(--icon-color) 55%, transparent))
-    drop-shadow(0 0 18px color-mix(in srgb, var(--icon-color) 28%, transparent));
+  filter: blur(0.6px) drop-shadow(0 0 5px color-mix(in srgb, var(--icon-color) 50%, transparent));
   animation: mastery-neon-drift 22s linear infinite;
-  opacity: 0.95;
+  opacity: 0.9;
 }
 
 .passive-node--mastery.is-mastery-powered .passive-node__neon-rim::before {
   content: '';
   position: absolute;
-  inset: 6px;
+  inset: 3px;
   border-radius: 50%;
   background: conic-gradient(
     from 140deg,
@@ -120,29 +118,28 @@
   );
   -webkit-mask: radial-gradient(
     farthest-side,
-    transparent calc(100% - 10px),
-    #000 calc(100% - 5px),
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 2px),
     transparent 100%
   );
   mask: radial-gradient(
     farthest-side,
-    transparent calc(100% - 10px),
-    #000 calc(100% - 5px),
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 2px),
     transparent 100%
   );
-  filter: blur(2.4px);
+  filter: blur(1.5px);
   animation: mastery-neon-pulse 6s ease-in-out infinite;
 }
 
 .passive-node--mastery.is-mastery-powered .passive-node__neon-rim::after {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: 0;
   border-radius: 50%;
   box-shadow:
-    0 0 16px color-mix(in srgb, var(--icon-color) 32%, transparent),
-    0 0 36px color-mix(in srgb, var(--icon-color) 18%, transparent),
-    0 0 58px color-mix(in srgb, var(--icon-color) 10%, transparent);
+    0 0 10px color-mix(in srgb, var(--icon-color) 26%, transparent),
+    0 0 22px color-mix(in srgb, var(--icon-color) 12%, transparent);
   animation: mastery-neon-breathe 8s ease-in-out infinite;
 }
 
