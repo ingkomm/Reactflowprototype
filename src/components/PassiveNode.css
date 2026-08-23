@@ -49,159 +49,11 @@
 }
 
 .passive-node--mastery {
-  --node-size: 96px;
+  --node-size: 104px;
   --ring: #3db8a8;
   --core: #142528;
   --accent: #9fe8dd;
   --glow: rgba(61, 184, 168, 0.35);
-}
-
-/* Powered mastery: compact nebula only along the icon rim — face stays clear. */
-.passive-node--mastery.is-mastery-powered .passive-node__nebula {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: calc(var(--node-size) * 1.56);
-  height: calc(var(--node-size) * 1.56);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(
-      circle at 50% 50%,
-      transparent 0%,
-      transparent 42%,
-      color-mix(in srgb, var(--icon-color) 55%, white 10%) 50%,
-      color-mix(in srgb, var(--icon-color) 32%, transparent) 62%,
-      color-mix(in srgb, var(--icon-color) 12%, transparent) 78%,
-      transparent 92%
-    );
-  -webkit-mask: radial-gradient(
-    farthest-side,
-    transparent 0%,
-    transparent 44%,
-    #000 50%,
-    #000 68%,
-    transparent 100%
-  );
-  mask: radial-gradient(
-    farthest-side,
-    transparent 0%,
-    transparent 44%,
-    #000 50%,
-    #000 68%,
-    transparent 100%
-  );
-  filter: blur(3.5px);
-  opacity: 0.9;
-  animation: mastery-nebula-breathe 10s ease-in-out infinite;
-}
-
-.passive-node--mastery.is-mastery-powered .passive-node__nebula::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 15deg,
-    transparent 0deg,
-    color-mix(in srgb, var(--icon-color) 42%, transparent) 40deg,
-    transparent 85deg,
-    color-mix(in srgb, var(--icon-color) 28%, transparent) 150deg,
-    transparent 195deg,
-    color-mix(in srgb, var(--icon-color) 48%, transparent) 250deg,
-    transparent 300deg,
-    color-mix(in srgb, var(--icon-color) 30%, transparent) 340deg,
-    transparent 360deg
-  );
-  -webkit-mask: radial-gradient(
-    farthest-side,
-    transparent 0%,
-    transparent 46%,
-    #000 52%,
-    #000 70%,
-    transparent 100%
-  );
-  mask: radial-gradient(
-    farthest-side,
-    transparent 0%,
-    transparent 46%,
-    #000 52%,
-    #000 70%,
-    transparent 100%
-  );
-  filter: blur(4px);
-  opacity: 0.75;
-  animation: mastery-nebula-drift 26s linear infinite;
-}
-
-.passive-node--mastery.is-mastery-powered .passive-node__nebula::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  box-shadow:
-    0 0 10px color-mix(in srgb, var(--icon-color) 28%, transparent),
-    0 0 20px color-mix(in srgb, var(--icon-color) 12%, transparent);
-  -webkit-mask: radial-gradient(
-    farthest-side,
-    transparent 0%,
-    transparent 48%,
-    #000 54%,
-    transparent 78%
-  );
-  mask: radial-gradient(farthest-side, transparent 0%, transparent 48%, #000 54%, transparent 78%);
-  animation: mastery-nebula-flare 8s ease-in-out infinite;
-}
-
-.passive-node--mastery.is-mastery-powered .passive-node__ring {
-  box-shadow:
-    0 0 8px color-mix(in srgb, var(--icon-color) 35%, transparent),
-    0 0 16px color-mix(in srgb, var(--icon-color) 16%, transparent);
-}
-
-.passive-node--mastery.is-mastery-powered .passive-node__halo {
-  opacity: 0;
-}
-
-.passive-node--mastery.is-mastery-powered .passive-node__title {
-  /* Sit just above the rim glow; soft shadow for readability without extra distance */
-  text-shadow:
-    0 0 6px rgba(6, 10, 14, 0.95),
-    0 1px 2px rgba(0, 0, 0, 0.9),
-    0 0 10px color-mix(in srgb, var(--icon-color) 35%, transparent);
-}
-
-@keyframes mastery-nebula-breathe {
-  0%,
-  100% {
-    opacity: 0.78;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    opacity: 0.96;
-    transform: translate(-50%, -50%) scale(1.03);
-  }
-}
-
-@keyframes mastery-nebula-drift {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes mastery-nebula-flare {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 0.85;
-  }
 }
 
 .passive-node--initial {
@@ -277,7 +129,7 @@
 }
 
 .passive-node--voidMastery {
-  --node-size: 96px;
+  --node-size: 104px;
   --ring: transparent;
   --core: transparent;
   --accent: #6a7580;
@@ -608,10 +460,10 @@
 }
 
 .passive-node--mastery .passive-node__title {
-  font-size: 0.84rem;
+  font-size: 1rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  max-width: min(13em, 188px);
+  letter-spacing: 0.05em;
+  max-width: min(14em, 220px);
 }
 
 .passive-node.is-selected .passive-node__title {

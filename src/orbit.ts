@@ -8,8 +8,8 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
   connect: 28,
   small: 48,
   notable: 68,
-  mastery: 96,
-  voidMastery: 96,
+  mastery: 104,
+  voidMastery: 104,
   void: 36,
 }
 
