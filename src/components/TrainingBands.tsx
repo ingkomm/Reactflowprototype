@@ -20,10 +20,10 @@ export const BAND_STROKE = 3.2
 /** Clearance past the node face / selection halo before the first (innermost) band. */
 export const BAND_BASE_PAD = 10
 export const COUNT_BAND_GAP = 12
-/** Mastery PoE-style nebula aura radius past node face (half of ~2.8× diameter). */
-export const MASTERY_NEBULA_PAD = 0.9
-/** Extra gap so the title clears the soft nebula fade. */
-export const MASTERY_NEBULA_LABEL_GAP = 18
+/** Mastery nebula: extra radius past face as fraction of nodeSize (CSS ~1.55× diameter). */
+export const MASTERY_NEBULA_PAD = 0.28
+/** Tight gap so the title sits just outside the nebula fade. */
+export const MASTERY_NEBULA_LABEL_GAP = 8
 /** Angular gap between segment cells (radians). */
 const SEGMENT_GAP = 0.09
 
@@ -44,12 +44,12 @@ export function labelBelowBandOffset(stageCount: number, nodeSize: number) {
   return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2 + COUNT_BAND_GAP
 }
 
-/** Title offset so mastery nebula does not cover the label. */
+/** Title offset — just outside the mastery nebula edge. */
 export function masteryNeonLabelOffset(nodeSize: number) {
   return nodeSize / 2 + nodeSize * MASTERY_NEBULA_PAD + MASTERY_NEBULA_LABEL_GAP
 }
 
-/** Outer radius used for mastery nebula sizing. */
+/** Outer radius of mastery nebula (matches CSS size). */
 export function masteryNeonOuterRadius(nodeSize: number) {
   return nodeSize / 2 + nodeSize * MASTERY_NEBULA_PAD
 }
