@@ -45,44 +45,94 @@
   --glow: rgba(61, 184, 168, 0.35);
 }
 
-/* Powered mastery: spinning gear rim only — icon face stays clear. */
-.passive-node--mastery.is-mastery-powered .passive-node__gear-rim {
+/* Powered mastery: slow neon shimmer on the rim only — icon face stays clear. */
+.passive-node--mastery.is-mastery-powered .passive-node__neon-rim {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(var(--node-size) + 10px);
-  height: calc(var(--node-size) + 10px);
+  width: calc(var(--node-size) + 14px);
+  height: calc(var(--node-size) + 14px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
   z-index: 2;
-  background: repeating-conic-gradient(
+  background: conic-gradient(
     from 0deg,
-    color-mix(in srgb, var(--icon-color) 82%, transparent) 0deg 3.5deg,
-    transparent 3.5deg 11deg,
-    color-mix(in srgb, var(--icon-color) 40%, transparent) 11deg 12.5deg,
-    transparent 12.5deg 20deg
+    transparent 0deg,
+    color-mix(in srgb, var(--icon-color) 8%, transparent) 40deg,
+    color-mix(in srgb, var(--icon-color) 55%, transparent) 70deg,
+    color-mix(in srgb, var(--icon-color) 90%, white 12%) 88deg,
+    color-mix(in srgb, var(--icon-color) 55%, transparent) 106deg,
+    color-mix(in srgb, var(--icon-color) 8%, transparent) 136deg,
+    transparent 180deg,
+    color-mix(in srgb, var(--icon-color) 6%, transparent) 220deg,
+    color-mix(in srgb, var(--icon-color) 40%, transparent) 250deg,
+    color-mix(in srgb, var(--icon-color) 72%, transparent) 268deg,
+    color-mix(in srgb, var(--icon-color) 40%, transparent) 286deg,
+    color-mix(in srgb, var(--icon-color) 6%, transparent) 316deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 5px),
+    #000 calc(100% - 3.5px),
+    #000 calc(100% - 1px),
+    transparent 100%
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 5px),
+    #000 calc(100% - 3.5px),
+    #000 calc(100% - 1px),
+    transparent 100%
+  );
+  filter: blur(0.6px) drop-shadow(0 0 5px color-mix(in srgb, var(--icon-color) 50%, transparent));
+  animation: mastery-neon-drift 22s linear infinite;
+  opacity: 0.9;
+}
+
+.passive-node--mastery.is-mastery-powered .passive-node__neon-rim::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 140deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--icon-color) 30%, transparent) 50deg,
+    color-mix(in srgb, var(--icon-color) 68%, transparent) 72deg,
+    color-mix(in srgb, var(--icon-color) 30%, transparent) 94deg,
+    transparent 150deg,
+    transparent 360deg
   );
   -webkit-mask: radial-gradient(
     farthest-side,
     transparent calc(100% - 3.5px),
-    #000 calc(100% - 3px)
+    #000 calc(100% - 2px),
+    transparent 100%
   );
-  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--icon-color) 45%, transparent));
-  animation: mastery-gear-spin 16s linear infinite;
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 2px),
+    transparent 100%
+  );
+  filter: blur(1.5px);
+  animation: mastery-neon-pulse 6s ease-in-out infinite;
 }
 
-.passive-node--mastery.is-mastery-powered .passive-node__gear-rim::after {
+.passive-node--mastery.is-mastery-powered .passive-node__neon-rim::after {
   content: '';
   position: absolute;
-  inset: 5px;
+  inset: 0;
   border-radius: 50%;
-  border: 1px dotted color-mix(in srgb, var(--icon-color) 38%, transparent);
-  animation: mastery-gear-spin-rev 22s linear infinite;
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--icon-color) 26%, transparent),
+    0 0 22px color-mix(in srgb, var(--icon-color) 12%, transparent);
+  animation: mastery-neon-breathe 8s ease-in-out infinite;
 }
 
-@keyframes mastery-gear-spin {
+@keyframes mastery-neon-drift {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
   }
@@ -91,12 +141,25 @@
   }
 }
 
-@keyframes mastery-gear-spin-rev {
-  from {
-    transform: rotate(0deg);
+@keyframes mastery-neon-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    filter: blur(1.8px);
   }
-  to {
-    transform: rotate(-360deg);
+  50% {
+    opacity: 0.85;
+    filter: blur(1px);
+  }
+}
+
+@keyframes mastery-neon-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 

@@ -182,7 +182,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {isMastery && powered && <div className="passive-node__gear-rim" aria-hidden />}
+      {isMastery && powered && <div className="passive-node__neon-rim" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       {!isStealth && (
