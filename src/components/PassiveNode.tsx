@@ -86,9 +86,9 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = isMastery && powered ? 28 : showBands ? 12 + bandLevel * 10 : 0
-  const glowAlpha = isMastery && powered ? 0.62 : showBands ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
-  const haloStrength = isMastery && powered ? 0.88 : showBands ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
+  const glowBlur = showBands ? 12 + bandLevel * 10 : 0
+  const glowAlpha = showBands ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
+  const haloStrength = showBands ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
 
   const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
   const done = fills.filter((f, i) => f >= (NOTABLE_BAND_GOALS[i] ?? 0)).length
@@ -182,7 +182,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {isMastery && powered && <div className="passive-node__sun-flare" aria-hidden />}
+      {isMastery && powered && <div className="passive-node__gear-rim" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       {!isStealth && (

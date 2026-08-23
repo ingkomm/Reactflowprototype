@@ -9,8 +9,8 @@ import { NODE_SIZE, trimStraightEndpoints } from '../orbit'
 
 export type NotableFlowEdge = Edge<Record<string, unknown>, 'notable'>
 
-/** Wide, very faint straight affinity link between two Notable nodes. */
-export function NotableEdge({ id, source, target, interactionWidth = 32, selected }: EdgeProps) {
+/** Wide, faint straight affinity link between two Notable nodes. */
+export function NotableEdge({ id, source, target, interactionWidth = 36, selected }: EdgeProps) {
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
 
@@ -45,7 +45,7 @@ export function NotableEdge({ id, source, target, interactionWidth = 32, selecte
   })[0]
   const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
 
-  const tint = 'color-mix(in srgb, #cfe8e4 6%, transparent)'
+  const tint = 'color-mix(in srgb, #d5ebe7 18%, transparent)'
 
   return (
     <>
@@ -60,10 +60,10 @@ export function NotableEdge({ id, source, target, interactionWidth = 32, selecte
         path={path}
         style={{
           stroke: tint,
-          strokeWidth: beamWidth * 2.2,
+          strokeWidth: beamWidth * 2.1,
           strokeLinecap: 'round',
-          opacity: selected ? 0.22 : 0.14,
-          filter: 'blur(3px)',
+          opacity: selected ? 0.42 : 0.3,
+          filter: 'blur(2.5px)',
         }}
         interactionWidth={0}
       />
@@ -74,7 +74,7 @@ export function NotableEdge({ id, source, target, interactionWidth = 32, selecte
           stroke: tint,
           strokeWidth: beamWidth,
           strokeLinecap: 'round',
-          opacity: selected ? 0.28 : 0.18,
+          opacity: selected ? 0.5 : 0.38,
         }}
         interactionWidth={0}
       />
