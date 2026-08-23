@@ -267,16 +267,18 @@ export function Inspector({
           {Array.from({ length: orbitTierCount }, (_, index) => {
             const tier = (index + 1) as OrbitTier
             const capacity = getOrbitTierCapacity(data, tier)
+            const memberCount = orbitMembers.filter((m) => m.tier === tier).length
+            const minCapacity = Math.max(1, memberCount)
             return (
               <label key={`cap-${tier}`} className="field">
                 <span>{tier}단 용량</span>
                 <input
                   type="number"
-                  min={1}
+                  min={minCapacity}
                   max={24}
                   value={capacity}
                   onChange={(e) => {
-                    const value = Math.max(1, Math.min(24, Number(e.target.value) || 1))
+                    const value = Math.max(minCapacity, Math.min(24, Number(e.target.value) || minCapacity))
                     onChangeOrbitCapacity(nodeId, tier, value)
                   }}
                 />

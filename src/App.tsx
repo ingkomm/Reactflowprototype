@@ -60,6 +60,7 @@ import {
   normalizeAngleDelta,
   placeSatelliteFromDrag,
   placeSatelliteOnMasteryOrbit,
+  rematerializeOrbitTierSlots,
   removeSatelliteFromOrbitOrders,
   rotateAllMasteryTiersByDelta,
   setMasteryTierOrbitOrder,
@@ -819,13 +820,19 @@ export default function App() {
       const members = countOrbitTierMembers(nodes, masteryId, tier)
       if (nextCapacity < members) {
         window.alert(
-          `${tier}단에 노드가 ${members}개 있습니다. 노드를 제거한 뒤 용량을 줄여 주세요.`,
+          `${tier}단에 노드가 ${members}개 있습니다. 용량이 가득 찬 상태에서는 더 줄일 수 없습니다. 노드를 제거한 뒤 다시 시도해 주세요.`,
         )
         return
       }
+      const mastery = nodes.find((n) => n.id === masteryId)
+      const currentCapacity = mastery
+        ? getOrbitTierCapacity(mastery.data as PassiveNodeData, tier)
+        : nextCapacity
+      if (nextCapacity === currentCapacity) return
+
       commit()
       setNodes((nds) => {
-        const next = nds.map((node) => {
+        let next = nds.map((node) => {
           if (node.id !== masteryId) return node
           const data = node.data as PassiveNodeData
           return {
@@ -839,6 +846,7 @@ export default function App() {
             },
           }
         })
+        next = rematerializeOrbitTierSlots(next, masteryId, tier, nextCapacity)
         const stacked = stack(layoutMasteryOrbit(next, masteryId))
         setEdges((eds) => sanitizeEdges(stacked, eds))
         return stacked

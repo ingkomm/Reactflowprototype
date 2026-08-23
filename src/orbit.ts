@@ -695,7 +695,30 @@ export function orbitSlotFromDropAngle(
   return { tier, slot }
 }
 
-/** Clockwise neighbors on a mastery orbit ring (empty capacity slots break adjacency). */
+/** True when the open arc from `fromSlot` → `toSlot` (exclusive) has no occupied slots. */
+function orbitArcHasOnlyVoids(
+  occupiedSlots: Set<number>,
+  capacity: number,
+  fromSlot: number,
+  toSlot: number,
+): boolean {
+  if (capacity <= 0) return false
+  if (fromSlot === toSlot) return false
+  let s = (fromSlot + 1) % capacity
+  let guard = 0
+  while (s !== toSlot) {
+    if (occupiedSlots.has(s)) return false
+    s = (s + 1) % capacity
+    if (++guard > capacity) return false
+  }
+  return true
+}
+
+/**
+ * Clockwise neighbors on a mastery orbit ring.
+ * Empty capacity slots (void spacers) do not break adjacency — only other
+ * satellites between the two nodes do.
+ */
 export function areOrbitAdjacent(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -712,8 +735,23 @@ export function areOrbitAdjacent(
   const capacity = getOrbitTierCapacity(md, tierA)
   const ia = getSatelliteOrbitSlot(nodes, masteryId, aId)
   const ib = getSatelliteOrbitSlot(nodes, masteryId, bId)
-  const diff = Math.abs(ia - ib)
-  return diff === 1 || diff === capacity - 1
+  if (ia === ib) return false
+
+  const occupied = new Set<number>()
+  for (const sat of getOrbitSatellites(nodes, masteryId)) {
+    if (sat.id === aId || sat.id === bId) continue
+    const sd = sat.data as PassiveNodeData
+    if (normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount)) !== tierA) {
+      continue
+    }
+    if (isVoidPassing(sd)) continue
+    occupied.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
+  }
+
+  return (
+    orbitArcHasOnlyVoids(occupied, capacity, ia, ib) ||
+    orbitArcHasOnlyVoids(occupied, capacity, ib, ia)
+  )
 }
 
 /** Starting angle (degrees) for one orbit tier; falls back to tier 1 / default. */
@@ -889,9 +927,23 @@ export function orbitLinkSpec(
   const ia = getSatelliteOrbitSlot(nodes, masteryId, sourceId)
   const ib = getSatelliteOrbitSlot(nodes, masteryId, targetId)
 
+  const occupied = new Set<number>()
+  for (const sat of getOrbitSatellites(nodes, masteryId)) {
+    if (sat.id === sourceId || sat.id === targetId) continue
+    const satData = sat.data as PassiveNodeData
+    if (normalizeOrbitTier(satData.orbitTier, tierCount) !== tierA) continue
+    if (isVoidPassing(satData)) continue
+    occupied.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
+  }
+
+  const cwClear = orbitArcHasOnlyVoids(occupied, capacity, ia, ib)
+  const ccwClear = orbitArcHasOnlyVoids(occupied, capacity, ib, ia)
+  const cwDist = (ib - ia + capacity) % capacity
+  const ccwDist = (ia - ib + capacity) % capacity
+  const clockwise = cwClear && (!ccwClear || cwDist <= ccwDist)
+
   const a1Raw = orbitSlotAngle(md, tierA, ia, capacity)
   const a2Raw = orbitSlotAngle(md, tierA, ib, capacity)
-  const clockwise = (ia + 1) % capacity === ib
   const trimA = orbitBandAngularTrim(sd, orbitR, options?.sourcePowered ?? false)
   const trimB = orbitBandAngularTrim(td, orbitR, options?.targetPowered ?? false)
 
@@ -1208,7 +1260,8 @@ export function layoutMasteryOrbit(
     const radius = orbitTierRadius(tierCount, tier)
     tierSatellites.forEach((sat) => {
       const satData = sat.data as PassiveNodeData
-      const slot = getSatelliteOrbitSlot(synced, masteryId, sat.id)
+      const rawSlot = getSatelliteOrbitSlot(synced, masteryId, sat.id)
+      const slot = ((rawSlot % capacity) + capacity) % capacity
       const angle = startRad + (2 * Math.PI * slot) / capacity
       const abs = positionFromCenter(
         center.x + radius * Math.cos(angle),
@@ -1235,6 +1288,70 @@ export function layoutMasteryOrbit(
       draggable: true,
     }
   })
+}
+
+/**
+ * After capacity change: map each satellite to a unique slot in [0, capacity).
+ * Prevents overlap when old slots wrap onto the same angle.
+ */
+export function rematerializeOrbitTierSlots(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+  capacity: number,
+): PassiveFlowNode[] {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery || capacity < 1) return nodes
+
+  const sats = getOrderedTierSatellites(nodes, masteryId, tier)
+    .slice()
+    .sort(
+      (a, b) =>
+        getSatelliteOrbitSlot(nodes, masteryId, a.id) -
+        getSatelliteOrbitSlot(nodes, masteryId, b.id),
+    )
+
+  if (sats.length > capacity) return nodes
+
+  const used = new Set<number>()
+  const assignments = new Map<string, number>()
+
+  for (const sat of sats) {
+    const raw = getSatelliteOrbitSlot(nodes, masteryId, sat.id)
+    const preferred = ((raw % capacity) + capacity) % capacity
+    let slot = preferred
+    if (used.has(slot)) {
+      slot = -1
+      for (let i = 1; i < capacity; i++) {
+        const cand = (preferred + i) % capacity
+        if (!used.has(cand)) {
+          slot = cand
+          break
+        }
+      }
+      if (slot < 0) return nodes
+    }
+    used.add(slot)
+    assignments.set(sat.id, slot)
+  }
+
+  let next = nodes.map((node) => {
+    const slot = assignments.get(node.id)
+    if (slot == null) return node
+    const data = node.data as PassiveNodeData
+    return { ...node, data: { ...data, orbitTier: tier, orbitSlot: slot } }
+  })
+
+  const order = [...assignments.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([id]) => id)
+
+  next = next.map((node) => {
+    if (node.id !== masteryId) return node
+    return { ...node, data: setMasteryTierOrbitOrder(node.data as PassiveNodeData, tier, order) }
+  })
+
+  return next
 }
 
 export function withMasteryDragFlags(
