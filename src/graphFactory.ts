@@ -79,6 +79,18 @@ export function passiveLinkEdge(sourceId: string, targetId: string): Edge {
   }
 }
 
+export function notableLinkEdge(sourceId: string, targetId: string): Edge {
+  return {
+    id: `notable-${sourceId}-${targetId}`,
+    type: 'notable',
+    source: sourceId,
+    target: targetId,
+    sourceHandle: 'center',
+    targetHandle: 'center-target',
+    zIndex: 0,
+  }
+}
+
 export function orbitLinkEdge(sourceId: string, targetId: string, masteryId: string): Edge {
   return {
     id: `orbit-${sourceId}-${targetId}`,

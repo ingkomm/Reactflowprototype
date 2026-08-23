@@ -39,7 +39,15 @@ export type LinkCandidate = {
   id: string
   label: string
   kind: PassiveKind
-  linkKind: 'center' | 'orbit'
+  linkKind: 'notable'
+}
+
+export type SelectedLink = {
+  edgeId: string
+  peerId: string
+  peerLabel: string
+  peerKind: PassiveKind
+  linkKind: 'notable'
 }
 
 type Props = {
@@ -48,6 +56,7 @@ type Props = {
   masteryLabel?: string | null
   masteryTierCount?: OrbitTierCount | null
   orbitMembers?: OrbitMember[]
+  selectedLinks?: SelectedLink[]
   linkCandidates?: LinkCandidate[]
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
@@ -71,6 +80,7 @@ export function Inspector({
   masteryLabel,
   masteryTierCount = null,
   orbitMembers = [],
+  selectedLinks = [],
   linkCandidates = [],
   onRename,
   onChangeKind,
@@ -385,24 +395,23 @@ export function Inspector({
         </>
       )}
 
-      {(data.kind === 'connect' ||
-        data.kind === 'small' ||
-        data.kind === 'notable' ||
-        data.kind === 'mastery') && (
+      {data.kind === 'notable' && (
         <div className="inspector__section">
           <div className="inspector__section-head">
-            <h3>Links</h3>
+            <h3>Notable links</h3>
           </div>
-          {data.kind === 'mastery' && (
-            <p className="inspector__empty">
-              Mastery는 개인 링크가 없습니다. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다.
-            </p>
-          )}
-          {(data.kind === 'connect' || data.kind === 'small' || data.kind === 'notable') && (
-            <p className="inspector__empty">
-              같은 단 = 인접 노드만 호 링크 · 인접 단(1↔2, 2↔3) = 직선 호 링크 · 1↔3 불가 · 오르빗
-              밖 = 직선 링크 · Notable끼리 직선 연결 불가
-            </p>
+          <p className="inspector__empty">
+            다른 Notable 노드와만 연결 가능 · 매우 연한 직선 affinity 링크 (파워 경로와 무관)
+          </p>
+
+          {selectedLinks.length > 0 && (
+            <ul className="orbit-list">
+              {selectedLinks.map((link) => (
+                <li key={link.edgeId} className="orbit-item">
+                  <span className="orbit-item__label">{link.peerLabel}</span>
+                </li>
+              ))}
+            </ul>
           )}
 
           <div className="link-add">
@@ -412,12 +421,11 @@ export function Inspector({
               disabled={linkCandidates.length === 0}
             >
               <option value="">
-                {linkCandidates.length === 0 ? 'No partners available' : 'Select partner…'}
+                {linkCandidates.length === 0 ? '연결 가능한 Notable 없음' : 'Notable 선택…'}
               </option>
               {linkCandidates.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.label} ({PASSIVE_KIND_LABEL[c.kind]}
-                  {c.linkKind === 'orbit' ? ', 오르빗' : ', 직선'})
+                  {c.label}
                 </option>
               ))}
             </select>

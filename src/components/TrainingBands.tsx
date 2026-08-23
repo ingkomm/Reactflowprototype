@@ -6,6 +6,7 @@ import {
   sortedStages,
   stageLoggedCount,
   totalRawLoggedAcrossStages,
+  visibleNotableBandCount,
 } from '../stage'
 import './TrainingBands.css'
 
@@ -113,19 +114,20 @@ export function TrainingBands({ stages, nodeSize }: Props) {
   const ordered = sortedStages(stages)
   if (ordered.length === 0) return null
 
-  const bandCount = ordered.length
+  const isNotableBands =
+    ordered.length === NOTABLE_BAND_GOALS.length &&
+    ordered.every((s, i) => s.goal === NOTABLE_BAND_GOALS[i])
+  const totalLogged = totalRawLoggedAcrossStages(ordered)
+  const fills = isNotableBands ? notableBandFills(totalLogged) : null
+  const visibleCount = isNotableBands ? visibleNotableBandCount(totalLogged) : ordered.length
+  const visibleStages = ordered.slice(0, visibleCount)
+
+  const bandCount = visibleStages.length
   const padding = BAND_GAP * bandCount + BAND_STROKE * 2 + 2
   const svgSize = nodeSize + padding * 2
   const cx = svgSize / 2
   const cy = svgSize / 2
   const baseR = nodeSize / 2 + BAND_BASE_PAD
-
-  const isNotableBands =
-    ordered.length === NOTABLE_BAND_GOALS.length &&
-    ordered.every((s, i) => s.goal === NOTABLE_BAND_GOALS[i])
-  const fills = isNotableBands
-    ? notableBandFills(totalRawLoggedAcrossStages(ordered))
-    : null
 
   return (
     <svg
@@ -135,7 +137,7 @@ export function TrainingBands({ stages, nodeSize }: Props) {
       viewBox={`0 0 ${svgSize} ${svgSize}`}
       aria-hidden
     >
-      {ordered.map((stage, i) => (
+      {visibleStages.map((stage, i) => (
         <StageRing
           key={stage.id}
           stage={stage}

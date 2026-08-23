@@ -8,6 +8,7 @@ import {
   NOTABLE_BAND_GOALS,
   stageBandLevel,
   totalRawLoggedAcrossStages,
+  visibleNotableBandCount,
 } from '../stage'
 import {
   getOrderedOrbitSatellites,
@@ -64,9 +65,14 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
-  const showBands = powered && kindUsesTrainingBands(data.kind) && stages.length > 0
+  const totalLogged = totalRawLoggedAcrossStages(stages)
+  const visibleBandCount =
+    powered && kindUsesTrainingBands(data.kind)
+      ? visibleNotableBandCount(totalLogged)
+      : 0
+  const showBands = visibleBandCount > 0
   const bandLevel = showBands ? stageBandLevel(stages) : 0
-  const bandCount = showBands ? stages.length : 0
+  const bandCount = showBands ? visibleBandCount : 0
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const showOrbitRings = isMastery
   const orbitRingsUnlocked = isMastery && !data.orbitLocked
@@ -80,11 +86,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = showBands ? 12 + bandLevel * 10 : 0
-  const glowAlpha = showBands ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
-  const haloStrength = showBands ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
+  const glowBlur = isMastery && powered ? 28 : showBands ? 12 + bandLevel * 10 : 0
+  const glowAlpha = isMastery && powered ? 0.62 : showBands ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
+  const haloStrength = isMastery && powered ? 0.88 : showBands ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
 
-  const totalLogged = totalRawLoggedAcrossStages(stages)
   const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
   const done = fills.filter((f, i) => f >= (NOTABLE_BAND_GOALS[i] ?? 0)).length
   const activeFill = fills.findIndex((f, i) => f < (NOTABLE_BAND_GOALS[i] ?? 1))
@@ -110,6 +115,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${orbitRingsUnlocked ? ' has-orbit-rings-visible' : ''}${
         orbitRingsLocked ? ' has-orbit-rings-locked' : ''
       }${orbitRingsForced ? ' is-orbit-forced-visible' : ''}${
+        isMastery && powered ? ' is-mastery-powered' : ''
+      }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }${connectGlowClass}`}
       style={
@@ -175,6 +182,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
+      {isMastery && powered && <div className="passive-node__sun-flare" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       {!isStealth && (
@@ -224,8 +232,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           )}
           {showBands && (
             <p className="passive-node__tooltip-meta">
-              누적 {totalLogged} · 밴드 {done}/{NOTABLE_BAND_GOALS.length}
-              {activeFill >= 0
+              로그 {totalLogged} · 밴드 {done}/{visibleBandCount}
+              {activeFill >= 0 && activeFill < visibleBandCount
                 ? ` · ${fills[activeFill]}/${NOTABLE_BAND_GOALS[activeFill]}`
                 : ''}
             </p>

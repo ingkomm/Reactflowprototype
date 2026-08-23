@@ -14,10 +14,12 @@ import {
   shareSameOrbit,
 } from './orbit'
 
-export type LinkKind = 'center' | 'orbit'
+export type LinkKind = 'center' | 'orbit' | 'notable'
 
 export function edgeLinkKind(edge: Edge): LinkKind {
-  return edge.type === 'orbit' ? 'orbit' : 'center'
+  if (edge.type === 'orbit') return 'orbit'
+  if (edge.type === 'notable') return 'notable'
+  return 'center'
 }
 
 function isInitial(data: PassiveNodeData) {
@@ -288,8 +290,14 @@ export function pruneEdgesReachableFromInitial(
   edges: Edge[],
 ): Edge[] {
   const reachable = getNodesReachableFromInitial(nodes, edges)
-  if (reachable.size === 0) return []
-  return edges.filter((e) => reachable.has(e.source) && reachable.has(e.target))
+  const nodeIds = new Set(nodes.map((n) => n.id))
+  if (reachable.size === 0) return edges.filter((e) => e.type === 'notable' && nodeIds.has(e.source) && nodeIds.has(e.target))
+  return edges.filter((e) => {
+    if (e.type === 'notable') {
+      return nodeIds.has(e.source) && nodeIds.has(e.target)
+    }
+    return reachable.has(e.source) && reachable.has(e.target)
+  })
 }
 
 /** Whether a new center/orbit link is allowed between two nodes. */
@@ -321,7 +329,7 @@ export function classifyPassiveConnection(
     return null
   }
 
-  if (sd.kind === 'notable' && td.kind === 'notable') return null
+  if (sd.kind === 'notable' && td.kind === 'notable') return 'notable'
 
   if (
     shareSameOrbit({ data: sd }, { data: td }) &&

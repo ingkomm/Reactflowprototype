@@ -45,6 +45,66 @@
   --glow: rgba(61, 184, 168, 0.35);
 }
 
+.passive-node--mastery.is-mastery-powered .passive-node__sun-flare {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--node-size) * 2.4);
+  height: calc(var(--node-size) * 2.4);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      circle,
+      color-mix(in srgb, #fff8e8 22%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 38%, transparent) 18%,
+      color-mix(in srgb, var(--ring) 22%, transparent) 42%,
+      transparent 68%
+    );
+  filter: blur(10px);
+  animation: mastery-sun-pulse 4.5s ease-in-out infinite;
+}
+
+.passive-node--mastery.is-mastery-powered .passive-node__ring {
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--accent) 72%, transparent),
+    0 0 36px color-mix(in srgb, var(--accent) 42%, transparent),
+    0 0 64px color-mix(in srgb, var(--ring) 28%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 248, 230, 0.28), transparent 46%),
+    radial-gradient(circle at 62% 68%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+    color-mix(in srgb, var(--icon-color) 32%, #0d1218);
+}
+
+.passive-node--mastery.is-mastery-powered .passive-node__halo {
+  width: calc(var(--node-size) * 2.2);
+  height: calc(var(--node-size) * 2.2);
+  opacity: 0.95;
+  background: radial-gradient(
+    circle,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 28%, transparent) 42%,
+    color-mix(in srgb, var(--ring) 18%, transparent) 58%,
+    transparent 76%
+  );
+  filter: blur(12px);
+}
+
+@keyframes mastery-sun-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+}
+
 .passive-node--initial {
   --node-size: 56px;
   --ring: #ffe066;

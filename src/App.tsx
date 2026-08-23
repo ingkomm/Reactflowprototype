@@ -19,6 +19,7 @@ import '@xyflow/react/dist/style.css'
 
 import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
 import { CenterEdge } from './components/CenterEdge'
+import { NotableEdge } from './components/NotableEdge'
 import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
@@ -34,7 +35,7 @@ import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
 import { stagesForKind, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
-import { createPassiveData, passiveLinkEdge, orbitLinkEdge } from './graphFactory'
+import { createPassiveData, passiveLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
 import {
   DEFAULT_SELECTED_NODE_ID,
   SEED_EDGES,
@@ -79,7 +80,7 @@ import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
 const nodeTypes = { passive: PassiveNode }
-const edgeTypes = { center: CenterEdge, orbit: OrbitEdge }
+const edgeTypes = { center: CenterEdge, orbit: OrbitEdge, notable: NotableEdge }
 
 function uid(prefix: string) {
   return stageUid(prefix)
@@ -167,7 +168,7 @@ function resolveMasteryPair(
   return null
 }
 
-function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit') {
+function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit' | 'notable') {
   return edges.find((e) => {
     if (type && e.type !== type) return false
     return (e.source === a && e.target === b) || (e.source === b && e.target === a)
@@ -189,6 +190,7 @@ function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
     if (!source || !target) return false
     const linkKind = classifyLink(source, target, nodes)
     if (e.type === 'orbit') return linkKind === 'orbit'
+    if (e.type === 'notable') return linkKind === 'notable'
     return linkKind === 'center'
   })
 }
@@ -437,18 +439,10 @@ export default function App() {
   }, [nodes, selectedData?.kind, selectedData?.orbitTierCount, selectedNode])
 
   const selectedLinks = useMemo(() => {
-    if (!selectedNode || !selectedData) return []
-    const kind = selectedData.kind
-    if (kind !== 'initial' && kind !== 'connect' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
-      return []
-    }
+    if (!selectedNode || !selectedData || selectedData.kind !== 'notable') return []
     return edges
       .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
-      .filter((e) => {
-        if (kind === 'mastery') return e.type === 'center' || !e.type
-        if (kind === 'initial') return e.type === 'center' || !e.type
-        return true
-      })
+      .filter((e) => e.type === 'notable')
       .map((e) => {
         const peerId = e.source === selectedNode.id ? e.target : e.source
         const peer = nodes.find((n) => n.id === peerId)
@@ -457,33 +451,29 @@ export default function App() {
           edgeId: e.id,
           peerId,
           peerLabel: peerData?.label ?? peerId,
-          peerKind: peerData?.kind ?? 'small',
-          linkKind: e.type === 'orbit' ? ('orbit' as const) : ('center' as const),
+          peerKind: peerData?.kind ?? 'notable',
+          linkKind: 'notable' as const,
         }
       })
   }, [edges, nodes, selectedData, selectedNode])
 
   const linkCandidates = useMemo(() => {
-    if (!selectedNode || !selectedData) return []
-    const kind = selectedData.kind
-    if (kind !== 'initial' && kind !== 'connect' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
-      return []
-    }
+    if (!selectedNode || !selectedData || selectedData.kind !== 'notable') return []
     const linked = new Set(selectedLinks.map((l) => l.peerId))
     return nodes
       .filter((n) => {
         if (n.id === selectedNode.id || linked.has(n.id)) return false
-        const linkKind = classifyLink(selectedNode, n, nodes)
-        return linkKind === 'center' || linkKind === 'orbit'
+        const d = n.data as PassiveNodeData
+        if (d.kind !== 'notable') return false
+        return classifyLink(selectedNode, n, nodes) === 'notable'
       })
       .map((n) => {
         const d = n.data as PassiveNodeData
-        const linkKind = classifyLink(selectedNode, n, nodes)
         return {
           id: n.id,
           label: d.label,
           kind: d.kind,
-          linkKind: linkKind === 'orbit' ? ('orbit' as const) : ('center' as const),
+          linkKind: 'notable' as const,
         }
       })
   }, [nodes, selectedData, selectedLinks, selectedNode])
@@ -494,7 +484,7 @@ export default function App() {
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
       const kind = classifyLink(source, target, nodes)
-      return kind === 'center' || kind === 'orbit' || kind === 'attach'
+      return kind === 'center' || kind === 'orbit' || kind === 'notable' || kind === 'attach'
     },
     [nodes],
   )
@@ -565,11 +555,12 @@ export default function App() {
         }
         return
       }
-      if (linkKind !== 'center' && linkKind !== 'orbit') return
+      if (linkKind !== 'center' && linkKind !== 'orbit' && linkKind !== 'notable') return
 
       commit()
       setEdges((eds) => {
-        const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
+        const edgeType =
+          linkKind === 'orbit' ? 'orbit' : linkKind === 'notable' ? 'notable' : 'center'
         const existing = findLinkEdge(eds, source.id, target.id, edgeType)
         let next: Edge[]
         if (existing) {
@@ -579,6 +570,8 @@ export default function App() {
           const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
           if (!masteryId) return eds
           next = [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+        } else if (linkKind === 'notable') {
+          next = [...eds, notableLinkEdge(source.id, target.id)]
         } else {
           next = [...eds, passiveLinkEdge(source.id, target.id)]
         }
@@ -760,21 +753,11 @@ export default function App() {
       const target = nodes.find((n) => n.id === peerId)
       if (!source || !target) return
       const linkKind = classifyLink(source, target, nodes)
-      if (linkKind !== 'center' && linkKind !== 'orbit') return
+      if (linkKind !== 'notable') return
       commit()
       setEdges((eds) => {
-        const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
-        if (findLinkEdge(eds, source.id, target.id, edgeType)) return eds
-        let next: Edge[]
-        if (linkKind === 'orbit') {
-          const sd = source.data as PassiveNodeData
-          const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
-          if (!masteryId) return eds
-          next = [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
-        } else {
-          next = [...eds, passiveLinkEdge(source.id, target.id)]
-        }
-        return sanitizeEdges(nodes, next)
+        if (findLinkEdge(eds, source.id, target.id, 'notable')) return eds
+        return sanitizeEdges(nodes, [...eds, notableLinkEdge(source.id, target.id)])
       })
     },
     [commit, nodes, selectedId, setEdges],
@@ -995,6 +978,7 @@ export default function App() {
           )
 
           if (e.type === 'orbit') return linkKind === 'orbit'
+          if (e.type === 'notable') return linkKind === 'notable'
           return linkKind === 'center'
         }),
       )
@@ -1382,6 +1366,7 @@ export default function App() {
             masteryLabel={selectedMasteryLabel}
             masteryTierCount={selectedMasteryTierCount}
             orbitMembers={orbitMembers}
+            selectedLinks={selectedLinks}
             linkCandidates={linkCandidates}
             onRename={(nodeId, label) => {
               if (nodeId === INITIAL_NODE_ID) return

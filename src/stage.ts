@@ -136,6 +136,15 @@ export function notableBandFills(totalLogged: number): number[] {
   })
 }
 
+/** How many Notable band rings to render (hide outer until inner is full). */
+export function visibleNotableBandCount(totalLogged: number): number {
+  const fills = notableBandFills(totalLogged)
+  for (let i = 0; i < NOTABLE_BAND_GOALS.length; i++) {
+    if (fills[i]! < NOTABLE_BAND_GOALS[i]!) return i + 1
+  }
+  return NOTABLE_BAND_GOALS.length
+}
+
 export function isNotableBandComplete(totalLogged: number, bandIndex0: number): boolean {
   const fills = notableBandFills(totalLogged)
   const goal = NOTABLE_BAND_GOALS[bandIndex0]
