@@ -93,14 +93,14 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     : labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = masteryNeonLit ? 16 + 8 : showBands ? 12 + bandLevel * 10 : 0
+  const glowBlur = masteryNeonLit ? 10 : showBands ? 12 + bandLevel * 10 : 0
   const glowAlpha = masteryNeonLit
-    ? 0.48
+    ? 0.28
     : showBands
       ? Math.min(0.95, 0.28 + bandLevel * 0.16)
       : 0
   const haloStrength = masteryNeonLit
-    ? 0.62
+    ? 0
     : showBands
       ? Math.min(0.92, 0.28 + bandLevel * 0.18)
       : 0
@@ -121,7 +121,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
         powered ? '' : ' is-unpowered'
-      }${showBands || masteryNeonLit ? ' has-bands' : ''}${
+      }${showBands ? ' has-bands' : ''}${
         isStealth ? ' is-stealth' : ''
       }${isAmbientVisible ? ' is-ambient-visible' : ''}${
         showVoidHighlight ? ' is-void-highlighted' : ''
@@ -139,7 +139,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           '--glow-blur': `${glowBlur}px`,
           '--glow-alpha': String(glowAlpha),
           '--halo-strength': String(haloStrength),
-          '--band-level': String(masteryNeonLit ? 1.2 : bandLevel),
+          '--band-level': String(bandLevel),
           '--band-count': String(bandCount),
           '--outer-band-r': `${outerBandR}px`,
           '--connect-r': `${connectR}px`,
@@ -197,7 +197,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {masteryNeonLit && <div className="passive-node__neon-rim" aria-hidden />}
+      {masteryNeonLit && <div className="passive-node__nebula" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       {!isStealth && (

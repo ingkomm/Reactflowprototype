@@ -20,10 +20,10 @@ export const BAND_STROKE = 3.2
 /** Clearance past the node face / selection halo before the first (innermost) band. */
 export const BAND_BASE_PAD = 10
 export const COUNT_BAND_GAP = 12
-/** Mastery neon rim: CSS uses `node-size + 14px` diameter → +7px radius past face. */
-export const MASTERY_NEON_RIM_PAD = 7
-/** Extra gap so the title clears neon bloom / drop-shadow. */
-export const MASTERY_NEON_LABEL_GAP = 14
+/** Mastery PoE-style nebula aura radius past node face (half of ~2.8× diameter). */
+export const MASTERY_NEBULA_PAD = 0.9
+/** Extra gap so the title clears the soft nebula fade. */
+export const MASTERY_NEBULA_LABEL_GAP = 18
 /** Angular gap between segment cells (radians). */
 const SEGMENT_GAP = 0.09
 
@@ -44,14 +44,14 @@ export function labelBelowBandOffset(stageCount: number, nodeSize: number) {
   return outermostBandRadius(stageCount, nodeSize) + BAND_STROKE / 2 + COUNT_BAND_GAP
 }
 
-/** Title offset so mastery neon rim does not cover the label. */
+/** Title offset so mastery nebula does not cover the label. */
 export function masteryNeonLabelOffset(nodeSize: number) {
-  return nodeSize / 2 + MASTERY_NEON_RIM_PAD + MASTERY_NEON_LABEL_GAP
+  return nodeSize / 2 + nodeSize * MASTERY_NEBULA_PAD + MASTERY_NEBULA_LABEL_GAP
 }
 
-/** Outer radius used for mastery neon halo sizing (matches rim element). */
+/** Outer radius used for mastery nebula sizing. */
 export function masteryNeonOuterRadius(nodeSize: number) {
-  return nodeSize / 2 + MASTERY_NEON_RIM_PAD
+  return nodeSize / 2 + nodeSize * MASTERY_NEBULA_PAD
 }
 
 function polar(cx: number, cy: number, r: number, angle: number) {
