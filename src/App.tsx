@@ -44,8 +44,6 @@ import {
   assignSatelliteOrbitSlot,
   canAcceptOrbitMember,
   DEFAULT_ORBIT_START_ANGLE,
-  distanceBetweenCenters,
-  findNearestMastery,
   findOrbitAttachTarget,
   getOrbitTierCapacity,
   getOrderedTierSatellites,
@@ -56,14 +54,10 @@ import {
   isMasteryOrbitLocked,
   isOrbitMemberKind,
   layoutMasteryOrbit,
-  masteryOuterOrbitRadius,
-  nodeCenter,
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
-  ORBIT_DETACH_SLACK,
-  placeExternalSatelliteOnOrbit,
-  placeOrbitMemberFromDrag,
+  placeSatelliteFromDrag,
   placeSatelliteOnMasteryOrbit,
   removeSatelliteFromOrbitOrders,
   rotateAllMasteryTiersByDelta,
@@ -72,6 +66,7 @@ import {
   snapshotMasteryTierAngles,
   removeNodesAndRelayout,
   snapOrbitAngle,
+  type SatelliteDragOrigin,
   withMasteryDragFlags,
 } from './orbit'
 import { OrbitRotateController, shouldSuppressOrbitSelectionClear } from './components/OrbitRotateController'
@@ -1076,80 +1071,27 @@ export default function App() {
         return
       }
 
-      if (isOrbitMemberKind(data.kind) && data.masteryId) {
-        const masteryId = data.masteryId
-        if (isMasteryOrbitLocked(nodes, masteryId)) return
+      if (!isOrbitMemberKind(data.kind)) return
 
-        const mastery = nodes.find((n) => n.id === masteryId)
-        if (mastery) {
-          const dragged: PassiveFlowNode = { ...(nodes.find((n) => n.id === node.id) ?? node), position: node.position } as PassiveFlowNode
-          const radius = masteryOuterOrbitRadius(mastery.data as PassiveNodeData)
-          const dist = distanceBetweenCenters(dragged, mastery, nodes)
+      if (data.masteryId && isMasteryOrbitLocked(nodes, data.masteryId)) return
 
-          if (dist > radius + ORBIT_DETACH_SLACK) {
-            setNodes((nds) => {
-              let next = nds.map((n) => {
-                if (n.id === node.id) {
-                  const d = n.data as PassiveNodeData
-                  return {
-                    ...n,
-                    position: node.position,
-                    data: { ...d, masteryId: null, orbitSlot: undefined },
-                  }
-                }
-                if (n.id === masteryId) {
-                  const d = n.data as PassiveNodeData
-                  return { ...n, data: removeSatelliteFromOrbitOrders(d, node.id) }
-                }
-                return n
-              })
-              next = layoutMasteryOrbit(next, masteryId)
-              return stack(next)
-            })
-            return
-          }
-        }
+      const session = orbitDragSessionRef.current
+      if (session?.nodeId !== node.id) return
 
-        const session = orbitDragSessionRef.current
-        if (session?.nodeId === node.id && session.orbitOrigin) {
-          const dragged: PassiveFlowNode = {
-            ...(nodes.find((n) => n.id === node.id) ?? node),
-            position: node.position,
-          } as PassiveFlowNode
-          const pointerCenter = nodeCenter(dragged, session.snapshotNodes)
-          setNodes(() =>
-            stack(
-              placeOrbitMemberFromDrag(
-                session.snapshotNodes,
-                node.id,
-                pointerCenter,
-                session.orbitOrigin!,
-              ),
-            ),
-          )
-        }
-        return
-      }
+      const origin: SatelliteDragOrigin = session.orbitOrigin
+        ? { kind: 'orbit', ...session.orbitOrigin }
+        : { kind: 'external', position: session.originPosition }
 
-      if (isOrbitMemberKind(data.kind) && !data.masteryId) {
-        const session = orbitDragSessionRef.current
-        if (session?.nodeId === node.id) {
-          setNodes(() =>
-            stack(
-              placeExternalSatelliteOnOrbit(
-                session.snapshotNodes,
-                node.id,
-                node.position,
-                session.originPosition,
-              ),
-            ),
-          )
-        } else {
-          setNodes((nds) =>
-            stack(nds.map((n) => (n.id === node.id ? { ...n, position: node.position } : n))),
-          )
-        }
-      }
+      setNodes(() =>
+        stack(
+          placeSatelliteFromDrag(
+            session.snapshotNodes,
+            node.id,
+            node.position,
+            origin,
+          ),
+        ),
+      )
     },
     [gridSnapEnabled, nodes, setNodes, stack],
   )
@@ -1159,8 +1101,6 @@ export default function App() {
       const data = node.data as PassiveNodeData
       const dragSession = orbitDragSessionRef.current
       orbitDragSessionRef.current = null
-      const externalSwapOrigin =
-        dragSession?.nodeId === node.id ? dragSession.originPosition : { ...node.position }
 
       if (isMasteryKind(data.kind)) {
         setNodes((nds) => {
@@ -1184,135 +1124,48 @@ export default function App() {
         return
       }
 
-      setNodes((nds) => {
-        let next = nds.map((n) =>
-          n.id === node.id ? { ...n, position: node.position } : n,
+      if (!dragSession || dragSession.nodeId !== node.id) {
+        if (gridSnapEnabled) {
+          setNodes((nds) =>
+            stack(
+              nds.map((n) =>
+                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position) } : n,
+              ),
+            ),
+          )
+        }
+        return
+      }
+
+      const origin: SatelliteDragOrigin = dragSession.orbitOrigin
+        ? { kind: 'orbit', ...dragSession.orbitOrigin }
+        : { kind: 'external', position: dragSession.originPosition }
+
+      let finalPosition = node.position
+      if (gridSnapEnabled) {
+        const dragged = {
+          ...(dragSession.snapshotNodes.find((n) => n.id === node.id) ?? node),
+          position: node.position,
+        } as PassiveFlowNode
+        const atPointer = dragSession.snapshotNodes.map((n) =>
+          n.id === node.id ? dragged : n,
         )
-        const satellite = next.find((n) => n.id === node.id)
-        if (!satellite) return nds
-
-        const currentMasteryId = (satellite.data as PassiveNodeData).masteryId ?? null
-
-        if (currentMasteryId) {
-          if (isMasteryOrbitLocked(next, currentMasteryId)) {
-            return stack(layoutMasteryOrbit(next, currentMasteryId))
-          }
-
-          const mastery = next.find((n) => n.id === currentMasteryId)
-          if (mastery) {
-            const parentDist =
-              findNearestMastery([mastery, satellite], satellite)?.dist ?? Infinity
-            const radius = masteryOuterOrbitRadius(mastery.data as PassiveNodeData)
-
-            if (parentDist > radius + ORBIT_DETACH_SLACK) {
-              next = next.map((n) => {
-                const d = n.data as PassiveNodeData
-                if (n.id === satellite.id) {
-                  const pos = gridSnapEnabled ? snapNodeTopLeft(n.position) : n.position
-                  return { ...n, position: pos, data: { ...d, masteryId: null, orbitSlot: undefined }, draggable: true }
-                }
-                if (n.id === currentMasteryId && isMasteryKind(d.kind)) {
-                  return {
-                    ...n,
-                    data: removeSatelliteFromOrbitOrders(d, satellite.id),
-                  }
-                }
-                return n
-              })
-              next = layoutMasteryOrbit(next, currentMasteryId)
-
-              const freeSat = next.find((n) => n.id === satellite.id)!
-              const otherTarget = findOrbitAttachTarget(next, freeSat)
-              if (
-                otherTarget &&
-                otherTarget.mastery.id !== currentMasteryId &&
-                !isMasteryOrbitLocked(next, otherTarget.mastery.id)
-              ) {
-                next = next.map((n) => {
-                  const d = n.data as PassiveNodeData
-                  if (n.id === freeSat.id) {
-                    return {
-                      ...n,
-                      data: { ...d, masteryId: otherTarget.mastery.id },
-                      draggable: true,
-                    }
-                  }
-                  return n
-                })
-                const placed = placeSatelliteOnMasteryOrbit(
-                  next,
-                  otherTarget.mastery.id,
-                  freeSat.id,
-                  {
-                    preferredTier: otherTarget.tier,
-                    swapOriginPosition: freeSat.position,
-                  },
-                )
-                if (placed) next = placed
-              }
-
-              return stack(next)
-            }
-
-            if (
-              dragSession?.nodeId === node.id &&
-              dragSession.orbitOrigin &&
-              dragSession.orbitOrigin.masteryId === currentMasteryId
-            ) {
-              const dragged: PassiveFlowNode = { ...satellite, position: node.position }
-              const pointerCenter = nodeCenter(dragged, dragSession.snapshotNodes)
-              return stack(
-                placeOrbitMemberFromDrag(
-                  dragSession.snapshotNodes,
-                  node.id,
-                  pointerCenter,
-                  dragSession.orbitOrigin,
-                ),
-              )
-            }
-
-            const placed = placeSatelliteOnMasteryOrbit(
-              next,
-              currentMasteryId,
-              satellite.id,
-            )
-            return stack(placed ?? layoutMasteryOrbit(next, currentMasteryId))
-          }
+        const attach = findOrbitAttachTarget(atPointer, dragged)
+        if (!attach) {
+          finalPosition = snapNodeTopLeft(node.position)
         }
+      }
 
-        const attachTarget = findOrbitAttachTarget(next, satellite)
-        if (attachTarget && !isMasteryOrbitLocked(next, attachTarget.mastery.id)) {
-          next = next.map((n) => {
-            const d = n.data as PassiveNodeData
-            if (n.id === satellite.id) {
-              return {
-                ...n,
-                data: { ...d, masteryId: attachTarget.mastery.id },
-                draggable: true,
-              }
-            }
-            return n
-          })
-          const placed = placeSatelliteOnMasteryOrbit(
-            next,
-            attachTarget.mastery.id,
-            satellite.id,
-            {
-              preferredTier: attachTarget.tier,
-              swapOriginPosition: externalSwapOrigin,
-            },
-          )
-          if (placed) return stack(placed)
-        }
-
-        if (gridSnapEnabled && !currentMasteryId) {
-          next = next.map((n) =>
-            n.id === node.id ? { ...n, position: snapNodeTopLeft(n.position) } : n,
-          )
-        }
-
-        return stack(next)
-      })
+      setNodes(() =>
+        stack(
+          placeSatelliteFromDrag(
+            dragSession.snapshotNodes,
+            node.id,
+            finalPosition,
+            origin,
+          ),
+        ),
+      )
     },
     [gridSnapEnabled, setNodes, stack],
   )

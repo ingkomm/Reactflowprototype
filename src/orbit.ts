@@ -478,6 +478,197 @@ export function placeOrbitMemberFromDrag(
   return layoutMasteryOrbit(next, masteryId)
 }
 
+export type SatelliteDragOrigin =
+  | ({ kind: 'orbit' } & OrbitDragOrigin)
+  | { kind: 'external'; position: { x: number; y: number } }
+
+const EXTERNAL_SWAP_HIT_SLACK = 48
+
+/** Off-orbit satellite whose center is under the pointer (for orbit↔external swap). */
+export function findExternalSatelliteNear(
+  nodes: PassiveFlowNode[],
+  pointerCenter: { x: number; y: number },
+  excludeId: string,
+): PassiveFlowNode | null {
+  let best: { node: PassiveFlowNode; dist: number } | null = null
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (node.id === excludeId || !isOrbitMemberKind(data.kind) || data.masteryId) continue
+    const center = nodeCenter(node, nodes)
+    const dist = Math.hypot(center.x - pointerCenter.x, center.y - pointerCenter.y)
+    if (dist <= EXTERNAL_SWAP_HIT_SLACK && (!best || dist < best.dist)) {
+      best = { node, dist }
+    }
+  }
+  return best?.node ?? null
+}
+
+/** Orbit A (origin slot) ↔ target orbit occupied slot; origin slot receives target occupant. */
+export function placeCrossOrbitSatelliteFromDrag(
+  snapshotNodes: PassiveFlowNode[],
+  satelliteId: string,
+  pointerCenter: { x: number; y: number },
+  origin: OrbitDragOrigin,
+  target: OrbitAttachTarget,
+): PassiveFlowNode[] {
+  const targetMasteryId = target.mastery.id
+  const targetTier = target.tier
+  const targetSlot = orbitSlotFromFlowPoint(snapshotNodes, targetMasteryId, targetTier, pointerCenter)
+  const occupant = getOrbitSlotOccupant(
+    snapshotNodes,
+    targetMasteryId,
+    targetTier,
+    targetSlot,
+    satelliteId,
+  )
+
+  let next = snapshotNodes.map((node) => {
+    const data = node.data as PassiveNodeData
+    if (node.id === origin.masteryId) {
+      return { ...node, data: removeSatelliteFromOrbitOrders(data, satelliteId) }
+    }
+    if (node.id === satelliteId) {
+      return {
+        ...node,
+        data: {
+          ...data,
+          masteryId: targetMasteryId,
+          orbitTier: targetTier,
+          orbitSlot: targetSlot,
+        },
+      }
+    }
+    return node
+  })
+
+  if (occupant) {
+    next = next.map((node) => {
+      if (node.id !== occupant.id) return node
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        data: {
+          ...data,
+          masteryId: origin.masteryId,
+          orbitTier: origin.tier,
+          orbitSlot: origin.slot,
+        },
+      }
+    })
+  }
+
+  next = layoutMasteryOrbit(next, origin.masteryId)
+  next = layoutMasteryOrbit(next, targetMasteryId)
+  return next
+}
+
+/** On-orbit satellite ↔ off-orbit satellite: external takes origin slot, dragged takes external's place. */
+export function swapOrbitSatelliteWithExternal(
+  snapshotNodes: PassiveFlowNode[],
+  satelliteId: string,
+  origin: OrbitDragOrigin,
+  externalId: string,
+): PassiveFlowNode[] {
+  const external = snapshotNodes.find((n) => n.id === externalId)
+  if (!external) return snapshotNodes
+  const externalPos = { ...external.position }
+
+  let next = snapshotNodes.map((node) => {
+    if (node.id === origin.masteryId) {
+      return { ...node, data: removeSatelliteFromOrbitOrders(node.data as PassiveNodeData, satelliteId) }
+    }
+    return node
+  })
+
+  next = next.map((node) => {
+    if (node.id === externalId) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        data: {
+          ...data,
+          masteryId: origin.masteryId,
+          orbitTier: origin.tier,
+          orbitSlot: origin.slot,
+        },
+      }
+    }
+    if (node.id === satelliteId) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        position: externalPos,
+        data: { ...data, masteryId: null, orbitSlot: undefined },
+      }
+    }
+    return node
+  })
+
+  return layoutMasteryOrbit(next, origin.masteryId)
+}
+
+/**
+ * Unified satellite drag preview/finalize from drag-start snapshot.
+ * Same-orbit, cross-orbit, and orbit↔external all use direct swap (no revolver).
+ */
+export function placeSatelliteFromDrag(
+  snapshotNodes: PassiveFlowNode[],
+  satelliteId: string,
+  pointerTopLeft: { x: number; y: number },
+  origin: SatelliteDragOrigin,
+): PassiveFlowNode[] {
+  const satellite = snapshotNodes.find((n) => n.id === satelliteId)
+  if (!satellite) return snapshotNodes
+
+  if (origin.kind === 'external') {
+    return placeExternalSatelliteOnOrbit(
+      snapshotNodes,
+      satelliteId,
+      pointerTopLeft,
+      origin.position,
+    )
+  }
+
+  const dragged: PassiveFlowNode = { ...satellite, position: pointerTopLeft }
+  const pointerCenter = nodeCenter(dragged, snapshotNodes)
+  const atPointer = snapshotNodes.map((n) => (n.id === satelliteId ? dragged : n))
+  const attachTarget = findOrbitAttachTarget(atPointer, dragged)
+
+  if (attachTarget) {
+    if (attachTarget.mastery.id === origin.masteryId) {
+      return placeOrbitMemberFromDrag(snapshotNodes, satelliteId, pointerCenter, origin)
+    }
+    return placeCrossOrbitSatelliteFromDrag(
+      snapshotNodes,
+      satelliteId,
+      pointerCenter,
+      origin,
+      attachTarget,
+    )
+  }
+
+  const externalNear = findExternalSatelliteNear(snapshotNodes, pointerCenter, satelliteId)
+  if (externalNear) {
+    return swapOrbitSatelliteWithExternal(snapshotNodes, satelliteId, origin, externalNear.id)
+  }
+
+  let next = snapshotNodes.map((node) => {
+    if (node.id === origin.masteryId) {
+      return { ...node, data: removeSatelliteFromOrbitOrders(node.data as PassiveNodeData, satelliteId) }
+    }
+    if (node.id === satelliteId) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        position: pointerTopLeft,
+        data: { ...data, masteryId: null, orbitSlot: undefined },
+      }
+    }
+    return node
+  })
+  return layoutMasteryOrbit(next, origin.masteryId)
+}
+
 /** Nearest capacity slot from drop angle (allows landing on void spacers). */
 export function orbitSlotFromDropAngle(
   nodes: PassiveFlowNode[],
