@@ -1,4 +1,14 @@
-export type PassiveKind = 'initial' | 'small' | 'notable' | 'mastery' | 'voidMastery' | 'void'
+export type PassiveKind =
+  | 'initial'
+  | 'connect'
+  | 'small'
+  | 'notable'
+  | 'mastery'
+  | 'voidMastery'
+  | 'void'
+
+/** Fixed singleton Initial node id — not creatable or deletable. */
+export const INITIAL_NODE_ID = 'initial-main'
 
 export type OrbitTier = 1 | 2 | 3
 export type OrbitTierCount = 1 | 2 | 3
@@ -48,6 +58,7 @@ export type NodeIconColor = (typeof NODE_ICON_COLORS)[number]
 
 export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   initial: '#FFE066',
+  connect: '#4DAB9A',
   small: '#9B9A97',
   notable: '#D9730D',
   mastery: '#0F7B6C',
@@ -90,16 +101,19 @@ export type PassiveNodeData = {
   orbitLocked?: boolean
   /** Small/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
-  /** Small/Notable/Void on an orbit: which tier ring (1 = innermost). */
+  /** Small/Notable on an orbit: which tier ring (1 = innermost). */
   orbitTier?: OrbitTier
+  /** Satellite slot index (0-based) within tier capacity; empty slots = void spacing. */
+  orbitSlot?: number
   /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
   voidPassing?: boolean
-  /** Connect (initial) only: circuit breaker — when false, power does not flow out. */
+  /** Connect only: circuit breaker — when false, blocks power from Initial. */
   connectEnabled?: boolean
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
-  initial: 'Connect',
+  initial: 'Initial',
+  connect: 'Connect',
   small: 'Small',
   notable: 'Notable',
   mastery: 'Mastery',
@@ -109,7 +123,7 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
 
 /** Kinds the user can add from the toolbar. */
 export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = [
-  'initial',
+  'connect',
   'small',
   'notable',
   'mastery',

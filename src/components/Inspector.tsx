@@ -6,7 +6,7 @@ import type {
   OrbitTierCount,
   StageData,
 } from '../types'
-import { ADDABLE_PASSIVE_KINDS, PASSIVE_KIND_LABEL } from '../types'
+import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from '../types'
 import {
   createTrainingLog,
   ensureNotableStages,
@@ -107,6 +107,7 @@ export function Inspector({
   const kindClasses = classesForKind(classes, data.kind)
   const currentClass = resolve(data.classId, data.kind)
   const notableLogs = ensureNotableStages(stages)[0]?.logs ?? []
+  const isFixedInitial = nodeId === INITIAL_NODE_ID
 
   const patchStages = (next: StageData[]) => {
     onChangeStages(nodeId, ensureNotableStages(next))
@@ -129,7 +130,7 @@ export function Inspector({
               {data.orbitLocked ? '🔒 오르빗 잠김' : '🔓 오르빗 잠금'}
             </button>
           )}
-          <button type="button" className="btn btn--danger" onClick={() => onDeleteNode(nodeId)}>
+          <button type="button" className="btn btn--danger" onClick={() => onDeleteNode(nodeId)} disabled={isFixedInitial}>
             Delete
           </button>
         </div>
@@ -141,9 +142,16 @@ export function Inspector({
           value={data.label}
           onChange={(e) => onRename(nodeId, e.target.value)}
           placeholder="Passive name"
+          disabled={isFixedInitial}
         />
       </label>
 
+      {isFixedInitial ? (
+        <p className="inspector__empty">
+          Initial Node — 전원 소스. 생성·삭제·종류 변경 불가. Connect 노드에만 직선 링크로 전원을
+          공급합니다.
+        </p>
+      ) : (
       <label className="field">
         <span>Kind</span>
         <select
@@ -157,8 +165,9 @@ export function Inspector({
           ))}
         </select>
       </label>
+      )}
 
-      {data.kind === 'initial' && (
+      {data.kind === 'connect' && (
         <div className="field">
           <span>Connect</span>
           <div className="inspector__passing-toggle" role="group" aria-label="Connect circuit">
@@ -180,14 +189,14 @@ export function Inspector({
             </button>
           </div>
           <p className="field-hint">
-            On = 초록(회로 닫힘) · Off = 파란(회로 차단) · Small 노드에만 직선 링크로 파워 공급
+            On = 초록 광원(회로 닫힘) · Off = 빨간 광원(회로 차단) · Initial에서 전원 수신
           </p>
         </div>
       )}
 
       <div className="field">
         <span>클래스</span>
-        {data.kind !== 'initial' && !isStealthPassiveKind(data.kind) ? (
+        {data.kind !== 'initial' && data.kind !== 'connect' && !isStealthPassiveKind(data.kind) ? (
           <>
             <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
               {kindClasses.map((cls) => {
@@ -321,7 +330,7 @@ export function Inspector({
 
           <div className="inspector__section">
             <div className="inspector__section-head">
-              <h3>Orbit order (clockwise)</h3>
+              <h3>Orbit slots (clockwise)</h3>
             </div>
             {orbitMembers.length === 0 ? (
               <p className="inspector__empty">No passives on this orbit yet.</p>
@@ -334,7 +343,7 @@ export function Inspector({
                       <small>{PASSIVE_KIND_LABEL[member.kind]}</small>
                     </span>
                     <select
-                      aria-label={`Order for ${member.label}`}
+                      aria-label={`Slot for ${member.label}`}
                       value={member.order}
                       disabled={data.orbitLocked}
                       onChange={(e) =>
@@ -343,7 +352,7 @@ export function Inspector({
                     >
                       {Array.from({ length: member.tierSize }, (_, i) => (
                         <option key={i + 1} value={i + 1}>
-                          #{i + 1}
+                          슬롯 {i + 1}
                         </option>
                       ))}
                     </select>
@@ -374,7 +383,7 @@ export function Inspector({
         </>
       )}
 
-      {(data.kind === 'initial' ||
+      {(data.kind === 'connect' ||
         data.kind === 'small' ||
         data.kind === 'notable' ||
         data.kind === 'mastery') && (
@@ -387,7 +396,7 @@ export function Inspector({
               Mastery는 개인 링크가 없습니다. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다.
             </p>
           )}
-          {(data.kind === 'small' || data.kind === 'notable') && (
+          {(data.kind === 'connect' || data.kind === 'small' || data.kind === 'notable') && (
             <p className="inspector__empty">
               같은 단 = 인접 노드만 호 링크 · 인접 단(1↔2, 2↔3) = 직선 호 링크 · 1↔3 불가 · 오르빗
               밖 = 직선 링크 · Notable끼리 직선 연결 불가

@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { OrbitTier } from './types'
+import { INITIAL_NODE_ID } from './types'
 import { notableStagesFromTotal } from './stage'
 import {
   layoutMasteryOrbit,
@@ -13,8 +14,12 @@ import {
   passiveLinkEdge,
 } from './graphFactory'
 
+export { INITIAL_NODE_ID }
+
 export const DANCE_MASTERY_ID = 'mastery-dance'
 export const GYM_MASTERY_ID = 'mastery-gym'
+export const CONNECT_DANCE_ID = 'connect-dance'
+export const CONNECT_GYM_ID = 'connect-gym'
 
 const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
   1: ['notable-hiphop', 'notable-kpop', 'small-basic'],
@@ -37,14 +42,30 @@ const gymOrbitOrder = [
 function buildSeedNodes(): PassiveFlowNode[] {
   const base: PassiveFlowNode[] = [
     {
-      id: 'initial-main',
+      id: INITIAL_NODE_ID,
       type: 'passive',
       position: { x: 20, y: 300 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('initial', '시작', {
-        stages: [],
-        classId: 'i-default',
+      data: createPassiveData('initial', 'Initial', { stages: [], classId: 'i-default' }),
+    },
+    {
+      id: CONNECT_DANCE_ID,
+      type: 'passive',
+      position: { x: 120, y: 280 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
+        classId: 'c-default',
+      }),
+    },
+    {
+      id: CONNECT_GYM_ID,
+      type: 'passive',
+      position: { x: 120, y: 360 },
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('connect', 'Connect', {
+        connectEnabled: true,
+        classId: 'c-default',
       }),
     },
     {
@@ -72,6 +93,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: notableStagesFromTotal(10),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
+        orbitSlot: 0,
         classId: 'n-hiphop',
       }),
     },
@@ -84,6 +106,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: notableStagesFromTotal(8),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
+        orbitSlot: 2,
         classId: 'n-kpop',
       }),
     },
@@ -96,6 +119,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
+        orbitSlot: 4,
         classId: 's-basic',
       }),
     },
@@ -108,6 +132,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
+        orbitSlot: 0,
         classId: 's-footwork',
       }),
     },
@@ -120,6 +145,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
+        orbitSlot: 3,
         classId: 's-stretch',
       }),
     },
@@ -145,6 +171,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('notable', '근력', {
         stages: notableStagesFromTotal(12),
         masteryId: GYM_MASTERY_ID,
+        orbitSlot: 0,
         classId: 'n-strength',
       }),
     },
@@ -156,6 +183,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('notable', '유산소', {
         stages: notableStagesFromTotal(7),
         masteryId: GYM_MASTERY_ID,
+        orbitSlot: 2,
         classId: 'n-cardio',
       }),
     },
@@ -167,6 +195,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '하체', {
         stages: [],
         masteryId: GYM_MASTERY_ID,
+        orbitSlot: 4,
         classId: 's-legs',
       }),
     },
@@ -178,6 +207,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '등', {
         stages: [],
         masteryId: GYM_MASTERY_ID,
+        orbitSlot: 5,
         classId: 's-back',
       }),
     },
@@ -189,6 +219,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '러닝', {
         stages: [],
         masteryId: GYM_MASTERY_ID,
+        orbitSlot: 6,
         classId: 's-run',
       }),
     },
@@ -200,6 +231,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       data: createPassiveData('small', '코어', {
         stages: [],
         masteryId: GYM_MASTERY_ID,
+        orbitSlot: 7,
         classId: 's-core',
       }),
     },
@@ -212,10 +244,12 @@ function buildSeedNodes(): PassiveFlowNode[] {
 
 export const SEED_NODES = buildSeedNodes()
 
-/** Connect chain into orbits; Mastery has no personal center links. */
+/** Initial → Connect → Small; orbit ring links among spaced satellites. */
 export const SEED_EDGES: Edge[] = [
-  passiveLinkEdge('initial-main', 'small-basic'),
-  passiveLinkEdge('initial-main', 'small-legs'),
+  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_DANCE_ID),
+  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_GYM_ID),
+  passiveLinkEdge(CONNECT_DANCE_ID, 'small-basic'),
+  passiveLinkEdge(CONNECT_GYM_ID, 'small-legs'),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(gymOrbitOrder, GYM_MASTERY_ID),

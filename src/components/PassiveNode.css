@@ -59,6 +59,57 @@
     0 0 40px color-mix(in srgb, #ffe066 25%, transparent);
 }
 
+.passive-node--connect {
+  --node-size: 28px;
+  --ring: transparent;
+  --core: transparent;
+}
+
+.passive-node--connect .passive-node__ring {
+  background: transparent;
+  border: none;
+}
+
+.passive-node--connect.is-connect-on .passive-node__ring {
+  box-shadow:
+    0 0 10px rgba(66, 232, 144, 0.95),
+    0 0 22px rgba(66, 232, 144, 0.55),
+    inset 0 0 8px rgba(180, 255, 210, 0.45);
+  background: radial-gradient(
+    circle,
+    rgba(66, 232, 144, 0.55) 0%,
+    rgba(66, 232, 144, 0.18) 55%,
+    transparent 72%
+  );
+}
+
+.passive-node--connect.is-connect-off .passive-node__ring {
+  box-shadow:
+    0 0 10px rgba(224, 62, 62, 0.9),
+    0 0 20px rgba(224, 62, 62, 0.45),
+    inset 0 0 6px rgba(255, 120, 120, 0.35);
+  background: radial-gradient(
+    circle,
+    rgba(224, 62, 62, 0.5) 0%,
+    rgba(224, 62, 62, 0.15) 55%,
+    transparent 72%
+  );
+}
+
+.passive-node--connect.is-connect-unpowered .passive-node__ring {
+  box-shadow: 0 0 8px rgba(224, 62, 62, 0.25);
+  background: radial-gradient(
+    circle,
+    rgba(120, 130, 140, 0.25) 0%,
+    transparent 70%
+  );
+}
+
+.passive-node--connect .passive-node__title {
+  font-size: 0.58rem;
+  max-width: 5em;
+}
+
 .passive-node--void {
   --node-size: 36px;
   --ring: transparent;
@@ -278,33 +329,6 @@
   opacity: 0.9;
   border-color: color-mix(in srgb, #6cb6ea 58%, transparent);
   box-shadow: 0 0 8px color-mix(in srgb, #6cb6ea 38%, transparent);
-}
-
-.passive-node__connect-lamp {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.35);
-}
-
-.passive-node__connect-lamp.is-on {
-  background: #42e890;
-  box-shadow:
-    0 0 6px rgba(66, 232, 144, 0.85),
-    0 0 12px rgba(66, 232, 144, 0.35);
-}
-
-.passive-node__connect-lamp.is-off {
-  background: #6cb6ea;
-  box-shadow: 0 0 6px rgba(108, 182, 234, 0.55);
-}
-
-.passive-node--initial.is-unpowered .passive-node__connect-lamp.is-off {
-  background: #5a8fb8;
-  opacity: 0.85;
 }
 
 .passive-node__halo {

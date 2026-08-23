@@ -18,7 +18,7 @@ type Props = {
   onChange: (next: PassiveClass[]) => void
 }
 
-const KIND_TABS: PassiveKind[] = ['initial', 'mastery', 'voidMastery', 'notable', 'small', 'void']
+const KIND_TABS: PassiveKind[] = ['initial', 'connect', 'mastery', 'voidMastery', 'notable', 'small', 'void']
 
 export function ClassManager({ open, classes, onClose, onChange }: Props) {
   const [kind, setKind] = useState<PassiveKind>('mastery')

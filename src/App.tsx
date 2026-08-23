@@ -24,7 +24,7 @@ import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from './types'
-import { ADDABLE_PASSIVE_KINDS, PASSIVE_KIND_LABEL } from './types'
+import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
   resolvePassiveClass,
@@ -42,8 +42,11 @@ import {
 } from './seedGraph'
 import {
   applySatelliteOrbitPlacement,
+  assignSatelliteOrbitSlot,
   canAcceptOrbitMember,
   DEFAULT_ORBIT_START_ANGLE,
+  distanceBetweenCenters,
+  findFirstFreeOrbitSlot,
   findNearestMastery,
   getOrbitTierCapacity,
   getOrderedTierSatellites,
@@ -130,8 +133,10 @@ function buildPastedNode(
       : kind === 'void'
         ? { masteryId: null, voidPassing: source.voidPassing ?? false, orbitTier: 1 }
         : kind === 'initial'
-          ? { connectEnabled: source.connectEnabled ?? true }
-          : { masteryId: null, orbitTier: 1 }),
+          ? {}
+          : kind === 'connect'
+            ? { connectEnabled: source.connectEnabled ?? true }
+            : { masteryId: null, orbitTier: 1 }),
   }
 
   return {
@@ -199,7 +204,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
-  const [addKind, setAddKind] = useState<PassiveKind>('small')
+  const [addKind, setAddKind] = useState<PassiveKind>('connect')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
   const [classManagerOpen, setClassManagerOpen] = useState(false)
@@ -313,10 +318,11 @@ export default function App() {
       const removals = changes.filter((c) => c.type === 'remove')
       const rest = changes.filter((c) => c.type !== 'remove')
       if (rest.length > 0) onNodesChange(rest)
-      if (removals.length === 0) return
+      const blockedRemovals = removals.filter((c) => c.id !== INITIAL_NODE_ID)
+      if (blockedRemovals.length === 0) return
 
       commit()
-      const removeIds = new Set(removals.map((c) => c.id))
+      const removeIds = new Set(blockedRemovals.map((c) => c.id))
       setNodes((nds) =>
         removeNodesAndRelayout(nds, removeIds, selectedIdRef.current),
       )
@@ -399,7 +405,7 @@ export default function App() {
           id: sat.id,
           label: data.label,
           kind: data.kind,
-          order: index + 1,
+          order: (data.orbitSlot ?? index) + 1,
           tier,
           tierSize: capacity,
         })
@@ -411,7 +417,7 @@ export default function App() {
   const selectedLinks = useMemo(() => {
     if (!selectedNode || !selectedData) return []
     const kind = selectedData.kind
-    if (kind !== 'initial' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
+    if (kind !== 'initial' && kind !== 'connect' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
       return []
     }
     return edges
@@ -438,7 +444,7 @@ export default function App() {
   const linkCandidates = useMemo(() => {
     if (!selectedNode || !selectedData) return []
     const kind = selectedData.kind
-    if (kind !== 'initial' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
+    if (kind !== 'initial' && kind !== 'connect' && kind !== 'small' && kind !== 'notable' && kind !== 'mastery') {
       return []
     }
     const linked = new Set(selectedLinks.map((l) => l.peerId))
@@ -519,6 +525,12 @@ export default function App() {
       const placedTier = getSatelliteOrbitTier(next, masteryId, satelliteId)
       if (!canAcceptOrbitMember(nds, masteryId, placedTier, satelliteId)) {
         return nds
+      }
+      if (!alreadyOn) {
+        const freeSlot = findFirstFreeOrbitSlot(next, masteryId, placedTier)
+        if (freeSlot != null) {
+          next = assignSatelliteOrbitSlot(next, masteryId, satelliteId, placedTier, freeSlot)
+        }
       }
       next = layoutMasteryOrbit(next, masteryId)
       if (oldMasteryId) {
@@ -706,20 +718,9 @@ export default function App() {
       if (isMasteryOrbitLocked(nodes, masteryId)) return
       commit()
       setNodes((nds) => {
-        const mastery = nds.find((n) => n.id === masteryId)
-        if (!mastery) return nds
-        const data = mastery.data as PassiveNodeData
         const tier = getSatelliteOrbitTier(nds, masteryId, satelliteId)
-        const ordered = getOrderedTierSatellites(nds, masteryId, tier).map((s) => s.id)
-        const without = ordered.filter((id) => id !== satelliteId)
-        const insertAt = Math.max(0, Math.min(without.length, order1Based - 1))
-        without.splice(insertAt, 0, satelliteId)
-
-        const next = nds.map((node) =>
-          node.id === masteryId
-            ? { ...node, data: setMasteryTierOrbitOrder(data, tier, without) }
-            : node,
-        )
+        const slot = Math.max(0, order1Based - 1)
+        const next = assignSatelliteOrbitSlot(nds, masteryId, satelliteId, tier, slot)
         return stack(layoutMasteryOrbit(next, masteryId))
       })
     },
@@ -822,6 +823,7 @@ export default function App() {
 
   const changeKind = useCallback(
     (nodeId: string, kind: PassiveKind) => {
+      if (nodeId === INITIAL_NODE_ID) return
       const current = nodes.find((n) => n.id === nodeId)
       if (!current) return
       const prev = current.data as PassiveNodeData
@@ -879,8 +881,13 @@ export default function App() {
                       ),
                     }
                 : resolvedKind === 'initial'
-                  ? { connectEnabled: prev.kind === 'initial' ? (data.connectEnabled ?? true) : true }
-                  : {
+                  ? {}
+                  : resolvedKind === 'connect'
+                    ? {
+                        connectEnabled:
+                          prev.kind === 'connect' ? (data.connectEnabled ?? true) : true,
+                      }
+                    : {
                       masteryId:
                         isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
                           ? data.masteryId ?? null
@@ -995,6 +1002,7 @@ export default function App() {
 
   const deleteNode = useCallback(
     (nodeId: string) => {
+      if (nodeId === INITIAL_NODE_ID) return
       commit()
       setNodes((nds) =>
         removeNodesAndRelayout(nds, [nodeId], selectedIdRef.current),
@@ -1057,12 +1065,44 @@ export default function App() {
       }
 
       if (isOrbitMemberKind(data.kind) && data.masteryId) {
-        if (isMasteryOrbitLocked(nodes, data.masteryId)) return
+        const masteryId = data.masteryId
+        if (isMasteryOrbitLocked(nodes, masteryId)) return
+
+        const mastery = nodes.find((n) => n.id === masteryId)
+        if (mastery) {
+          const dragged: PassiveFlowNode = { ...(nodes.find((n) => n.id === node.id) ?? node), position: node.position } as PassiveFlowNode
+          const radius = masteryOuterOrbitRadius(mastery.data as PassiveNodeData)
+          const dist = distanceBetweenCenters(dragged, mastery, nodes)
+
+          if (dist > radius + ORBIT_DETACH_SLACK) {
+            setNodes((nds) => {
+              let next = nds.map((n) => {
+                if (n.id === node.id) {
+                  const d = n.data as PassiveNodeData
+                  return {
+                    ...n,
+                    position: node.position,
+                    data: { ...d, masteryId: null, orbitSlot: undefined },
+                  }
+                }
+                if (n.id === masteryId) {
+                  const d = n.data as PassiveNodeData
+                  return { ...n, data: removeSatelliteFromOrbitOrders(d, node.id) }
+                }
+                return n
+              })
+              next = layoutMasteryOrbit(next, masteryId)
+              return stack(next)
+            })
+            return
+          }
+        }
+
         setNodes((nds) => {
           const synced = nds.map((n) =>
             n.id === node.id ? { ...n, position: node.position } : n,
           )
-          return relayoutOrbitSatellite(synced, data.masteryId!, node.id)
+          return relayoutOrbitSatellite(synced, masteryId, node.id)
         })
       }
     },
@@ -1120,7 +1160,7 @@ export default function App() {
                 const d = n.data as PassiveNodeData
                 if (n.id === satellite.id) {
                   const pos = gridSnapEnabled ? snapNodeTopLeft(n.position) : n.position
-                  return { ...n, position: pos, data: { ...d, masteryId: null }, draggable: true }
+                  return { ...n, position: pos, data: { ...d, masteryId: null, orbitSlot: undefined }, draggable: true }
                 }
                 if (n.id === currentMasteryId && isMasteryKind(d.kind)) {
                   return {
@@ -1348,7 +1388,10 @@ export default function App() {
             masteryTierCount={selectedMasteryTierCount}
             orbitMembers={orbitMembers}
             linkCandidates={linkCandidates}
-            onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
+            onRename={(nodeId, label) => {
+              if (nodeId === INITIAL_NODE_ID) return
+              updateNodeData(nodeId, (d) => ({ ...d, label }))
+            }}
             onChangeKind={changeKind}
             onChangeClassId={(nodeId, classId) =>
               updateNodeData(nodeId, (d) => ({ ...d, classId }))

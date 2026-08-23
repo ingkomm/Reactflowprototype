@@ -5,6 +5,7 @@ import { kindUsesTrainingBands } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
+  connect: 28,
   small: 40,
   notable: 68,
   mastery: 88,
@@ -129,7 +130,7 @@ export function inferOrbitTierFromDistance(
   return best?.tier ?? 1
 }
 
-/** Update satellite tier (by radial drag) and clockwise slot (by angle). */
+/** Update satellite tier and slot from drag position around mastery. */
 export function applySatelliteOrbitPlacement(
   nodes: PassiveFlowNode[],
   masteryId: string,
@@ -144,22 +145,16 @@ export function applySatelliteOrbitPlacement(
   const dist = distanceBetweenCenters(satellite, mastery, nodes)
   const tier = tierCount > 1 ? inferOrbitTierFromDistance(dist, tierCount) : 1
 
-  let next = nodes.map((node) => {
-    if (node.id !== satelliteId) return node
-    const data = node.data as PassiveNodeData
-    return { ...node, data: { ...data, orbitTier: tier } }
-  })
-
-  const { tier: orderTier, order } = orbitOrderByDropAngleInTier(next, masteryId, satelliteId)
-  return next.map((node) => {
-    if (node.id !== masteryId) return node
-    const data = node.data as PassiveNodeData
-    return { ...node, data: setMasteryTierOrbitOrder(data, orderTier, order) }
-  })
+  const { tier: slotTier, slot } = orbitSlotFromDropAngle(nodes, masteryId, satelliteId, tier)
+  return assignSatelliteOrbitSlot(nodes, masteryId, satelliteId, slotTier, slot)
 }
 /** Degrees. -90 = top of the circle; layout advances clockwise. */
 export const DEFAULT_ORBIT_START_ANGLE = -90
 export const ORBIT_ANGLE_STEP = 15
+
+export function isConnectKind(kind: PassiveKind) {
+  return kind === 'connect'
+}
 
 export function isSatelliteKind(kind: PassiveKind) {
   return kind === 'small' || kind === 'notable'
@@ -265,6 +260,10 @@ export function getOrderedTierSatellites(
   for (const sat of byId.values()) {
     ordered.push(sat)
   }
+  ordered.sort(
+    (a, b) =>
+      getSatelliteOrbitSlot(nodes, masteryId, a.id) - getSatelliteOrbitSlot(nodes, masteryId, b.id),
+  )
   return ordered
 }
 
@@ -285,6 +284,140 @@ export function isMasteryOrbitLocked(nodes: PassiveFlowNode[], masteryId: string
   return Boolean((mastery.data as PassiveNodeData).orbitLocked)
 }
 
+/** Slot index for a satellite on its tier (defaults to order index). */
+export function getSatelliteOrbitSlot(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+): number {
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  if (!satellite) return 0
+  const data = satellite.data as PassiveNodeData
+  if (typeof data.orbitSlot === 'number' && Number.isFinite(data.orbitSlot)) {
+    return Math.max(0, Math.floor(data.orbitSlot))
+  }
+  const tier = getSatelliteOrbitTier(nodes, masteryId, satelliteId)
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return 0
+  const md = mastery.data as PassiveNodeData
+  const tierOrder = md.orbitOrderByTier?.[tier] ?? md.orbitOrder ?? []
+  const index = tierOrder.indexOf(satelliteId)
+  return index >= 0 ? index : 0
+}
+
+/** First unused slot index on a tier ring. */
+export function findFirstFreeOrbitSlot(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+): number | null {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return null
+  const md = mastery.data as PassiveNodeData
+  const capacity = getOrbitTierCapacity(md, tier)
+  const used = new Set<number>()
+  for (const sat of getOrbitSatellites(nodes, masteryId)) {
+    const sd = sat.data as PassiveNodeData
+    if (normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount)) !== tier) {
+      continue
+    }
+    used.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
+  }
+  for (let slot = 0; slot < capacity; slot++) {
+    if (!used.has(slot)) return slot
+  }
+  return null
+}
+
+/** Assign a slot on a tier; swaps with occupant when target is taken. */
+export function assignSatelliteOrbitSlot(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+  tier: OrbitTier,
+  slot: number,
+): PassiveFlowNode[] {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return nodes
+  const md = mastery.data as PassiveNodeData
+  const capacity = getOrbitTierCapacity(md, tier)
+  const normalizedSlot = ((Math.floor(slot) % capacity) + capacity) % capacity
+
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  const currentSlot = satellite
+    ? getSatelliteOrbitSlot(nodes, masteryId, satelliteId)
+    : normalizedSlot
+
+  const occupant = getOrbitSatellites(nodes, masteryId).find((sat) => {
+    if (sat.id === satelliteId) return false
+    const sd = sat.data as PassiveNodeData
+    if (normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount)) !== tier) {
+      return false
+    }
+    return getSatelliteOrbitSlot(nodes, masteryId, sat.id) === normalizedSlot
+  })
+
+  let next = nodes.map((node) => {
+    if (node.id === satelliteId) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        data: { ...data, orbitTier: tier, orbitSlot: normalizedSlot },
+      }
+    }
+    if (occupant && node.id === occupant.id) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        data: { ...data, orbitSlot: currentSlot },
+      }
+    }
+    return node
+  })
+
+  const tierSats = getOrbitSatellites(next, masteryId).filter((sat) => {
+    const sd = sat.data as PassiveNodeData
+    return normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount)) === tier
+  })
+  tierSats.sort(
+    (a, b) =>
+      getSatelliteOrbitSlot(next, masteryId, a.id) - getSatelliteOrbitSlot(next, masteryId, b.id),
+  )
+  const order = tierSats.map((s) => s.id)
+
+  return next.map((node) => {
+    if (node.id !== masteryId) return node
+    const data = node.data as PassiveNodeData
+    return { ...node, data: setMasteryTierOrbitOrder(data, tier, order) }
+  })
+}
+
+/** Nearest capacity slot from drop angle (allows landing on void spacers). */
+export function orbitSlotFromDropAngle(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+  tierOverride?: OrbitTier,
+): { tier: OrbitTier; slot: number } {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  if (!mastery || !satellite) return { tier: 1, slot: 0 }
+
+  const tier = tierOverride ?? getSatelliteOrbitTier(nodes, masteryId, satelliteId)
+  const md = mastery.data as PassiveNodeData
+  const capacity = getOrbitTierCapacity(md, tier)
+  const mc = nodeCenter(mastery, nodes)
+  const sc = nodeCenter(satellite, nodes)
+  const start = (getTierStartAngle(md, tier) * Math.PI) / 180
+
+  let rel = Math.atan2(sc.y - mc.y, sc.x - mc.x) - start
+  while (rel < 0) rel += Math.PI * 2
+  while (rel >= Math.PI * 2) rel -= Math.PI * 2
+
+  const slot = Math.round((rel / (Math.PI * 2)) * capacity) % capacity
+  return { tier, slot }
+}
+
 /** Clockwise neighbors on a mastery orbit ring (empty capacity slots break adjacency). */
 export function areOrbitAdjacent(
   nodes: PassiveFlowNode[],
@@ -300,10 +433,8 @@ export function areOrbitAdjacent(
   if (!mastery) return false
   const md = mastery.data as PassiveNodeData
   const capacity = getOrbitTierCapacity(md, tierA)
-  const ordered = getOrderedTierSatellites(nodes, masteryId, tierA).map((s) => s.id)
-  const ia = ordered.indexOf(aId)
-  const ib = ordered.indexOf(bId)
-  if (ia < 0 || ib < 0) return false
+  const ia = getSatelliteOrbitSlot(nodes, masteryId, aId)
+  const ib = getSatelliteOrbitSlot(nodes, masteryId, bId)
   const diff = Math.abs(ia - ib)
   return diff === 1 || diff === capacity - 1
 }
@@ -478,10 +609,8 @@ export function orbitLinkSpec(
 
   const orbitR = orbitTierRadius(tierCount, tierA)
   const capacity = getOrbitTierCapacity(md, tierA)
-  const ordered = getOrderedTierSatellites(nodes, masteryId, tierA).map((s) => s.id)
-  const ia = ordered.indexOf(sourceId)
-  const ib = ordered.indexOf(targetId)
-  if (ia < 0 || ib < 0) return null
+  const ia = getSatelliteOrbitSlot(nodes, masteryId, sourceId)
+  const ib = getSatelliteOrbitSlot(nodes, masteryId, targetId)
 
   const a1Raw = orbitSlotAngle(md, tierA, ia, capacity)
   const a2Raw = orbitSlotAngle(md, tierA, ib, capacity)
@@ -800,9 +929,10 @@ export function layoutMasteryOrbit(
     const capacity = getOrbitTierCapacity(data, tier)
     const startRad = (getTierStartAngle(data, tier) * Math.PI) / 180
     const radius = orbitTierRadius(tierCount, tier)
-    tierSatellites.forEach((sat, index) => {
+    tierSatellites.forEach((sat) => {
       const satData = sat.data as PassiveNodeData
-      const angle = startRad + (2 * Math.PI * index) / capacity
+      const slot = getSatelliteOrbitSlot(synced, masteryId, sat.id)
+      const angle = startRad + (2 * Math.PI * slot) / capacity
       const abs = positionFromCenter(
         center.x + radius * Math.cos(angle),
         center.y + radius * Math.sin(angle),

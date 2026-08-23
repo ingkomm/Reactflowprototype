@@ -6,6 +6,7 @@ import { canNotableTransmit, kindUsesTrainingBands } from './stage'
 import {
   getOrderedOrbitSatellites,
   canOrbitLink,
+  isConnectKind,
   isMasteryKind,
   isOrbitMemberKind,
   isSatelliteKind,
@@ -23,8 +24,12 @@ function isInitial(data: PassiveNodeData) {
   return data.kind === 'initial'
 }
 
+function isConnect(data: PassiveNodeData) {
+  return isConnectKind(data.kind)
+}
+
 function isConnectEnabled(data: PassiveNodeData) {
-  return data.kind !== 'initial' || data.connectEnabled !== false
+  return data.connectEnabled !== false
 }
 
 function isMastery(data: PassiveNodeData) {
@@ -37,19 +42,21 @@ function isStealth(data: PassiveNodeData) {
 
 /**
  * Whether a powered node may push power across a link.
- * - Initial / Small (Connect): always, when powered
+ * - Initial: always (root source)
+ * - Connect: when On
+ * - Small: when powered
  * - Notable: first cumulative band (3) complete
- * - Mastery / Void: never (Mastery has no personal outbound links)
  */
 export function canTransmitPower(data: PassiveNodeData): boolean {
-  if (data.kind === 'initial') return isConnectEnabled(data)
+  if (isInitial(data)) return true
+  if (isConnect(data)) return isConnectEnabled(data)
   if (data.kind === 'small') return true
   if (isStealth(data) || isMastery(data)) return false
   if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
   return false
 }
 
-/** POB-style power: Initial/Connect → center/orbit; Mastery ← powered transmitting satellite on orbit (no personal link). */
+/** Power: Initial → Connect → graph; Mastery ← powered transmitting satellite on orbit. */
 export function computePoweredNodeIds(
   nodes: PassiveFlowNode[],
   edges: Edge[],
@@ -59,7 +66,7 @@ export function computePoweredNodeIds(
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (isInitial(data) && isConnectEnabled(data)) powered.add(node.id)
+    if (isInitial(data)) powered.add(node.id)
   }
 
   let changed = true
@@ -127,7 +134,7 @@ export function computePowerFlowMeta(
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (isInitial(data) && isConnectEnabled(data)) {
+    if (isInitial(data)) {
       depth.set(node.id, 0)
     }
   }
@@ -244,7 +251,7 @@ export function getNodesReachableFromInitial(
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (isInitial(data) && isConnectEnabled(data)) {
+    if (isInitial(data)) {
       reachable.add(node.id)
       queue.push(node.id)
     }
@@ -300,11 +307,10 @@ export function classifyPassiveConnection(
 
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
-    if (other.kind === 'small') return 'center'
+    if (isConnect(other)) return 'center'
     return null
   }
 
-  // Mastery has no personal center links — only orbit attach / satellite orbit links.
   if (isMasteryKind(sd.kind) && isOrbitMemberKind(td.kind)) {
     return 'attach'
   }
@@ -328,6 +334,9 @@ export function classifyPassiveConnection(
   }
 
   if (!shareSameOrbit({ data: sd }, { data: td })) {
+    if (isConnect(sd) && isConnect(td)) return 'center'
+    if (isConnect(sd) && (td.kind === 'small' || td.kind === 'notable')) return 'center'
+    if (isConnect(td) && (sd.kind === 'small' || sd.kind === 'notable')) return 'center'
     if (sd.kind === 'small' && td.kind === 'small') return 'center'
     if (
       (sd.kind === 'small' && td.kind === 'notable') ||

@@ -24,6 +24,7 @@ export function createPassiveData(
       | 'orbitLocked'
       | 'masteryId'
       | 'orbitTier'
+      | 'orbitSlot'
       | 'voidPassing'
       | 'connectEnabled'
       | 'classId'
@@ -56,11 +57,14 @@ export function createPassiveData(
             orbitTier: extras.orbitTier ?? 1,
           }
         : resolvedKind === 'initial'
-          ? { connectEnabled: extras.connectEnabled ?? true }
-          : {
-              masteryId: extras.masteryId ?? null,
-              orbitTier: extras.orbitTier ?? 1,
-            }),
+          ? {}
+          : resolvedKind === 'connect'
+            ? { connectEnabled: extras.connectEnabled ?? true }
+            : {
+                masteryId: extras.masteryId ?? null,
+                orbitTier: extras.orbitTier ?? 1,
+                orbitSlot: extras.orbitSlot,
+              }),
   }
 }
 

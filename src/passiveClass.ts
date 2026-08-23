@@ -13,6 +13,7 @@ export type PassiveClass = {
 
 export const DEFAULT_CLASS_ID_BY_KIND: Record<PassiveKind, string> = {
   initial: 'i-default',
+  connect: 'c-default',
   mastery: 'm-default',
   notable: 'n-default',
   small: 's-default',
@@ -44,6 +45,7 @@ export function buildSeedClasses(): PassiveClass[] {
       iconId: 'tr-bolt',
       iconColor: NODE_ICON_COLORS[12],
     },
+    buildDefaultClass('connect', 'Connect'),
     buildDefaultClass('mastery', '기본 마스터리'),
     {
       id: 'm-dance',
