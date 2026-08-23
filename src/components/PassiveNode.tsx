@@ -142,6 +142,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
               (slot) => !occupied.has(slot),
             )
             const startRad = (getTierStartAngle(data, tier) * Math.PI) / 180
+            const showVoidSlots = !data.orbitLocked
             return (
               <div
                 key={tier}
@@ -153,7 +154,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
                   style={{ width: tierR * 2, height: tierR * 2 }}
                   aria-hidden
                 />
-                {voidSlots.map((slotIndex) => {
+                {showVoidSlots &&
+                  voidSlots.map((slotIndex) => {
                   const angle = startRad + (2 * Math.PI * slotIndex) / capacity
                   const x = tierR + tierR * Math.cos(angle)
                   const y = tierR + tierR * Math.sin(angle)

@@ -46,8 +46,8 @@ import {
   canAcceptOrbitMember,
   DEFAULT_ORBIT_START_ANGLE,
   distanceBetweenCenters,
-  findFirstFreeOrbitSlot,
   findNearestMastery,
+  findOrbitAttachTarget,
   getOrbitTierCapacity,
   getOrderedTierSatellites,
   getSatelliteOrbitTier,
@@ -60,9 +60,9 @@ import {
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
-  ORBIT_ATTACH_SLACK,
   ORBIT_DETACH_SLACK,
   orbitTierFreeSlots,
+  placeSatelliteOnMasteryOrbit,
   removeSatelliteFromOrbitOrders,
   rotateAllMasteryTiersByDelta,
   setMasteryTierOrbitOrder,
@@ -477,70 +477,70 @@ export default function App() {
     [nodes],
   )
 
-  const attachSatellite = useCallback((masteryId: string, satelliteId: string) => {
-    if (isMasteryOrbitLocked(nodes, masteryId)) return
-    const mastery = nodes.find((n) => n.id === masteryId)
-    if (!mastery) return
-    const md = mastery.data as PassiveNodeData
-    const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
-    const current = nodes.find((n) => n.id === satelliteId)
-    const alreadyOn =
-      (current?.data as PassiveNodeData | undefined)?.masteryId === masteryId
-    if (!alreadyOn) {
-      let hasFree = false
-      for (let t = 1; t <= tierCount; t++) {
-        if (orbitTierFreeSlots(nodes, masteryId, t as OrbitTier) > 0) {
-          hasFree = true
-          break
-        }
-      }
-      if (!hasFree) return
-    }
-
-    commit()
-    setNodes((nds) => {
-      const prevMasteryId = (current?.data as PassiveNodeData | undefined)?.masteryId ?? null
-      const oldMasteryId =
-        prevMasteryId && prevMasteryId !== masteryId ? prevMasteryId : null
-
-      let next = nds.map((node) => {
-        const data = node.data as PassiveNodeData
-        if (node.id === satelliteId) {
-          return {
-            ...node,
-            data: { ...data, masteryId },
-            draggable: true,
-          }
-        }
-        if (oldMasteryId && node.id === oldMasteryId && isMasteryKind(data.kind)) {
-          return {
-            ...node,
-            data: removeSatelliteFromOrbitOrders(data, satelliteId),
-          }
-        }
-        return node
-      })
-
-      next = applySatelliteOrbitPlacement(next, masteryId, satelliteId)
-      const placedTier = getSatelliteOrbitTier(next, masteryId, satelliteId)
-      if (!canAcceptOrbitMember(nds, masteryId, placedTier, satelliteId)) {
-        return nds
-      }
+  const attachSatellite = useCallback(
+    (masteryId: string, satelliteId: string, preferredTier?: OrbitTier) => {
+      if (isMasteryOrbitLocked(nodes, masteryId)) return
+      const mastery = nodes.find((n) => n.id === masteryId)
+      if (!mastery) return
+      const md = mastery.data as PassiveNodeData
+      const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
+      const current = nodes.find((n) => n.id === satelliteId)
+      const alreadyOn =
+        (current?.data as PassiveNodeData | undefined)?.masteryId === masteryId
       if (!alreadyOn) {
-        const freeSlot = findFirstFreeOrbitSlot(next, masteryId, placedTier)
-        if (freeSlot != null) {
-          next = assignSatelliteOrbitSlot(next, masteryId, satelliteId, placedTier, freeSlot)
+        let hasFree = false
+        for (let t = 1; t <= tierCount; t++) {
+          if (orbitTierFreeSlots(nodes, masteryId, t as OrbitTier) > 0) {
+            hasFree = true
+            break
+          }
         }
+        if (!hasFree) return
       }
-      next = layoutMasteryOrbit(next, masteryId)
-      if (oldMasteryId) {
-        next = layoutMasteryOrbit(next, oldMasteryId)
-      }
-      const stacked = stack(next)
-      setEdges((eds) => sanitizeEdges(stacked, eds))
-      return stacked
-    })
-  }, [commit, nodes, setEdges, setNodes, stack])
+
+      commit()
+      setNodes((nds) => {
+        const prevMasteryId = (current?.data as PassiveNodeData | undefined)?.masteryId ?? null
+        const oldMasteryId =
+          prevMasteryId && prevMasteryId !== masteryId ? prevMasteryId : null
+
+        let next = nds.map((node) => {
+          const data = node.data as PassiveNodeData
+          if (node.id === satelliteId) {
+            return {
+              ...node,
+              data: { ...data, masteryId },
+              draggable: true,
+            }
+          }
+          if (oldMasteryId && node.id === oldMasteryId && isMasteryKind(data.kind)) {
+            return {
+              ...node,
+              data: removeSatelliteFromOrbitOrders(data, satelliteId),
+            }
+          }
+          return node
+        })
+
+        const placed = placeSatelliteOnMasteryOrbit(
+          next,
+          masteryId,
+          satelliteId,
+          preferredTier,
+        )
+        if (!placed) return nds
+
+        next = placed
+        if (oldMasteryId) {
+          next = layoutMasteryOrbit(next, oldMasteryId)
+        }
+        const stacked = stack(next)
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
+      })
+    },
+    [commit, nodes, setEdges, setNodes, stack],
+  )
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -1104,6 +1104,42 @@ export default function App() {
           )
           return relayoutOrbitSatellite(synced, masteryId, node.id)
         })
+        return
+      }
+
+      if (isOrbitMemberKind(data.kind) && !data.masteryId) {
+        const dragged = {
+          ...(nodes.find((n) => n.id === node.id) ?? node),
+          position: node.position,
+        } as PassiveFlowNode
+        const target = findOrbitAttachTarget(nodes, dragged)
+        if (target) {
+          setNodes((nds) => {
+            let next = nds.map((n) => {
+              if (n.id !== node.id) return n
+              const d = n.data as PassiveNodeData
+              return {
+                ...n,
+                position: node.position,
+                data: { ...d, masteryId: target.mastery.id },
+              }
+            })
+            const placed = placeSatelliteOnMasteryOrbit(
+              next,
+              target.mastery.id,
+              node.id,
+              target.tier,
+            )
+            if (!placed) {
+              return stack(
+                nds.map((n) =>
+                  n.id === node.id ? { ...n, position: node.position } : n,
+                ),
+              )
+            }
+            return stack(placed)
+          })
+        }
       }
     },
     [gridSnapEnabled, nodes, relayoutOrbitSatellite, setNodes, stack],
@@ -1173,55 +1209,64 @@ export default function App() {
               next = layoutMasteryOrbit(next, currentMasteryId)
 
               const freeSat = next.find((n) => n.id === satellite.id)!
-              const other = findNearestMastery(next, freeSat)
+              const otherTarget = findOrbitAttachTarget(next, freeSat)
               if (
-                other &&
-                other.mastery.id !== currentMasteryId &&
-                !isMasteryOrbitLocked(next, other.mastery.id) &&
-                other.dist <= other.radius + ORBIT_ATTACH_SLACK
+                otherTarget &&
+                otherTarget.mastery.id !== currentMasteryId &&
+                !isMasteryOrbitLocked(next, otherTarget.mastery.id)
               ) {
                 next = next.map((n) => {
                   const d = n.data as PassiveNodeData
                   if (n.id === freeSat.id) {
                     return {
                       ...n,
-                      data: { ...d, masteryId: other.mastery.id },
+                      data: { ...d, masteryId: otherTarget.mastery.id },
                       draggable: true,
                     }
                   }
                   return n
                 })
-                next = applySatelliteOrbitPlacement(next, other.mastery.id, freeSat.id)
-                next = layoutMasteryOrbit(next, other.mastery.id)
+                const placed = placeSatelliteOnMasteryOrbit(
+                  next,
+                  otherTarget.mastery.id,
+                  freeSat.id,
+                  otherTarget.tier,
+                )
+                if (placed) next = placed
               }
 
               return stack(next)
             }
 
-            next = applySatelliteOrbitPlacement(next, currentMasteryId, satellite.id)
-            return stack(layoutMasteryOrbit(next, currentMasteryId))
+            const placed = placeSatelliteOnMasteryOrbit(
+              next,
+              currentMasteryId,
+              satellite.id,
+            )
+            return stack(placed ?? layoutMasteryOrbit(next, currentMasteryId))
           }
         }
 
-        const nearest = findNearestMastery(next, satellite)
-        if (
-          nearest &&
-          !isMasteryOrbitLocked(next, nearest.mastery.id) &&
-          nearest.dist <= nearest.radius + ORBIT_ATTACH_SLACK
-        ) {
+        const attachTarget = findOrbitAttachTarget(next, satellite)
+        if (attachTarget && !isMasteryOrbitLocked(next, attachTarget.mastery.id)) {
           next = next.map((n) => {
             const d = n.data as PassiveNodeData
             if (n.id === satellite.id) {
               return {
                 ...n,
-                data: { ...d, masteryId: nearest.mastery.id },
+                data: { ...d, masteryId: attachTarget.mastery.id },
                 draggable: true,
               }
             }
             return n
           })
-          next = applySatelliteOrbitPlacement(next, nearest.mastery.id, satellite.id)
-          return stack(layoutMasteryOrbit(next, nearest.mastery.id))
+          const placed = placeSatelliteOnMasteryOrbit(
+            next,
+            attachTarget.mastery.id,
+            satellite.id,
+            attachTarget.tier,
+          )
+          if (placed) return stack(placed)
         }
 
         if (gridSnapEnabled && !currentMasteryId) {

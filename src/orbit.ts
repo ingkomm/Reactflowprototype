@@ -135,6 +135,7 @@ export function applySatelliteOrbitPlacement(
   nodes: PassiveFlowNode[],
   masteryId: string,
   satelliteId: string,
+  tierOverride?: OrbitTier,
 ): PassiveFlowNode[] {
   const mastery = nodes.find((n) => n.id === masteryId)
   const satellite = nodes.find((n) => n.id === satelliteId)
@@ -143,10 +144,18 @@ export function applySatelliteOrbitPlacement(
   const md = mastery.data as PassiveNodeData
   const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
   const dist = distanceBetweenCenters(satellite, mastery, nodes)
-  const tier = tierCount > 1 ? inferOrbitTierFromDistance(dist, tierCount) : 1
+  const tier =
+    tierOverride ??
+    (tierCount > 1 ? inferOrbitTierFromDistance(dist, tierCount) : 1)
 
-  const { tier: slotTier, slot } = orbitSlotFromDropAngle(nodes, masteryId, satelliteId, tier)
-  return assignSatelliteOrbitSlot(nodes, masteryId, satelliteId, slotTier, slot)
+  let next = nodes.map((node) => {
+    if (node.id !== satelliteId) return node
+    const data = node.data as PassiveNodeData
+    return { ...node, data: { ...data, orbitTier: tier } }
+  })
+
+  const { tier: slotTier, slot } = orbitSlotFromDropAngle(next, masteryId, satelliteId, tier)
+  return assignSatelliteOrbitSlot(next, masteryId, satelliteId, slotTier, slot)
 }
 /** Degrees. -90 = top of the circle; layout advances clockwise. */
 export const DEFAULT_ORBIT_START_ANGLE = -90
@@ -1086,6 +1095,90 @@ export function findNearestMastery(nodes: PassiveFlowNode[], satellite: PassiveF
     }
   }
   return best
+}
+
+export type OrbitAttachTarget = {
+  mastery: PassiveFlowNode
+  tier: OrbitTier
+}
+
+/**
+ * External drop target: satellite center within slack of a specific tier ring.
+ * Unlike findNearestMastery (outer disk), this matches 2·3단 rings individually.
+ */
+export function findOrbitAttachTarget(
+  nodes: PassiveFlowNode[],
+  satellite: PassiveFlowNode,
+): OrbitAttachTarget | null {
+  let best: (OrbitAttachTarget & { err: number }) | null = null
+
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (!isMasteryKind(data.kind) || data.orbitLocked) continue
+
+    const tierCount = normalizeOrbitTierCount(data.orbitTierCount)
+    const dist = distanceBetweenCenters(satellite, node, nodes)
+
+    for (let t = 1; t <= tierCount; t++) {
+      const tier = t as OrbitTier
+      const err = Math.abs(dist - orbitTierRadius(tierCount, tier))
+      if (err <= ORBIT_ATTACH_SLACK && (!best || err < best.err)) {
+        best = { mastery: node, tier, err }
+      }
+    }
+  }
+
+  if (!best) return null
+  return { mastery: best.mastery, tier: best.tier }
+}
+
+/** Prefer nearest ring with a free slot; optional tier hint from drop target. */
+export function resolveOrbitAttachTier(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+  preferredTier?: OrbitTier,
+): OrbitTier | null {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  if (!mastery || !satellite) return null
+
+  const md = mastery.data as PassiveNodeData
+  const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
+  const dist = distanceBetweenCenters(satellite, mastery, nodes)
+
+  const ranked: { tier: OrbitTier; err: number }[] = []
+  for (let t = 1; t <= tierCount; t++) {
+    const tier = t as OrbitTier
+    ranked.push({ tier, err: Math.abs(dist - orbitTierRadius(tierCount, tier)) })
+  }
+  ranked.sort((a, b) => a.err - b.err)
+
+  if (
+    preferredTier &&
+    canAcceptOrbitMember(nodes, masteryId, preferredTier, satelliteId)
+  ) {
+    return preferredTier
+  }
+
+  for (const { tier } of ranked) {
+    if (canAcceptOrbitMember(nodes, masteryId, tier, satelliteId)) return tier
+  }
+  return null
+}
+
+/** Attach / reposition a satellite on a mastery orbit (returns null when no tier has room). */
+export function placeSatelliteOnMasteryOrbit(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+  preferredTier?: OrbitTier,
+): PassiveFlowNode[] | null {
+  const tier = resolveOrbitAttachTier(nodes, masteryId, satelliteId, preferredTier)
+  if (tier == null) return null
+
+  let next = applySatelliteOrbitPlacement(nodes, masteryId, satelliteId, tier)
+  return layoutMasteryOrbit(next, masteryId)
 }
 
 /** Insert satellite into tier-local clockwise order using drop angle around mastery. */
