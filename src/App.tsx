@@ -41,7 +41,6 @@ import {
   SEED_NODES,
 } from './seedGraph'
 import {
-  applySatelliteOrbitPlacement,
   assignSatelliteOrbitSlot,
   canAcceptOrbitMember,
   DEFAULT_ORBIT_START_ANGLE,
@@ -50,6 +49,7 @@ import {
   findOrbitAttachTarget,
   getOrbitTierCapacity,
   getOrderedTierSatellites,
+  getSatelliteOrbitSlot,
   getSatelliteOrbitTier,
   getTierStartAngle,
   isMasteryKind,
@@ -57,11 +57,13 @@ import {
   isOrbitMemberKind,
   layoutMasteryOrbit,
   masteryOuterOrbitRadius,
+  nodeCenter,
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
   ORBIT_DETACH_SLACK,
   placeExternalSatelliteOnOrbit,
+  placeOrbitMemberFromDrag,
   placeSatelliteOnMasteryOrbit,
   removeSatelliteFromOrbitOrders,
   rotateAllMasteryTiersByDelta,
@@ -215,6 +217,11 @@ export default function App() {
     nodeId: string
     originPosition: { x: number; y: number }
     snapshotNodes: PassiveFlowNode[]
+    orbitOrigin?: {
+      masteryId: string
+      tier: OrbitTier
+      slot: number
+    }
   } | null>(null)
 
   const stateRef = useRef({ nodes, edges })
@@ -1023,12 +1030,21 @@ export default function App() {
     (_event: MouseEvent | TouchEvent, node: Node) => {
       commit()
       const data = node.data as PassiveNodeData
-      if (isOrbitMemberKind(data.kind) && !data.masteryId) {
-        orbitDragSessionRef.current = {
+      if (isOrbitMemberKind(data.kind)) {
+        const snapshotNodes = structuredClone(nodesRef.current)
+        const session: NonNullable<typeof orbitDragSessionRef.current> = {
           nodeId: node.id,
           originPosition: { ...node.position },
-          snapshotNodes: structuredClone(nodesRef.current),
+          snapshotNodes,
         }
+        if (data.masteryId) {
+          session.orbitOrigin = {
+            masteryId: data.masteryId,
+            tier: getSatelliteOrbitTier(snapshotNodes, data.masteryId, node.id),
+            slot: getSatelliteOrbitSlot(snapshotNodes, data.masteryId, node.id),
+          }
+        }
+        orbitDragSessionRef.current = session
       } else {
         orbitDragSessionRef.current = null
       }
@@ -1043,15 +1059,6 @@ export default function App() {
       setEdges((eds) => eds.filter((e) => e.id !== edgeId))
     },
     [commit, setEdges],
-  )
-
-  const relayoutOrbitSatellite = useCallback(
-    (nds: PassiveFlowNode[], masteryId: string, satelliteId: string) => {
-      let next = applySatelliteOrbitPlacement(nds, masteryId, satelliteId)
-      next = layoutMasteryOrbit(next, masteryId)
-      return stack(next)
-    },
-    [stack],
   )
 
   const onNodeDrag = useCallback(
@@ -1103,12 +1110,24 @@ export default function App() {
           }
         }
 
-        setNodes((nds) => {
-          const synced = nds.map((n) =>
-            n.id === node.id ? { ...n, position: node.position } : n,
+        const session = orbitDragSessionRef.current
+        if (session?.nodeId === node.id && session.orbitOrigin) {
+          const dragged: PassiveFlowNode = {
+            ...(nodes.find((n) => n.id === node.id) ?? node),
+            position: node.position,
+          } as PassiveFlowNode
+          const pointerCenter = nodeCenter(dragged, session.snapshotNodes)
+          setNodes(() =>
+            stack(
+              placeOrbitMemberFromDrag(
+                session.snapshotNodes,
+                node.id,
+                pointerCenter,
+                session.orbitOrigin!,
+              ),
+            ),
           )
-          return relayoutOrbitSatellite(synced, masteryId, node.id)
-        })
+        }
         return
       }
 
@@ -1132,7 +1151,7 @@ export default function App() {
         }
       }
     },
-    [gridSnapEnabled, nodes, relayoutOrbitSatellite, setNodes, stack],
+    [gridSnapEnabled, nodes, setNodes, stack],
   )
 
   const onNodeDragStop = useCallback(
@@ -1233,6 +1252,23 @@ export default function App() {
               }
 
               return stack(next)
+            }
+
+            if (
+              dragSession?.nodeId === node.id &&
+              dragSession.orbitOrigin &&
+              dragSession.orbitOrigin.masteryId === currentMasteryId
+            ) {
+              const dragged: PassiveFlowNode = { ...satellite, position: node.position }
+              const pointerCenter = nodeCenter(dragged, dragSession.snapshotNodes)
+              return stack(
+                placeOrbitMemberFromDrag(
+                  dragSession.snapshotNodes,
+                  node.id,
+                  pointerCenter,
+                  dragSession.orbitOrigin,
+                ),
+              )
             }
 
             const placed = placeSatelliteOnMasteryOrbit(
