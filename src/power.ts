@@ -23,6 +23,10 @@ function isInitial(data: PassiveNodeData) {
   return data.kind === 'initial'
 }
 
+function isConnectEnabled(data: PassiveNodeData) {
+  return data.kind !== 'initial' || data.connectEnabled !== false
+}
+
 function isMastery(data: PassiveNodeData) {
   return data.kind === 'mastery' || data.kind === 'voidMastery'
 }
@@ -38,7 +42,8 @@ function isStealth(data: PassiveNodeData) {
  * - Mastery / Void: never (Mastery has no personal outbound links)
  */
 export function canTransmitPower(data: PassiveNodeData): boolean {
-  if (data.kind === 'initial' || data.kind === 'small') return true
+  if (data.kind === 'initial') return isConnectEnabled(data)
+  if (data.kind === 'small') return true
   if (isStealth(data) || isMastery(data)) return false
   if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
   return false
@@ -54,7 +59,7 @@ export function computePoweredNodeIds(
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (isInitial(data)) powered.add(node.id)
+    if (isInitial(data) && isConnectEnabled(data)) powered.add(node.id)
   }
 
   let changed = true
@@ -121,7 +126,8 @@ export function computePowerFlowMeta(
   const parent = new Map<string, string>()
 
   for (const node of nodes) {
-    if (isInitial(node.data as PassiveNodeData)) {
+    const data = node.data as PassiveNodeData
+    if (isInitial(data) && isConnectEnabled(data)) {
       depth.set(node.id, 0)
     }
   }
@@ -237,7 +243,8 @@ export function getNodesReachableFromInitial(
   const queue: string[] = []
 
   for (const node of nodes) {
-    if ((node.data as PassiveNodeData).kind === 'initial') {
+    const data = node.data as PassiveNodeData
+    if (isInitial(data) && isConnectEnabled(data)) {
       reachable.add(node.id)
       queue.push(node.id)
     }

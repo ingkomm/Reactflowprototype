@@ -11,6 +11,9 @@ import {
 } from '../stage'
 import {
   getOrderedOrbitSatellites,
+  getOrbitTierCapacity,
+  getOrderedTierSatellites,
+  getTierStartAngle,
   isMasteryKind,
   isStealthPassiveKind,
   normalizeOrbitTierCount,
@@ -50,7 +53,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const isAmbientVisible =
     (data.kind === 'void' && !data.masteryId) ||
     (isMastery && orbitSatelliteCount === 0)
-  const powered = !isStealth && (useNodePowered(id) || data.kind === 'initial')
+  const isConnect = data.kind === 'initial'
+  const connectOn = data.connectEnabled !== false
+  const powered =
+    !isStealth && (useNodePowered(id) || (isConnect && connectOn))
   const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
@@ -116,13 +122,34 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           {Array.from({ length: orbitTierCount }, (_, index) => {
             const tier = (index + 1) as OrbitTier
             const tierR = orbitTierRadius(orbitTierCount, tier)
+            const capacity = getOrbitTierCapacity(data, tier)
+            const memberCount = getOrderedTierSatellites(nodes, id, tier).length
+            const startRad = (getTierStartAngle(data, tier) * Math.PI) / 180
+            const voidSlots = Array.from(
+              { length: Math.max(0, capacity - memberCount) },
+              (_, slotIndex) => memberCount + slotIndex,
+            )
             return (
-              <div
-                key={tier}
-                className="passive-node__orbit"
-                style={{ width: tierR * 2, height: tierR * 2 }}
-                aria-hidden
-              />
+              <div key={tier} className="passive-node__orbit-wrap">
+                <div
+                  className="passive-node__orbit"
+                  style={{ width: tierR * 2, height: tierR * 2 }}
+                  aria-hidden
+                />
+                {voidSlots.map((slotIndex) => {
+                  const angle = startRad + (2 * Math.PI * slotIndex) / capacity
+                  const x = tierR + tierR * Math.cos(angle)
+                  const y = tierR + tierR * Math.sin(angle)
+                  return (
+                    <div
+                      key={`void-${tier}-${slotIndex}`}
+                      className={`passive-node__void-slot${voidHighlight ? ' is-highlighted' : ''}`}
+                      style={{ left: x, top: y }}
+                      aria-hidden
+                    />
+                  )
+                })}
+              </div>
             )
           })}
         </>
@@ -152,6 +179,13 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       <div className="passive-node__ring" aria-hidden>
         {!isStealth && <IconGlyph iconId={iconId} className="passive-node__glyph" />}
+        {isConnect && (
+          <span
+            className={`passive-node__connect-lamp${connectOn ? ' is-on' : ' is-off'}`}
+            aria-hidden
+            title={connectOn ? 'Connect On' : 'Connect Off'}
+          />
+        )}
       </div>
 
       <div className="passive-node__hit node-drag-handle" />
@@ -162,8 +196,11 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         <div className="passive-node__tooltip" role="tooltip">
           <p className="passive-node__tooltip-title">{data.label}</p>
           <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
-          {!powered && data.kind !== 'initial' && (
+          {!powered && !isConnect && (
             <p className="passive-node__tooltip-meta">파워 미공급</p>
+          )}
+          {isConnect && !connectOn && (
+            <p className="passive-node__tooltip-meta">Connect Off — 회로 차단</p>
           )}
           {powered && !canRelay && data.kind === 'notable' && (
             <p className="passive-node__tooltip-meta">1밴드(3) 미완료 — 파워 전달 불가</p>

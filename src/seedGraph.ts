@@ -41,7 +41,11 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 20, y: 300 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('initial', '시작', { stages: [], classId: 'i-default' }),
+      data: createPassiveData('initial', '시작', {
+        stages: [],
+        classId: 'i-default',
+        connectEnabled: true,
+      }),
     },
     {
       id: DANCE_MASTERY_ID,

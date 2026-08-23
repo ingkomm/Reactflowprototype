@@ -94,11 +94,13 @@ export type PassiveNodeData = {
   orbitTier?: OrbitTier
   /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
   voidPassing?: boolean
+  /** Connect (initial) only: circuit breaker — when false, power does not flow out. */
+  connectEnabled?: boolean
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
-  initial: 'Connect / Initial',
-  small: 'Connect / Small',
+  initial: 'Connect',
+  small: 'Small',
   notable: 'Notable',
   mastery: 'Mastery',
   voidMastery: 'Void Master (retired)',
@@ -111,7 +113,6 @@ export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = [
   'small',
   'notable',
   'mastery',
-  'void',
 ]
 
 export const DEFAULT_STAGE_GOAL = 3

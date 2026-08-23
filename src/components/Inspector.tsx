@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type {
   PassiveKind,
   PassiveNodeData,
@@ -11,10 +11,7 @@ import {
   createTrainingLog,
   ensureNotableStages,
   kindUsesTrainingBands,
-  notableBandFills,
-  NOTABLE_BAND_GOALS,
   sortedStages,
-  totalRawLoggedAcrossStages,
 } from '../stage'
 import {
   getOrbitTierCapacity,
@@ -38,14 +35,6 @@ export type OrbitMember = {
   tierSize: number
 }
 
-export type LinkItem = {
-  edgeId: string
-  peerId: string
-  peerLabel: string
-  peerKind: PassiveKind
-  linkKind: 'center' | 'orbit'
-}
-
 export type LinkCandidate = {
   id: string
   label: string
@@ -59,25 +48,22 @@ type Props = {
   masteryLabel?: string | null
   masteryTierCount?: OrbitTierCount | null
   orbitMembers?: OrbitMember[]
-  links?: LinkItem[]
   linkCandidates?: LinkCandidate[]
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeClassId: (nodeId: string, classId: string) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
+  onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
   onChangeOrbitStartAngle: (masteryId: string, tier: OrbitTier, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onChangeOrbitCapacity: (masteryId: string, tier: OrbitTier, capacity: number) => void
-  onChangeVoidPassing: (nodeId: string, passing: boolean) => void
   onDetachFromMastery: (nodeId: string) => void
-  onRemoveLink: (edgeId: string) => void
   onAddLink: (peerId: string) => void
   onDeleteNode: (nodeId: string) => void
 }
-
 
 export function Inspector({
   nodeId,
@@ -85,31 +71,24 @@ export function Inspector({
   masteryLabel,
   masteryTierCount = null,
   orbitMembers = [],
-  links = [],
   linkCandidates = [],
   onRename,
   onChangeKind,
   onChangeClassId,
   onChangeStages,
+  onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
   onChangeOrbitLocked,
   onChangeOrbitCapacity,
-  onChangeVoidPassing,
   onDetachFromMastery,
-  onRemoveLink,
   onAddLink,
   onDeleteNode,
 }: Props) {
   const { classes, resolve } = usePassiveClasses()
   const [addPeerId, setAddPeerId] = useState('')
-  const [expandedStageIds, setExpandedStageIds] = useState<string[]>([])
-
-  useEffect(() => {
-    setExpandedStageIds([])
-  }, [nodeId])
 
   if (!nodeId || !data) {
     return (
@@ -127,15 +106,10 @@ export function Inspector({
   const stages = sortedStages(data.stages ?? [])
   const kindClasses = classesForKind(classes, data.kind)
   const currentClass = resolve(data.classId, data.kind)
+  const notableLogs = ensureNotableStages(stages)[0]?.logs ?? []
 
   const patchStages = (next: StageData[]) => {
     onChangeStages(nodeId, ensureNotableStages(next))
-  }
-
-  const toggleStageExpanded = (stageId: string) => {
-    setExpandedStageIds((prev) =>
-      prev.includes(stageId) ? prev.filter((id) => id !== stageId) : [...prev, stageId],
-    )
   }
 
   return (
@@ -176,13 +150,40 @@ export function Inspector({
           value={data.kind}
           onChange={(e) => onChangeKind(nodeId, e.target.value as PassiveKind)}
         >
-          {(ADDABLE_PASSIVE_KINDS).map((kind) => (
+          {ADDABLE_PASSIVE_KINDS.map((kind) => (
             <option key={kind} value={kind}>
               {PASSIVE_KIND_LABEL[kind]}
             </option>
           ))}
         </select>
       </label>
+
+      {data.kind === 'initial' && (
+        <div className="field">
+          <span>Connect</span>
+          <div className="inspector__passing-toggle" role="group" aria-label="Connect circuit">
+            <button
+              type="button"
+              className={`btn btn--ghost${data.connectEnabled !== false ? ' is-active' : ''}`}
+              aria-pressed={data.connectEnabled !== false}
+              onClick={() => onChangeConnectEnabled(nodeId, true)}
+            >
+              On
+            </button>
+            <button
+              type="button"
+              className={`btn btn--ghost${data.connectEnabled === false ? ' is-active' : ''}`}
+              aria-pressed={data.connectEnabled === false}
+              onClick={() => onChangeConnectEnabled(nodeId, false)}
+            >
+              Off
+            </button>
+          </div>
+          <p className="field-hint">
+            On = 초록(회로 닫힘) · Off = 파란(회로 차단) · Small 노드에만 직선 링크로 파워 공급
+          </p>
+        </div>
+      )}
 
       <div className="field">
         <span>클래스</span>
@@ -216,44 +217,11 @@ export function Inspector({
         )}
       </div>
 
-      {data.kind === 'void' && (
-        <>
-          <p className="inspector__empty">
-            Void spacer — 오르빗 빈 칸을 수동으로 채울 때만 사용. 용량 미달 빈 슬롯도 개념상 void입니다.
-            Void Master는 더 이상 쓰지 않습니다.
-          </p>
-          <div className="field">
-            <span>Passing</span>
-            <div className="inspector__passing-toggle" role="group" aria-label="Passing">
-              <button
-                type="button"
-                className={`btn btn--ghost${data.voidPassing ? ' is-active' : ''}`}
-                aria-pressed={Boolean(data.voidPassing)}
-                onClick={() => onChangeVoidPassing(nodeId, true)}
-              >
-                On
-              </button>
-              <button
-                type="button"
-                className={`btn btn--ghost${!data.voidPassing ? ' is-active' : ''}`}
-                aria-pressed={!data.voidPassing}
-                onClick={() => onChangeVoidPassing(nodeId, false)}
-              >
-                Off
-              </button>
-            </div>
-            <p className="field-hint">
-              On이면 Passing Void를 사이에 둔 Small/Notable끼리 오르빗 링크가 가능합니다.
-            </p>
-          </div>
-        </>
-      )}
-
       {isMasteryKind(data.kind) && (
         <>
           <p className="inspector__empty">
-            Mastery — 띠·개인 링크 없음. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다. 빈 용량
-            슬롯 = void.
+            Mastery — 띠·개인 링크 없음. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다. 용량
+            미달 빈 슬롯은 자동 void 스페이싱.
           </p>
           <label className="field field--row">
             <span>Orbit lock</span>
@@ -283,8 +251,8 @@ export function Inspector({
             </select>
           </label>
           <p className="field-hint">
-            1단 직경 고정 · 2·3단은 바깥으로 추가 · 멤버 드래그로 단 배치 · 단별 용량 초과 시 추가
-            불가 (빈 칸 = void)
+            1단 직경 고정 · 2·3단은 바깥으로 추가 · 단별 용량 초과 시 추가 불가 · 빈 슬롯 = 자동
+            void
           </p>
 
           {Array.from({ length: orbitTierCount }, (_, index) => {
@@ -298,10 +266,10 @@ export function Inspector({
                   min={1}
                   max={24}
                   value={capacity}
-                    onChange={(e) => {
-                      const value = Math.max(1, Math.min(24, Number(e.target.value) || 1))
-                      onChangeOrbitCapacity(nodeId, tier, value)
-                    }}
+                  onChange={(e) => {
+                    const value = Math.max(1, Math.min(24, Number(e.target.value) || 1))
+                    onChangeOrbitCapacity(nodeId, tier, value)
+                  }}
                 />
               </label>
             )
@@ -373,13 +341,11 @@ export function Inspector({
                         onChangeOrbitOrder(nodeId, member.id, Number(e.target.value))
                       }
                     >
-                      {orbitMembers
-                        .filter((m) => m.tier === member.tier)
-                        .map((_, i) => (
-                          <option key={i + 1} value={i + 1}>
-                            #{i + 1}
-                          </option>
-                        ))}
+                      {Array.from({ length: member.tierSize }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          #{i + 1}
+                        </option>
+                      ))}
                     </select>
                     {orbitTierCount > 1 && (
                       <select
@@ -416,9 +382,6 @@ export function Inspector({
           <div className="inspector__section-head">
             <h3>Links</h3>
           </div>
-          {data.kind === 'initial' && (
-            <p className="inspector__empty">Initial Node는 Small Passive에만 직선 링크로 파워를 공급합니다.</p>
-          )}
           {data.kind === 'mastery' && (
             <p className="inspector__empty">
               Mastery는 개인 링크가 없습니다. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다.
@@ -426,33 +389,9 @@ export function Inspector({
           )}
           {(data.kind === 'small' || data.kind === 'notable') && (
             <p className="inspector__empty">
-              같은 단 = 인접 노드만 호 링크 · 인접 단(1↔2, 2↔3) = 직선 호 링크 · 1↔3 불가 · 오르빗 밖 = 직선 링크 · Notable끼리 직선 연결 불가
+              같은 단 = 인접 노드만 호 링크 · 인접 단(1↔2, 2↔3) = 직선 호 링크 · 1↔3 불가 · 오르빗
+              밖 = 직선 링크 · Notable끼리 직선 연결 불가
             </p>
-          )}
-          {links.length === 0 ? (
-            <p className="inspector__empty">No passive links yet.</p>
-          ) : (
-            <ul className="link-list">
-              {links.map((link) => (
-                <li key={link.edgeId} className="link-item">
-                  <span>
-                    {link.peerLabel}
-                    <small>
-                      {PASSIVE_KIND_LABEL[link.peerKind]}
-                      {link.linkKind === 'orbit' ? ' · 오르빗' : ' · 직선'}
-                    </small>
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn--icon"
-                    onClick={() => onRemoveLink(link.edgeId)}
-                    aria-label={`Remove link to ${link.peerLabel}`}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
           )}
 
           <div className="link-add">
@@ -487,7 +426,7 @@ export function Inspector({
         </div>
       )}
 
-      {(data.kind === 'small' || data.kind === 'notable' || data.kind === 'void') && (
+      {(data.kind === 'small' || data.kind === 'notable') && (
         <>
           <div className="inspector__section">
             <div className="inspector__section-head">
@@ -505,7 +444,7 @@ export function Inspector({
             <p className="inspector__empty">
               {data.masteryId
                 ? `Orbit of: ${masteryLabel ?? data.masteryId}`
-                : 'Not on an orbit. Connect to a Mastery or Void Master (membership only).'}
+                : 'Not on an orbit. Connect to a Mastery (membership only).'}
             </p>
             {data.masteryId && masteryTierCount !== null && masteryTierCount > 1 && (
               <label className="field">
@@ -529,168 +468,87 @@ export function Inspector({
       )}
 
       {kindUsesTrainingBands(data.kind) && (
-      <div className="inspector__section">
-        <div className="inspector__section-head">
-          <h3>Notable 띠 (누적 3·5·7)</h3>
-        </div>
-        <p className="inspector__empty">
-          총 횟수가 안쪽부터 3 → 5 → 7 칸을 채웁니다. 완료돼도 원형이 아니라 세그먼트로
-          표시됩니다. 1밴드(3) 완료 시 파워 전달.
-        </p>
-        {(() => {
-          const total = totalRawLoggedAcrossStages(stages)
-          const fills = notableBandFills(total)
-          return (
-            <p className="field-hint">
-              누적 {total}회 ·{' '}
-              {NOTABLE_BAND_GOALS.map((goal, i) => `${fills[i]}/${goal}`).join(' · ')}
-            </p>
-          )
-        })()}
-
-        <ul className="stage-list">
-          {ensureNotableStages(stages).map((stage, bandIndex) => {
-            const total = totalRawLoggedAcrossStages(stages)
-            const fills = notableBandFills(total)
-            const filled = fills[bandIndex] ?? 0
-            const complete = filled >= stage.goal
-            const expanded = expandedStageIds.includes(stage.id)
-            const isPool = bandIndex === 0
-            return (
-              <li key={stage.id} className={`stage-card${complete ? ' is-complete' : ''}`}>
-                <div className="stage-card__head">
+        <div className="inspector__section">
+          <div className="inspector__section-head">
+            <h3>트레이닝 로그</h3>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                const next = ensureNotableStages(stages)
+                const pool = next[0]!
+                patchStages(
+                  next.map((s, i) =>
+                    i === 0
+                      ? { ...pool, logs: [...pool.logs, createTrainingLog('로그', 1)] }
+                      : s,
+                  ),
+                )
+              }}
+            >
+              + 로그
+            </button>
+          </div>
+          {notableLogs.length === 0 ? (
+            <p className="inspector__empty">로그 없음</p>
+          ) : (
+            <ul className="training-list">
+              {notableLogs.map((log) => (
+                <li key={log.id} className="training-item">
+                  <input
+                    className="training-item__label"
+                    value={log.label}
+                    onChange={(e) => {
+                      const next = ensureNotableStages(stages)
+                      const pool = next[0]!
+                      patchStages(
+                        next.map((s, i) =>
+                          i === 0
+                            ? {
+                                ...pool,
+                                logs: pool.logs.map((l) =>
+                                  l.id === log.id ? { ...l, label: e.target.value } : l,
+                                ),
+                              }
+                            : s,
+                        ),
+                      )
+                    }}
+                    placeholder="로그 이름"
+                  />
                   <button
                     type="button"
-                    className="stage-card__toggle"
-                    aria-expanded={expanded}
-                    onClick={() => toggleStageExpanded(stage.id)}
+                    className="btn btn--icon"
+                    onClick={() => {
+                      const next = ensureNotableStages(stages)
+                      const pool = next[0]!
+                      patchStages(
+                        next.map((s, i) =>
+                          i === 0
+                            ? {
+                                ...pool,
+                                logs: pool.logs.filter((l) => l.id !== log.id),
+                              }
+                            : s,
+                        ),
+                      )
+                    }}
+                    aria-label="로그 삭제"
                   >
-                    <span className="stage-card__chevron" aria-hidden>
-                      {expanded ? '▾' : '▸'}
-                    </span>
-                    <span className="stage-card__title">
-                      <strong>밴드 {stage.goal}</strong>
-                      <small>
-                        {filled}/{stage.goal}
-                        {complete ? ' · 채움' : ''}
-                        {isPool ? ' · 로그 풀' : ''}
-                      </small>
-                    </span>
+                    ×
                   </button>
-                </div>
-                {expanded && isPool && (
-                  <div className="stage-card__body">
-                    <div className="inspector__section-head">
-                      <h4>트레이닝 로그</h4>
-                      <button
-                        type="button"
-                        className="btn btn--ghost"
-                        onClick={() => {
-                          const next = ensureNotableStages(stages)
-                          const pool = next[0]!
-                          patchStages(
-                            next.map((s, i) =>
-                              i === 0
-                                ? { ...pool, logs: [...pool.logs, createTrainingLog('Session', 1)] }
-                                : s,
-                            ),
-                          )
-                        }}
-                      >
-                        + 로그
-                      </button>
-                    </div>
-                    {ensureNotableStages(stages)[0]!.logs.length === 0 ? (
-                      <p className="inspector__empty">로그 없음</p>
-                    ) : (
-                      <ul className="training-list">
-                        {ensureNotableStages(stages)[0]!.logs.map((log) => (
-                          <li key={log.id} className="training-item">
-                            <input
-                              className="training-item__label"
-                              value={log.label}
-                              onChange={(e) => {
-                                const next = ensureNotableStages(stages)
-                                const pool = next[0]!
-                                patchStages(
-                                  next.map((s, i) =>
-                                    i === 0
-                                      ? {
-                                          ...pool,
-                                          logs: pool.logs.map((l) =>
-                                            l.id === log.id ? { ...l, label: e.target.value } : l,
-                                          ),
-                                        }
-                                      : s,
-                                  ),
-                                )
-                              }}
-                              placeholder="로그 이름"
-                            />
-                            <input
-                              className="training-item__count"
-                              type="number"
-                              min={0}
-                              value={log.count}
-                              onChange={(e) => {
-                                const count = Math.max(0, Number(e.target.value) || 0)
-                                const next = ensureNotableStages(stages)
-                                const pool = next[0]!
-                                patchStages(
-                                  next.map((s, i) =>
-                                    i === 0
-                                      ? {
-                                          ...pool,
-                                          logs: pool.logs.map((l) =>
-                                            l.id === log.id ? { ...l, count } : l,
-                                          ),
-                                        }
-                                      : s,
-                                  ),
-                                )
-                              }}
-                              aria-label="Training count"
-                            />
-                            <button
-                              type="button"
-                              className="btn btn--icon"
-                              onClick={() => {
-                                const next = ensureNotableStages(stages)
-                                const pool = next[0]!
-                                patchStages(
-                                  next.map((s, i) =>
-                                    i === 0
-                                      ? {
-                                          ...pool,
-                                          logs: pool.logs.filter((l) => l.id !== log.id),
-                                        }
-                                      : s,
-                                  ),
-                                )
-                              }}
-                              aria-label="로그 삭제"
-                            >
-                              ×
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
-      {(data.kind === 'small' || data.kind === 'initial') && (
+      {data.kind === 'small' && (
         <p className="inspector__empty">
-          Connect 노드 — 띠 없음. 파워가 들어오면 그대로 전달합니다.
+          Small — 띠 없음. 파워가 들어오면 그대로 전달합니다.
         </p>
       )}
-
     </aside>
   )
 }

@@ -25,6 +25,7 @@ export function createPassiveData(
       | 'masteryId'
       | 'orbitTier'
       | 'voidPassing'
+      | 'connectEnabled'
       | 'classId'
       | 'stages'
     >
@@ -55,7 +56,7 @@ export function createPassiveData(
             orbitTier: extras.orbitTier ?? 1,
           }
         : resolvedKind === 'initial'
-          ? {}
+          ? { connectEnabled: extras.connectEnabled ?? true }
           : {
               masteryId: extras.masteryId ?? null,
               orbitTier: extras.orbitTier ?? 1,

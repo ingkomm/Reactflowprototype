@@ -45,6 +45,7 @@ import {
   canAcceptOrbitMember,
   DEFAULT_ORBIT_START_ANGLE,
   findNearestMastery,
+  getOrbitTierCapacity,
   getOrderedTierSatellites,
   getSatelliteOrbitTier,
   getTierStartAngle,
@@ -129,7 +130,7 @@ function buildPastedNode(
       : kind === 'void'
         ? { masteryId: null, voidPassing: source.voidPassing ?? false, orbitTier: 1 }
         : kind === 'initial'
-          ? {}
+          ? { connectEnabled: source.connectEnabled ?? true }
           : { masteryId: null, orbitTier: 1 }),
   }
 
@@ -391,6 +392,7 @@ export default function App() {
     for (let t = 1; t <= tierCount; t++) {
       const tier = t as OrbitTier
       const tierSats = getOrderedTierSatellites(nodes, selectedNode.id, tier)
+      const capacity = getOrbitTierCapacity(selectedData, tier)
       tierSats.forEach((sat, index) => {
         const data = sat.data as PassiveNodeData
         members.push({
@@ -399,7 +401,7 @@ export default function App() {
           kind: data.kind,
           order: index + 1,
           tier,
-          tierSize: tierSats.length,
+          tierSize: capacity,
         })
       })
     }
@@ -724,14 +726,6 @@ export default function App() {
     [commit, nodes, setNodes, stack],
   )
 
-  const removeLink = useCallback(
-    (edgeId: string) => {
-      commit()
-      setEdges((eds) => eds.filter((e) => e.id !== edgeId))
-    },
-    [commit, setEdges],
-  )
-
   const addLink = useCallback(
     (peerId: string) => {
       if (!selectedId) return
@@ -796,37 +790,34 @@ export default function App() {
   const changeOrbitCapacity = useCallback(
     (masteryId: string, tier: OrbitTier, capacity: number) => {
       commit()
-      updateNodeData(masteryId, (d) => ({
-        ...d,
-        orbitCapacityByTier: {
-          ...(d.orbitCapacityByTier ?? {}),
-          [tier]: Math.max(1, Math.floor(capacity)),
-        },
-      }))
-    },
-    [commit, updateNodeData],
-  )
-
-  const changeVoidPassing = useCallback(
-    (nodeId: string, passing: boolean) => {
-      commit()
       setNodes((nds) => {
-        const next = nds.map((node) =>
-          node.id === nodeId
-            ? {
-                ...node,
-                data: {
-                  ...(node.data as PassiveNodeData),
-                  voidPassing: passing,
-                },
-              }
-            : node,
-        )
-        setEdges((eds) => sanitizeEdges(next, eds))
-        return next
+        const next = nds.map((node) => {
+          if (node.id !== masteryId) return node
+          const data = node.data as PassiveNodeData
+          return {
+            ...node,
+            data: {
+              ...data,
+              orbitCapacityByTier: {
+                ...(data.orbitCapacityByTier ?? {}),
+                [tier]: Math.max(1, Math.floor(capacity)),
+              },
+            },
+          }
+        })
+        const stacked = stack(layoutMasteryOrbit(next, masteryId))
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
       })
     },
-    [commit, setEdges, setNodes],
+    [commit, setEdges, setNodes, stack],
+  )
+
+  const changeConnectEnabled = useCallback(
+    (nodeId: string, enabled: boolean) => {
+      updateNodeData(nodeId, (d) => ({ ...d, connectEnabled: enabled }))
+    },
+    [updateNodeData],
   )
 
   const changeKind = useCallback(
@@ -888,7 +879,7 @@ export default function App() {
                       ),
                     }
                 : resolvedKind === 'initial'
-                  ? {}
+                  ? { connectEnabled: prev.kind === 'initial' ? (data.connectEnabled ?? true) : true }
                   : {
                       masteryId:
                         isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
@@ -1248,7 +1239,7 @@ export default function App() {
               checked={voidHighlightEnabled}
               onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
             />
-            <span>보이드 표시</span>
+            <span>빈 슬롯 표시</span>
           </label>
           <button
             type="button"
@@ -1356,7 +1347,6 @@ export default function App() {
             masteryLabel={selectedMasteryLabel}
             masteryTierCount={selectedMasteryTierCount}
             orbitMembers={orbitMembers}
-            links={selectedLinks}
             linkCandidates={linkCandidates}
             onRename={(nodeId, label) => updateNodeData(nodeId, (d) => ({ ...d, label }))}
             onChangeKind={changeKind}
@@ -1366,15 +1356,14 @@ export default function App() {
             onChangeStages={(nodeId, stages) =>
               updateNodeData(nodeId, (d) => ({ ...d, stages }))
             }
+            onChangeConnectEnabled={changeConnectEnabled}
             onChangeOrbitTierCount={changeOrbitTierCount}
             onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
             onChangeOrbitStartAngle={changeOrbitStartAngle}
             onChangeOrbitOrder={changeOrbitOrder}
             onChangeOrbitLocked={changeOrbitLocked}
             onChangeOrbitCapacity={changeOrbitCapacity}
-            onChangeVoidPassing={changeVoidPassing}
             onDetachFromMastery={detachFromMastery}
-            onRemoveLink={removeLink}
             onAddLink={addLink}
             onDeleteNode={deleteNode}
           />
