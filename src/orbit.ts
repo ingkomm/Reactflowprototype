@@ -1601,7 +1601,7 @@ export function placeExternalSatelliteOnOrbit(
       n.id === satelliteId
         ? {
             ...n,
-            position: swapOrigin,
+            position: currentPosition,
             data: {
               ...(n.data as PassiveNodeData),
               masteryId: null,
