@@ -6,10 +6,10 @@ import { kindUsesTrainingBands } from './stage'
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
   connect: 28,
-  small: 40,
+  small: 48,
   notable: 68,
-  mastery: 88,
-  voidMastery: 88,
+  mastery: 96,
+  voidMastery: 96,
   void: 36,
 }
 
