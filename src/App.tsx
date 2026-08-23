@@ -43,6 +43,7 @@ import {
 import {
   assignSatelliteOrbitSlot,
   canAcceptOrbitMember,
+  countOrbitTierMembers,
   DEFAULT_ORBIT_START_ANGLE,
   findOrbitAttachTarget,
   getOrbitTierCapacity,
@@ -205,6 +206,8 @@ export default function App() {
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
   const [classManagerOpen, setClassManagerOpen] = useState(false)
+  /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
+  const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
   const resizingInspector = useRef(false)
   const clipboardRef = useRef<NodeClipboard | null>(null)
   const pasteSerialRef = useRef(0)
@@ -322,8 +325,15 @@ export default function App() {
 
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChange>[0]) => {
-      const removals = changes.filter((c) => c.type === 'remove')
-      const rest = changes.filter((c) => c.type !== 'remove')
+      const session = orbitDragSessionRef.current
+      const filtered =
+        session != null
+          ? changes.filter(
+              (c) => !(c.type === 'position' && 'id' in c && c.id === session.nodeId),
+            )
+          : changes
+      const removals = filtered.filter((c) => c.type === 'remove')
+      const rest = filtered.filter((c) => c.type !== 'remove')
       if (rest.length > 0) onNodesChange(rest)
       const blockedRemovals = removals.filter((c) => c.id !== INITIAL_NODE_ID)
       if (blockedRemovals.length === 0) return
@@ -362,13 +372,17 @@ export default function App() {
   )
 
   // Drop invalid links and anything not reachable from Initial.
+  // Skip while a satellite drag preview is active so hover alone cannot prune edges.
   useEffect(() => {
+    if (dragPreviewNodes) return
     setEdges((eds) => {
       const next = sanitizeEdges(nodes, eds)
       if (next.length === eds.length && next.every((e, i) => e.id === eds[i]?.id)) return eds
       return next
     })
-  }, [nodes, edges, setEdges])
+  }, [nodes, edges, setEdges, dragPreviewNodes])
+
+  const flowNodes = dragPreviewNodes ?? nodes
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
@@ -609,6 +623,23 @@ export default function App() {
 
   const changeOrbitTierCount = useCallback(
     (masteryId: string, tierCount: OrbitTierCount) => {
+      const mastery = nodes.find((n) => n.id === masteryId)
+      if (!mastery) return
+      const currentCount = normalizeOrbitTierCount(
+        (mastery.data as PassiveNodeData).orbitTierCount,
+      )
+      if (tierCount < currentCount) {
+        for (let t = tierCount + 1; t <= currentCount; t++) {
+          const tier = t as OrbitTier
+          const members = countOrbitTierMembers(nodes, masteryId, tier)
+          if (members > 0) {
+            window.alert(
+              `${tier}단에 노드가 ${members}개 있습니다. 해당 단의 노드를 제거한 뒤 단수를 줄여 주세요.`,
+            )
+            return
+          }
+        }
+      }
       commit()
       setNodes((nds) => {
         let next = nds.map((node) => {
@@ -633,7 +664,7 @@ export default function App() {
         return stacked
       })
     },
-    [commit, setEdges, setNodes, stack],
+    [commit, nodes, setEdges, setNodes, stack],
   )
 
   const changeSatelliteOrbitTier = useCallback(
@@ -784,6 +815,14 @@ export default function App() {
 
   const changeOrbitCapacity = useCallback(
     (masteryId: string, tier: OrbitTier, capacity: number) => {
+      const nextCapacity = Math.max(1, Math.floor(capacity))
+      const members = countOrbitTierMembers(nodes, masteryId, tier)
+      if (nextCapacity < members) {
+        window.alert(
+          `${tier}단에 노드가 ${members}개 있습니다. 노드를 제거한 뒤 용량을 줄여 주세요.`,
+        )
+        return
+      }
       commit()
       setNodes((nds) => {
         const next = nds.map((node) => {
@@ -795,7 +834,7 @@ export default function App() {
               ...data,
               orbitCapacityByTier: {
                 ...(data.orbitCapacityByTier ?? {}),
-                [tier]: Math.max(1, Math.floor(capacity)),
+                [tier]: nextCapacity,
               },
             },
           }
@@ -805,7 +844,7 @@ export default function App() {
         return stacked
       })
     },
-    [commit, setEdges, setNodes, stack],
+    [commit, nodes, setEdges, setNodes, stack],
   )
 
   const changeConnectEnabled = useCallback(
@@ -1040,8 +1079,10 @@ export default function App() {
           }
         }
         orbitDragSessionRef.current = session
+        setDragPreviewNodes(null)
       } else {
         orbitDragSessionRef.current = null
+        setDragPreviewNodes(null)
       }
     },
     [commit],
@@ -1082,7 +1123,8 @@ export default function App() {
         ? { kind: 'orbit', ...session.orbitOrigin }
         : { kind: 'external', position: session.originPosition }
 
-      setNodes(() =>
+      // Preview only — committed nodes/edges stay until drop.
+      setDragPreviewNodes(
         stack(
           placeSatelliteFromDrag(
             session.snapshotNodes,
@@ -1101,6 +1143,7 @@ export default function App() {
       const data = node.data as PassiveNodeData
       const dragSession = orbitDragSessionRef.current
       orbitDragSessionRef.current = null
+      setDragPreviewNodes(null)
 
       if (isMasteryKind(data.kind)) {
         setNodes((nds) => {
@@ -1134,6 +1177,16 @@ export default function App() {
             ),
           )
         }
+        return
+      }
+
+      if (
+        dragSession.orbitOrigin &&
+        isMasteryOrbitLocked(dragSession.snapshotNodes, dragSession.orbitOrigin.masteryId)
+      ) {
+        setNodes(() =>
+          stack(layoutMasteryOrbit(dragSession.snapshotNodes, dragSession.orbitOrigin!.masteryId)),
+        )
         return
       }
 
@@ -1241,7 +1294,7 @@ export default function App() {
           <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
           <VoidHighlightProvider enabled={voidHighlightEnabled}>
           <ReactFlow
-            nodes={nodes}
+            nodes={flowNodes}
             edges={edges}
             onNodesChange={handleNodesChange}
             onEdgesChange={handleEdgesChange}
