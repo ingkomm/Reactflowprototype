@@ -58,30 +58,35 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
 export type PassiveNodeData = {
   label: string
   kind: PassiveKind
-  /** Ordered stages; each owns a ring and its training log. */
+  /** Ordered stages; Notable only uses cumulative 3/5/7 bands. Master/Small have none. */
   stages: StageData[]
   /**
    * Passive class id for this node's kind.
    * Icon + color come from the class catalog (not stored per-node).
    */
   classId: string
-  /** Mastery / Void Master: radius of the circular orbit for attached passives. */
+  /** Mastery: radius of the circular orbit for attached passives. */
   orbitRadius?: number
-  /** Mastery / Void Master: number of concentric orbit tiers (1–3). */
+  /** Mastery: number of concentric orbit tiers (1–3). */
   orbitTierCount?: OrbitTierCount
   /**
-   * Mastery / Void Master: starting angle in degrees for orbit slot #1 on tier 1.
+   * Mastery: starting angle in degrees for orbit slot #1 on tier 1.
    * Snapped to 15° steps. Default -90 (top). Clockwise from there.
    * @deprecated Prefer orbitStartAngleByTier for per-tier rotation.
    */
   orbitStartAngle?: number
-  /** Mastery / Void Master: per-tier starting angles (independent rotation per ring). */
+  /** Mastery: per-tier starting angles (independent rotation per ring). */
   orbitStartAngleByTier?: Partial<Record<OrbitTier, number>>
-  /** Mastery / Void Master: satellite node ids in clockwise orbit order (1-based UI). */
+  /** Mastery: satellite node ids in clockwise orbit order (1-based UI). */
   orbitOrder?: string[]
-  /** Mastery / Void Master: per-tier clockwise order (independent spacing per ring). */
+  /** Mastery: per-tier clockwise order (independent spacing per ring). */
   orbitOrderByTier?: Partial<Record<OrbitTier, string[]>>
-  /** Mastery / Void Master: when true, orbit membership count/order cannot change (rotation still allowed). */
+  /**
+   * Mastery: max members per tier. Unfilled slots are conceptual voids
+   * (no separate Void Master node).
+   */
+  orbitCapacityByTier?: Partial<Record<OrbitTier, number>>
+  /** Mastery: when true, orbit membership count/order cannot change (rotation still allowed). */
   orbitLocked?: boolean
   /** Small/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
@@ -92,12 +97,21 @@ export type PassiveNodeData = {
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
-  initial: 'Initial Node',
-  small: 'Small Passive',
-  notable: 'Notable Passive',
+  initial: 'Connect / Initial',
+  small: 'Connect / Small',
+  notable: 'Notable',
   mastery: 'Mastery',
-  voidMastery: 'Void Master Node',
-  void: 'Void Node',
+  voidMastery: 'Void Master (retired)',
+  void: 'Void spacer',
 }
+
+/** Kinds the user can add from the toolbar. */
+export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = [
+  'initial',
+  'small',
+  'notable',
+  'mastery',
+  'void',
+]
 
 export const DEFAULT_STAGE_GOAL = 3

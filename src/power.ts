@@ -2,7 +2,7 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { PassiveNodeData } from './types'
 import { NODE_SIZE } from './orbit'
-import { isStageComplete } from './stage'
+import { canNotableTransmit, kindUsesTrainingBands } from './stage'
 import {
   getOrderedOrbitSatellites,
   canOrbitLink,
@@ -24,30 +24,27 @@ function isInitial(data: PassiveNodeData) {
 }
 
 function isMastery(data: PassiveNodeData) {
-  return data.kind === 'mastery'
+  return data.kind === 'mastery' || data.kind === 'voidMastery'
 }
 
 function isStealth(data: PassiveNodeData) {
   return isStealthPassiveKind(data.kind)
 }
 
-/** At least one stage band must be complete before power flows onward. */
+/**
+ * Whether a powered node may push power across a link.
+ * - Initial / Small (Connect): always, when powered
+ * - Notable: first cumulative band (3) complete
+ * - Mastery / Void: never (Mastery has no personal outbound links)
+ */
 export function canTransmitPower(data: PassiveNodeData): boolean {
-  if (data.kind === 'initial') return true
-  if (isStealth(data)) return false
-  if (data.stages.length === 0) return false
-  return data.stages.some(isStageComplete)
+  if (data.kind === 'initial' || data.kind === 'small') return true
+  if (isStealth(data) || isMastery(data)) return false
+  if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
+  return false
 }
 
-function findCenterEdge(edges: Edge[], a: string, b: string) {
-  return edges.find(
-    (e) =>
-      edgeLinkKind(e) === 'center' &&
-      ((e.source === a && e.target === b) || (e.source === b && e.target === a)),
-  )
-}
-
-/** POB-style power: Initial → center/orbit links; Mastery ← powered Notable + center link. */
+/** POB-style power: Initial/Connect → center/orbit; Mastery ← powered transmitting satellite on orbit (no personal link). */
 export function computePoweredNodeIds(
   nodes: PassiveFlowNode[],
   edges: Edge[],
@@ -96,13 +93,11 @@ export function computePoweredNodeIds(
     const satellites = getOrderedOrbitSatellites(nodes, node.id)
     for (const sat of satellites) {
       const satData = sat.data as PassiveNodeData
-      if (satData.kind !== 'notable') continue
+      if (isStealth(satData)) continue
       if (!powered.has(sat.id)) continue
       if (!canTransmitPower(satData)) continue
-      if (findCenterEdge(edges, node.id, sat.id)) {
-        powered.add(node.id)
-        break
-      }
+      powered.add(node.id)
+      break
     }
   }
 
@@ -168,17 +163,15 @@ export function computePowerFlowMeta(
     const satellites = getOrderedOrbitSatellites(nodes, node.id)
     for (const sat of satellites) {
       const satData = sat.data as PassiveNodeData
-      if (satData.kind !== 'notable') continue
+      if (isStealth(satData)) continue
       if (!depth.has(sat.id)) continue
       if (!canTransmitPower(satData)) continue
-      if (findCenterEdge(edges, node.id, sat.id)) {
-        const nextDepth = depth.get(sat.id)! + 1
-        if (!depth.has(node.id) || nextDepth > depth.get(node.id)!) {
-          depth.set(node.id, nextDepth)
-          parent.set(node.id, sat.id)
-        }
-        break
+      const nextDepth = depth.get(sat.id)! + 1
+      if (!depth.has(node.id) || nextDepth > depth.get(node.id)!) {
+        depth.set(node.id, nextDepth)
+        parent.set(node.id, sat.id)
       }
+      break
     }
   }
 
@@ -304,21 +297,15 @@ export function classifyPassiveConnection(
     return null
   }
 
-  if (
-    (sd.kind === 'notable' && isMasteryKind(td.kind) && td.kind === 'mastery') ||
-    (isMasteryKind(sd.kind) && sd.kind === 'mastery' && td.kind === 'notable')
-  ) {
-    const notable = sd.kind === 'notable' ? sd : td
-    const mastery = sd.kind === 'mastery' ? source : target
-    if (notable.masteryId === mastery.id) return 'center'
-    return null
-  }
-
+  // Mastery has no personal center links — only orbit attach / satellite orbit links.
   if (isMasteryKind(sd.kind) && isOrbitMemberKind(td.kind)) {
     return 'attach'
   }
   if (isMasteryKind(td.kind) && isOrbitMemberKind(sd.kind)) {
     return 'attach'
+  }
+  if (isMasteryKind(sd.kind) || isMasteryKind(td.kind)) {
+    return null
   }
 
   if (sd.kind === 'notable' && td.kind === 'notable') return null

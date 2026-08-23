@@ -3,11 +3,11 @@ import { useMemo, type CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
 import { PASSIVE_KIND_LABEL } from '../types'
 import {
-  completedStageCount,
-  isStageComplete,
-  sortedStages,
+  kindUsesTrainingBands,
+  notableBandFills,
+  NOTABLE_BAND_GOALS,
   stageBandLevel,
-  stageLoggedCount,
+  totalRawLoggedAcrossStages,
 } from '../stage'
 import {
   getOrderedOrbitSatellites,
@@ -44,19 +44,20 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const isMastery = isMasteryKind(data.kind)
   const showVoidHighlight = voidHighlight && isStealth
   const orbitSatelliteCount = useMemo(() => {
-    if (data.kind !== 'voidMastery') return 0
+    if (!isMastery) return 0
     return getOrderedOrbitSatellites(nodes, id).length
-  }, [nodes, id, data.kind])
+  }, [nodes, id, isMastery])
   const isAmbientVisible =
     (data.kind === 'void' && !data.masteryId) ||
-    (data.kind === 'voidMastery' && orbitSatelliteCount === 0)
+    (isMastery && orbitSatelliteCount === 0)
   const powered = !isStealth && (useNodePowered(id) || data.kind === 'initial')
   const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
-  const bandLevel = stageBandLevel(stages)
-  const bandCount = stages.length
+  const showBands = powered && kindUsesTrainingBands(data.kind) && stages.length > 0
+  const bandLevel = showBands ? stageBandLevel(stages) : 0
+  const bandCount = showBands ? stages.length : 0
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const showOrbitRings = isMastery
   const orbitRingsUnlocked = isMastery && !data.orbitLocked
@@ -70,21 +71,20 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const labelOffset = labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = powered && bandCount > 0 ? 12 + bandLevel * 10 : 0
-  const glowAlpha =
-    powered && bandCount > 0 ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
-  const haloStrength =
-    powered && bandCount > 0 ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
+  const glowBlur = showBands ? 12 + bandLevel * 10 : 0
+  const glowAlpha = showBands ? Math.min(0.95, 0.28 + bandLevel * 0.16) : 0
+  const haloStrength = showBands ? Math.min(0.92, 0.28 + bandLevel * 0.18) : 0
 
-  const ordered = sortedStages(stages)
-  const done = completedStageCount(stages)
-  const active = ordered.find((s) => !isStageComplete(s))
+  const totalLogged = totalRawLoggedAcrossStages(stages)
+  const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
+  const done = fills.filter((f, i) => f >= (NOTABLE_BAND_GOALS[i] ?? 0)).length
+  const activeFill = fills.findIndex((f, i) => f < (NOTABLE_BAND_GOALS[i] ?? 1))
 
   return (
     <div
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
         powered ? '' : ' is-unpowered'
-      }${bandCount > 0 && powered ? ' has-bands' : ''}${
+      }${showBands ? ' has-bands' : ''}${
         isStealth ? ' is-stealth' : ''
       }${isAmbientVisible ? ' is-ambient-visible' : ''}${
         showVoidHighlight ? ' is-void-highlighted' : ''
@@ -129,9 +129,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__halo" aria-hidden />
-      {powered && bandCount > 0 && !isStealth && (
-        <TrainingBands stages={stages} nodeSize={nodeSize} />
-      )}
+      {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
       {!isStealth && (
         <>
@@ -167,20 +165,18 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           {!powered && data.kind !== 'initial' && (
             <p className="passive-node__tooltip-meta">파워 미공급</p>
           )}
-          {powered && !canRelay && data.kind !== 'initial' && bandCount > 0 && (
-            <p className="passive-node__tooltip-meta">1단계 미완료 — 파워 전달 불가</p>
+          {powered && !canRelay && data.kind === 'notable' && (
+            <p className="passive-node__tooltip-meta">1밴드(3) 미완료 — 파워 전달 불가</p>
           )}
           {data.kind !== 'initial' && (
             <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
           )}
-          {bandCount > 0 && (
+          {showBands && (
             <p className="passive-node__tooltip-meta">
-              단계 {done}/{stages.length} 완료
-            </p>
-          )}
-          {active && powered && (
-            <p className="passive-node__tooltip-meta">
-              {active.label}: {stageLoggedCount(active)}/{active.goal}
+              누적 {totalLogged} · 밴드 {done}/{NOTABLE_BAND_GOALS.length}
+              {activeFill >= 0
+                ? ` · ${fills[activeFill]}/${NOTABLE_BAND_GOALS[activeFill]}`
+                : ''}
             </p>
           )}
         </div>

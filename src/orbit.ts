@@ -1,6 +1,7 @@
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
+import { kindUsesTrainingBands } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 56,
@@ -11,19 +12,22 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
   void: 36,
 }
 
+/** Mastery hubs (Void Master is retired — treated as mastery when present). */
 export function isMasteryKind(kind: PassiveKind) {
   return kind === 'mastery' || kind === 'voidMastery'
 }
 
-/** Void Node / Void Master — no icon, bands, links, or power. */
+/** Void spacer slots only — no icon, bands, links, or power. */
 export function isStealthPassiveKind(kind: PassiveKind) {
-  return kind === 'void' || kind === 'voidMastery'
+  return kind === 'void'
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180
+/** Default max real members per orbit tier (empty remainder = void slots). */
+export const DEFAULT_ORBIT_TIER_CAPACITY = 6
 /** Radial gap between tier rings — enough for Notable + bands on adjacent tiers. */
 export const ORBIT_TIER_STEP = Math.ceil(
-  (outermostBandRadius(2, NODE_SIZE.notable) + BAND_STROKE / 2) * 2 + 24,
+  (outermostBandRadius(3, NODE_SIZE.notable) + BAND_STROKE / 2) * 2 + 24,
 )
 
 export function normalizeOrbitTierCount(count: number | undefined): OrbitTierCount {
@@ -37,6 +41,55 @@ export function normalizeOrbitTier(tier: number | undefined, tierCount: OrbitTie
   if (t >= 3 && tierCount >= 3) return 3
   if (t >= 2 && tierCount >= 2) return 2
   return 1
+}
+
+/** Max members on a tier ring; unfilled slots are conceptual voids. */
+export function getOrbitTierCapacity(data: PassiveNodeData, tier: OrbitTier): number {
+  const custom = data.orbitCapacityByTier?.[tier]
+  if (typeof custom === 'number' && Number.isFinite(custom) && custom >= 1) {
+    return Math.floor(custom)
+  }
+  return DEFAULT_ORBIT_TIER_CAPACITY
+}
+
+export function countOrbitTierMembers(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+): number {
+  return getOrderedTierSatellites(nodes, masteryId, tier).length
+}
+
+export function orbitTierFreeSlots(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+): number {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return 0
+  const data = mastery.data as PassiveNodeData
+  const capacity = getOrbitTierCapacity(data, tier)
+  return Math.max(0, capacity - countOrbitTierMembers(nodes, masteryId, tier))
+}
+
+export function canAcceptOrbitMember(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+  satelliteId?: string,
+): boolean {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery || !isMasteryKind((mastery.data as PassiveNodeData).kind)) return false
+  if ((mastery.data as PassiveNodeData).orbitLocked) return false
+
+  const already = nodes.find((n) => n.id === satelliteId)
+  if (already) {
+    const ad = already.data as PassiveNodeData
+    if (ad.masteryId === masteryId && normalizeOrbitTier(ad.orbitTier, normalizeOrbitTierCount((mastery.data as PassiveNodeData).orbitTierCount)) === tier) {
+      return true
+    }
+  }
+  return orbitTierFreeSlots(nodes, masteryId, tier) > 0
 }
 
 /** Tier 1 is always at DEFAULT_ORBIT_RADIUS; higher tiers expand outward only. */
@@ -365,7 +418,7 @@ export function satelliteBandOuterRadius(data: PassiveNodeData): number {
 /** True when training bands are rendered on the node (matches PassiveNode). */
 export function nodeHasVisibleBands(data: PassiveNodeData, nodePowered: boolean): boolean {
   if (!nodePowered) return false
-  if (isStealthPassiveKind(data.kind)) return false
+  if (!kindUsesTrainingBands(data.kind)) return false
   return (data.stages?.length ?? 0) > 0
 }
 

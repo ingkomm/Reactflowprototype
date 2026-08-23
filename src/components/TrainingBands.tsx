@@ -1,8 +1,11 @@
 import type { StageData } from '../types'
 import {
   isStageComplete,
+  notableBandFills,
+  NOTABLE_BAND_GOALS,
   sortedStages,
   stageLoggedCount,
+  totalRawLoggedAcrossStages,
 } from '../stage'
 import './TrainingBands.css'
 
@@ -66,29 +69,21 @@ type RingProps = {
   r: number
 }
 
-function StageRing({ stage, cx, cy, r }: RingProps) {
+function StageRing({ stage, cx, cy, r, filledOverride }: RingProps & { filledOverride?: number }) {
   const goal = Math.max(1, stage.goal)
-  const filled = isStageComplete(stage) ? goal : stageLoggedCount(stage)
-  const complete = isStageComplete(stage)
+  const filled =
+    filledOverride != null
+      ? Math.min(goal, Math.max(0, filledOverride))
+      : isStageComplete(stage)
+        ? goal
+        : stageLoggedCount(stage)
   const circumferenceAngle = Math.PI * 2
   const usable = circumferenceAngle - goal * SEGMENT_GAP
   const segSpan = usable / goal
   // Start at top (-90°)
   const origin = -Math.PI / 2
 
-  if (complete) {
-    return (
-      <circle
-        className="training-bands__complete"
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        strokeWidth={BAND_STROKE}
-      />
-    )
-  }
-
+  // Always segmented cells — never a solid completed circle.
   return (
     <g className="training-bands__stage">
       {Array.from({ length: goal }, (_, i) => {
@@ -113,7 +108,7 @@ function StageRing({ stage, cx, cy, r }: RingProps) {
   )
 }
 
-/** One segmented ring per stage: stage 1 innermost → outer. */
+/** One segmented ring per stage: stage 1 innermost → outer. Notable uses cumulative 3/5/7 fills. */
 export function TrainingBands({ stages, nodeSize }: Props) {
   const ordered = sortedStages(stages)
   if (ordered.length === 0) return null
@@ -124,6 +119,13 @@ export function TrainingBands({ stages, nodeSize }: Props) {
   const cx = svgSize / 2
   const cy = svgSize / 2
   const baseR = nodeSize / 2 + BAND_BASE_PAD
+
+  const isNotableBands =
+    ordered.length === NOTABLE_BAND_GOALS.length &&
+    ordered.every((s, i) => s.goal === NOTABLE_BAND_GOALS[i])
+  const fills = isNotableBands
+    ? notableBandFills(totalRawLoggedAcrossStages(ordered))
+    : null
 
   return (
     <svg
@@ -140,6 +142,7 @@ export function TrainingBands({ stages, nodeSize }: Props) {
           cx={cx}
           cy={cy}
           r={baseR + i * BAND_GAP}
+          filledOverride={fills?.[i]}
         />
       ))}
     </svg>

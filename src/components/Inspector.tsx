@@ -1,23 +1,23 @@
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   PassiveKind,
   PassiveNodeData,
   OrbitTier,
   OrbitTierCount,
   StageData,
-  TrainingLog,
 } from '../types'
-import { PASSIVE_KIND_LABEL } from '../types'
+import { ADDABLE_PASSIVE_KINDS, PASSIVE_KIND_LABEL } from '../types'
 import {
-  createStage,
   createTrainingLog,
-  isStageComplete,
+  ensureNotableStages,
+  kindUsesTrainingBands,
+  notableBandFills,
+  NOTABLE_BAND_GOALS,
   sortedStages,
-  stageLoggedCount,
-  stageRawLoggedCount,
-  withNormalizedStage,
+  totalRawLoggedAcrossStages,
 } from '../stage'
 import {
+  getOrbitTierCapacity,
   getTierStartAngle,
   isMasteryKind,
   isStealthPassiveKind,
@@ -70,6 +70,7 @@ type Props = {
   onChangeOrbitStartAngle: (masteryId: string, tier: OrbitTier, degrees: number) => void
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
+  onChangeOrbitCapacity: (masteryId: string, tier: OrbitTier, capacity: number) => void
   onChangeVoidPassing: (nodeId: string, passing: boolean) => void
   onDetachFromMastery: (nodeId: string) => void
   onRemoveLink: (edgeId: string) => void
@@ -77,12 +78,6 @@ type Props = {
   onDeleteNode: (nodeId: string) => void
 }
 
-function reindexStages(stages: StageData[]): StageData[] {
-  return stages.map((stage, i) => ({
-    ...withNormalizedStage(stage),
-    index: i + 1,
-  }))
-}
 
 export function Inspector({
   nodeId,
@@ -101,6 +96,7 @@ export function Inspector({
   onChangeOrbitStartAngle,
   onChangeOrbitOrder,
   onChangeOrbitLocked,
+  onChangeOrbitCapacity,
   onChangeVoidPassing,
   onDetachFromMastery,
   onRemoveLink,
@@ -110,13 +106,9 @@ export function Inspector({
   const { classes, resolve } = usePassiveClasses()
   const [addPeerId, setAddPeerId] = useState('')
   const [expandedStageIds, setExpandedStageIds] = useState<string[]>([])
-  const [dragStageId, setDragStageId] = useState<string | null>(null)
-  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
 
   useEffect(() => {
     setExpandedStageIds([])
-    setDragStageId(null)
-    setDragOverStageId(null)
   }, [nodeId])
 
   if (!nodeId || !data) {
@@ -137,105 +129,13 @@ export function Inspector({
   const currentClass = resolve(data.classId, data.kind)
 
   const patchStages = (next: StageData[]) => {
-    onChangeStages(nodeId, reindexStages(next))
-  }
-
-  const updateStage = (stageId: string, patch: Partial<StageData>) => {
-    patchStages(
-      stages.map((stage) => {
-        if (stage.id !== stageId) return stage
-        return withNormalizedStage({ ...stage, ...patch })
-      }),
-    )
-  }
-
-  const addStage = () => {
-    const index = stages.length + 1
-    patchStages([...stages, createStage(index)])
-  }
-
-  const removeStage = (stageId: string) => {
-    patchStages(stages.filter((s) => s.id !== stageId))
-  }
-
-  const addLog = (stageId: string) => {
-    patchStages(
-      stages.map((stage) => {
-        if (stage.id !== stageId) return stage
-        const log = createTrainingLog(`로그 ${stage.logs.length + 1}`, 1)
-        return withNormalizedStage({ ...stage, logs: [...stage.logs, log] })
-      }),
-    )
-  }
-
-  const updateLog = (
-    stageId: string,
-    logId: string,
-    patch: Partial<Pick<TrainingLog, 'label' | 'count' | 'note'>>,
-  ) => {
-    patchStages(
-      stages.map((stage) => {
-        if (stage.id !== stageId) return stage
-        const logs = stage.logs.map((log) =>
-          log.id === logId ? { ...log, ...patch } : log,
-        )
-        return withNormalizedStage({ ...stage, logs })
-      }),
-    )
-  }
-
-  const removeLog = (stageId: string, logId: string) => {
-    patchStages(
-      stages.map((stage) => {
-        if (stage.id !== stageId) return stage
-        return withNormalizedStage({
-          ...stage,
-          logs: stage.logs.filter((log) => log.id !== logId),
-        })
-      }),
-    )
+    onChangeStages(nodeId, ensureNotableStages(next))
   }
 
   const toggleStageExpanded = (stageId: string) => {
     setExpandedStageIds((prev) =>
       prev.includes(stageId) ? prev.filter((id) => id !== stageId) : [...prev, stageId],
     )
-  }
-
-  const reorderStage = (fromId: string, toId: string) => {
-    if (fromId === toId) return
-    const list = [...stages]
-    const from = list.findIndex((s) => s.id === fromId)
-    const to = list.findIndex((s) => s.id === toId)
-    if (from < 0 || to < 0) return
-    const [moved] = list.splice(from, 1)
-    list.splice(to, 0, moved!)
-    patchStages(list)
-  }
-
-  const onStageDragStart = (event: DragEvent, stageId: string) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/stage-id', stageId)
-    setDragStageId(stageId)
-  }
-
-  const onStageDragOver = (event: DragEvent, stageId: string) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    if (dragOverStageId !== stageId) setDragOverStageId(stageId)
-  }
-
-  const onStageDrop = (event: DragEvent, targetId: string) => {
-    event.preventDefault()
-    const fromId = event.dataTransfer.getData('text/stage-id') || dragStageId
-    if (fromId) reorderStage(fromId, targetId)
-    setDragStageId(null)
-    setDragOverStageId(null)
-  }
-
-  const onStageDragEnd = () => {
-    setDragStageId(null)
-    setDragOverStageId(null)
   }
 
   return (
@@ -276,7 +176,7 @@ export function Inspector({
           value={data.kind}
           onChange={(e) => onChangeKind(nodeId, e.target.value as PassiveKind)}
         >
-          {(Object.keys(PASSIVE_KIND_LABEL) as PassiveKind[]).map((kind) => (
+          {(ADDABLE_PASSIVE_KINDS).map((kind) => (
             <option key={kind} value={kind}>
               {PASSIVE_KIND_LABEL[kind]}
             </option>
@@ -319,8 +219,8 @@ export function Inspector({
       {data.kind === 'void' && (
         <>
           <p className="inspector__empty">
-            Void Node — 오르빗 배치용. 파워·직접 링크·띠 없음. 오르빗에 속하지 않을 때만
-            표시됩니다.
+            Void spacer — 오르빗 빈 칸을 수동으로 채울 때만 사용. 용량 미달 빈 슬롯도 개념상 void입니다.
+            Void Master는 더 이상 쓰지 않습니다.
           </p>
           <div className="field">
             <span>Passing</span>
@@ -349,15 +249,12 @@ export function Inspector({
         </>
       )}
 
-      {data.kind === 'voidMastery' && (
-        <p className="inspector__empty">
-          Void Master Node — Mastery와 같이 오르빗을 갖지만 링크·파워·띠·아이콘 없음. 오르빗이
-          비어 있을 때만 표시됩니다.
-        </p>
-      )}
-
       {isMasteryKind(data.kind) && (
         <>
+          <p className="inspector__empty">
+            Mastery — 띠·개인 링크 없음. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다. 빈 용량
+            슬롯 = void.
+          </p>
           <label className="field field--row">
             <span>Orbit lock</span>
             <input
@@ -386,8 +283,29 @@ export function Inspector({
             </select>
           </label>
           <p className="field-hint">
-            1단 직경 고정 · 2·3단은 바깥으로 추가 · 멤버 드래그로 단 배치
+            1단 직경 고정 · 2·3단은 바깥으로 추가 · 멤버 드래그로 단 배치 · 단별 용량 초과 시 추가
+            불가 (빈 칸 = void)
           </p>
+
+          {Array.from({ length: orbitTierCount }, (_, index) => {
+            const tier = (index + 1) as OrbitTier
+            const capacity = getOrbitTierCapacity(data, tier)
+            return (
+              <label key={`cap-${tier}`} className="field">
+                <span>{tier}단 용량</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={capacity}
+                    onChange={(e) => {
+                      const value = Math.max(1, Math.min(24, Number(e.target.value) || 1))
+                      onChangeOrbitCapacity(nodeId, tier, value)
+                    }}
+                />
+              </label>
+            )
+          })}
 
           {data.orbitLocked ? (
             <>
@@ -503,7 +421,7 @@ export function Inspector({
           )}
           {data.kind === 'mastery' && (
             <p className="inspector__empty">
-              같은 오르빗의 Notable과 직선 링크가 있어야 파워가 공급됩니다.
+              Mastery는 개인 링크가 없습니다. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다.
             </p>
           )}
           {(data.kind === 'small' || data.kind === 'notable') && (
@@ -610,202 +528,169 @@ export function Inspector({
         </>
       )}
 
-      {data.kind !== 'initial' && !isStealthPassiveKind(data.kind) && (
+      {kindUsesTrainingBands(data.kind) && (
       <div className="inspector__section">
         <div className="inspector__section-head">
-          <h3>단계 (띠)</h3>
-          <button type="button" className="btn btn--ghost" onClick={addStage}>
-            + 단계
-          </button>
+          <h3>Notable 띠 (누적 3·5·7)</h3>
         </div>
         <p className="inspector__empty">
-          안쪽 원 = 1단계. 핸들로 순서 변경 · 제목을 눌러 상세 펼침.
+          총 횟수가 안쪽부터 3 → 5 → 7 칸을 채웁니다. 완료돼도 원형이 아니라 세그먼트로
+          표시됩니다. 1밴드(3) 완료 시 파워 전달.
         </p>
+        {(() => {
+          const total = totalRawLoggedAcrossStages(stages)
+          const fills = notableBandFills(total)
+          return (
+            <p className="field-hint">
+              누적 {total}회 ·{' '}
+              {NOTABLE_BAND_GOALS.map((goal, i) => `${fills[i]}/${goal}`).join(' · ')}
+            </p>
+          )
+        })()}
 
-        {stages.length === 0 ? (
-          <p className="inspector__empty">단계가 없습니다.</p>
-        ) : (
-          <ul className="stage-list">
-            {stages.map((stage) => {
-              const logged = stageLoggedCount(stage)
-              const rawLogged = stageRawLoggedCount(stage)
-              const complete = isStageComplete(stage)
-              const expanded = expandedStageIds.includes(stage.id)
-              return (
-                <li
-                  key={stage.id}
-                  className={`stage-card${complete ? ' is-complete' : ''}${
-                    dragStageId === stage.id ? ' is-dragging' : ''
-                  }${dragOverStageId === stage.id && dragStageId !== stage.id ? ' is-drop-target' : ''}`}
-                  onDragOver={(e) => onStageDragOver(e, stage.id)}
-                  onDrop={(e) => onStageDrop(e, stage.id)}
-                  onDragEnd={onStageDragEnd}
-                >
-                  <div className="stage-card__head">
-                    <button
-                      type="button"
-                      className="stage-card__drag"
-                      draggable
-                      aria-label={`${stage.label} 순서 변경`}
-                      title="드래그해서 순서 변경"
-                      onDragStart={(e) => onStageDragStart(e, stage.id)}
-                      onClick={(e) => e.preventDefault()}
-                    >
-                      ⋮⋮
-                    </button>
-                    <button
-                      type="button"
-                      className="stage-card__toggle"
-                      aria-expanded={expanded}
-                      onClick={() => toggleStageExpanded(stage.id)}
-                    >
-                      <span className="stage-card__chevron" aria-hidden>
-                        {expanded ? '▾' : '▸'}
-                      </span>
-                      <span className="stage-card__title">
-                        <strong>
-                          #{stage.index} {stage.label}
-                        </strong>
-                        <small>
-                          {rawLogged > stage.goal
-                            ? `${logged}/${stage.goal} · 로그 ${rawLogged}`
-                            : `${rawLogged}/${stage.goal}`}
-                          {complete ? ' · 완료' : ''}
-                        </small>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--icon"
-                      onClick={() => removeStage(stage.id)}
-                      aria-label="단계 삭제"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  {expanded && (
-                    <div className="stage-card__body">
-                      <label className="field">
-                        <span>이름</span>
-                        <input
-                          value={stage.label}
-                          onChange={(e) => updateStage(stage.id, { label: e.target.value })}
-                        />
-                      </label>
-
-                      <div className="stats-row">
-                        <label className="field">
-                          <span>목표 (칸)</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={stage.goal}
-                            onChange={(e) =>
-                              updateStage(stage.id, {
-                                goal: Math.max(1, Number(e.target.value) || 1),
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="field">
-                          <span>진행 (띠)</span>
-                          <input
-                            type="text"
-                            readOnly
-                            value={
-                              rawLogged > stage.goal
-                                ? `${logged}/${stage.goal} · 로그 ${rawLogged}`
-                                : `${rawLogged} / ${stage.goal}`
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <label className="stage-complete">
-                        <input
-                          type="checkbox"
-                          checked={stage.completedManually || rawLogged >= stage.goal}
-                          onChange={(e) => {
-                            if (rawLogged >= stage.goal) return
-                            updateStage(stage.id, { completedManually: e.target.checked })
-                          }}
-                        />
-                        <span>
-                          {rawLogged >= stage.goal
-                            ? '목표 달성으로 완료'
-                            : stage.completedManually
-                              ? '수동 완료됨'
-                              : '수동 완료 표시'}
-                        </span>
-                      </label>
-
-                      <div className="inspector__section-head">
-                        <h3>트레이닝 로그</h3>
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          onClick={() => addLog(stage.id)}
-                        >
-                          + 로그
-                        </button>
-                      </div>
-
-                      {stage.logs.length === 0 ? (
-                        <p className="inspector__empty">로그 없음</p>
-                      ) : (
-                        <ul className="training-list">
-                          {stage.logs.map((log) => (
-                            <li key={log.id} className="training-item">
-                              <input
-                                className="training-item__label"
-                                value={log.label}
-                                onChange={(e) =>
-                                  updateLog(stage.id, log.id, { label: e.target.value })
-                                }
-                                placeholder="로그 이름"
-                              />
-                              <input
-                                className="training-item__count"
-                                type="number"
-                                min={0}
-                                value={log.count}
-                                onChange={(e) =>
-                                  updateLog(stage.id, log.id, {
-                                    count: Number(e.target.value) || 0,
-                                  })
-                                }
-                                aria-label="Training count"
-                              />
-                              <input
-                                className="training-item__note"
-                                value={log.note ?? ''}
-                                onChange={(e) =>
-                                  updateLog(stage.id, log.id, { note: e.target.value })
-                                }
-                                placeholder="메모"
-                              />
-                              <button
-                                type="button"
-                                className="btn btn--icon"
-                                onClick={() => removeLog(stage.id, log.id)}
-                                aria-label="로그 삭제"
-                              >
-                                ×
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+        <ul className="stage-list">
+          {ensureNotableStages(stages).map((stage, bandIndex) => {
+            const total = totalRawLoggedAcrossStages(stages)
+            const fills = notableBandFills(total)
+            const filled = fills[bandIndex] ?? 0
+            const complete = filled >= stage.goal
+            const expanded = expandedStageIds.includes(stage.id)
+            const isPool = bandIndex === 0
+            return (
+              <li key={stage.id} className={`stage-card${complete ? ' is-complete' : ''}`}>
+                <div className="stage-card__head">
+                  <button
+                    type="button"
+                    className="stage-card__toggle"
+                    aria-expanded={expanded}
+                    onClick={() => toggleStageExpanded(stage.id)}
+                  >
+                    <span className="stage-card__chevron" aria-hidden>
+                      {expanded ? '▾' : '▸'}
+                    </span>
+                    <span className="stage-card__title">
+                      <strong>밴드 {stage.goal}</strong>
+                      <small>
+                        {filled}/{stage.goal}
+                        {complete ? ' · 채움' : ''}
+                        {isPool ? ' · 로그 풀' : ''}
+                      </small>
+                    </span>
+                  </button>
+                </div>
+                {expanded && isPool && (
+                  <div className="stage-card__body">
+                    <div className="inspector__section-head">
+                      <h4>트레이닝 로그</h4>
+                      <button
+                        type="button"
+                        className="btn btn--ghost"
+                        onClick={() => {
+                          const next = ensureNotableStages(stages)
+                          const pool = next[0]!
+                          patchStages(
+                            next.map((s, i) =>
+                              i === 0
+                                ? { ...pool, logs: [...pool.logs, createTrainingLog('Session', 1)] }
+                                : s,
+                            ),
+                          )
+                        }}
+                      >
+                        + 로그
+                      </button>
                     </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
+                    {ensureNotableStages(stages)[0]!.logs.length === 0 ? (
+                      <p className="inspector__empty">로그 없음</p>
+                    ) : (
+                      <ul className="training-list">
+                        {ensureNotableStages(stages)[0]!.logs.map((log) => (
+                          <li key={log.id} className="training-item">
+                            <input
+                              className="training-item__label"
+                              value={log.label}
+                              onChange={(e) => {
+                                const next = ensureNotableStages(stages)
+                                const pool = next[0]!
+                                patchStages(
+                                  next.map((s, i) =>
+                                    i === 0
+                                      ? {
+                                          ...pool,
+                                          logs: pool.logs.map((l) =>
+                                            l.id === log.id ? { ...l, label: e.target.value } : l,
+                                          ),
+                                        }
+                                      : s,
+                                  ),
+                                )
+                              }}
+                              placeholder="로그 이름"
+                            />
+                            <input
+                              className="training-item__count"
+                              type="number"
+                              min={0}
+                              value={log.count}
+                              onChange={(e) => {
+                                const count = Math.max(0, Number(e.target.value) || 0)
+                                const next = ensureNotableStages(stages)
+                                const pool = next[0]!
+                                patchStages(
+                                  next.map((s, i) =>
+                                    i === 0
+                                      ? {
+                                          ...pool,
+                                          logs: pool.logs.map((l) =>
+                                            l.id === log.id ? { ...l, count } : l,
+                                          ),
+                                        }
+                                      : s,
+                                  ),
+                                )
+                              }}
+                              aria-label="Training count"
+                            />
+                            <button
+                              type="button"
+                              className="btn btn--icon"
+                              onClick={() => {
+                                const next = ensureNotableStages(stages)
+                                const pool = next[0]!
+                                patchStages(
+                                  next.map((s, i) =>
+                                    i === 0
+                                      ? {
+                                          ...pool,
+                                          logs: pool.logs.filter((l) => l.id !== log.id),
+                                        }
+                                      : s,
+                                  ),
+                                )
+                              }}
+                              aria-label="로그 삭제"
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       </div>
       )}
+
+      {(data.kind === 'small' || data.kind === 'initial') && (
+        <p className="inspector__empty">
+          Connect 노드 — 띠 없음. 파워가 들어오면 그대로 전달합니다.
+        </p>
+      )}
+
     </aside>
   )
 }

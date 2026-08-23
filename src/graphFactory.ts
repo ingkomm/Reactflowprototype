@@ -1,11 +1,11 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveKind, PassiveNodeData } from './types'
 import { DEFAULT_CLASS_ID_BY_KIND } from './passiveClass'
-import { createStage } from './stage'
+import { stagesForKind } from './stage'
 import {
   DEFAULT_ORBIT_START_ANGLE,
+  DEFAULT_ORBIT_TIER_CAPACITY,
   isMasteryKind,
-  isStealthPassiveKind,
 } from './orbit'
 
 /** Build default `PassiveNodeData` for a new node. */
@@ -20,6 +20,7 @@ export function createPassiveData(
       | 'orbitStartAngleByTier'
       | 'orbitOrder'
       | 'orbitOrderByTier'
+      | 'orbitCapacityByTier'
       | 'orbitLocked'
       | 'masteryId'
       | 'orbitTier'
@@ -29,29 +30,31 @@ export function createPassiveData(
     >
   > = {},
 ): PassiveNodeData {
+  const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
   return {
     label,
-    kind,
-    stages:
-      extras.stages ??
-      (kind === 'initial' || isStealthPassiveKind(kind) ? [] : [createStage(1)]),
-    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
-    ...(isMasteryKind(kind)
+    kind: resolvedKind,
+    stages: extras.stages ?? stagesForKind(resolvedKind),
+    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[resolvedKind],
+    ...(isMasteryKind(resolvedKind)
       ? {
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitStartAngleByTier: extras.orbitStartAngleByTier,
           orbitOrder: extras.orbitOrder ?? [],
           orbitOrderByTier: extras.orbitOrderByTier,
+          orbitCapacityByTier: extras.orbitCapacityByTier ?? {
+            1: DEFAULT_ORBIT_TIER_CAPACITY,
+          },
           orbitLocked: extras.orbitLocked ?? false,
           orbitTierCount: extras.orbitTierCount ?? 1,
         }
-      : kind === 'void'
+      : resolvedKind === 'void'
         ? {
             masteryId: extras.masteryId ?? null,
             voidPassing: extras.voidPassing ?? false,
             orbitTier: extras.orbitTier ?? 1,
           }
-        : kind === 'initial'
+        : resolvedKind === 'initial'
           ? {}
           : {
               masteryId: extras.masteryId ?? null,
