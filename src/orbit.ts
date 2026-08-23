@@ -1132,12 +1132,96 @@ export function findOrbitAttachTarget(
   return { mastery: best.mastery, tier: best.tier }
 }
 
+/** Satellite occupying a specific slot on a tier (if any). */
+export function getOrbitSlotOccupant(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  tier: OrbitTier,
+  slot: number,
+  excludeId?: string,
+): PassiveFlowNode | null {
+  const mastery = nodes.find((n) => n.id === masteryId)
+  if (!mastery) return null
+  const md = mastery.data as PassiveNodeData
+  const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
+  const normalizedSlot = slot
+
+  for (const sat of getOrbitSatellites(nodes, masteryId)) {
+    if (excludeId && sat.id === excludeId) continue
+    const sd = sat.data as PassiveNodeData
+    if (normalizeOrbitTier(sd.orbitTier, tierCount) !== tier) continue
+    if (getSatelliteOrbitSlot(nodes, masteryId, sat.id) === normalizedSlot) return sat
+  }
+  return null
+}
+
+/** Detach occupant to `outgoingPosition`; incoming takes its orbit slot. */
+export function swapExternalWithOrbitOccupant(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  incomingId: string,
+  tier: OrbitTier,
+  slot: number,
+  outgoingId: string,
+  outgoingPosition: { x: number; y: number },
+): PassiveFlowNode[] {
+  let next = nodes.map((node) => {
+    if (node.id === outgoingId) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        position: outgoingPosition,
+        data: { ...data, masteryId: null, orbitSlot: undefined },
+      }
+    }
+    if (node.id === incomingId) {
+      const data = node.data as PassiveNodeData
+      return {
+        ...node,
+        data: { ...data, masteryId, orbitTier: tier, orbitSlot: slot },
+      }
+    }
+    if (node.id === masteryId) {
+      const data = node.data as PassiveNodeData
+      return { ...node, data: removeSatelliteFromOrbitOrders(data, outgoingId) }
+    }
+    return node
+  })
+
+  const md = next.find((n) => n.id === masteryId)?.data as PassiveNodeData
+  const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
+  const tierSats = getOrbitSatellites(next, masteryId).filter((sat) => {
+    const sd = sat.data as PassiveNodeData
+    return normalizeOrbitTier(sd.orbitTier, tierCount) === tier
+  })
+  tierSats.sort(
+    (a, b) =>
+      getSatelliteOrbitSlot(next, masteryId, a.id) - getSatelliteOrbitSlot(next, masteryId, b.id),
+  )
+  const order = tierSats.map((s) => s.id)
+
+  next = next.map((node) => {
+    if (node.id !== masteryId) return node
+    const data = node.data as PassiveNodeData
+    return { ...node, data: setMasteryTierOrbitOrder(data, tier, order) }
+  })
+
+  return layoutMasteryOrbit(next, masteryId)
+}
+
+export type PlaceOrbitOptions = {
+  preferredTier?: OrbitTier
+  /** Incoming node's off-orbit position — occupant at target slot detaches here. */
+  swapOriginPosition?: { x: number; y: number }
+}
+
 /** Prefer nearest ring with a free slot; optional tier hint from drop target. */
 export function resolveOrbitAttachTier(
   nodes: PassiveFlowNode[],
   masteryId: string,
   satelliteId: string,
   preferredTier?: OrbitTier,
+  options?: { allowOccupiedSwap?: boolean },
 ): OrbitTier | null {
   const mastery = nodes.find((n) => n.id === masteryId)
   const satellite = nodes.find((n) => n.id === satelliteId)
@@ -1156,15 +1240,30 @@ export function resolveOrbitAttachTier(
 
   if (
     preferredTier &&
-    canAcceptOrbitMember(nodes, masteryId, preferredTier, satelliteId)
+    tierAcceptsAttach(nodes, masteryId, satelliteId, preferredTier, options?.allowOccupiedSwap)
   ) {
     return preferredTier
   }
 
   for (const { tier } of ranked) {
-    if (canAcceptOrbitMember(nodes, masteryId, tier, satelliteId)) return tier
+    if (tierAcceptsAttach(nodes, masteryId, satelliteId, tier, options?.allowOccupiedSwap)) {
+      return tier
+    }
   }
   return null
+}
+
+function tierAcceptsAttach(
+  nodes: PassiveFlowNode[],
+  masteryId: string,
+  satelliteId: string,
+  tier: OrbitTier,
+  allowOccupiedSwap?: boolean,
+): boolean {
+  if (canAcceptOrbitMember(nodes, masteryId, tier, satelliteId)) return true
+  if (!allowOccupiedSwap) return false
+  const { slot } = orbitSlotFromDropAngle(nodes, masteryId, satelliteId, tier)
+  return getOrbitSlotOccupant(nodes, masteryId, tier, slot, satelliteId) != null
 }
 
 /** Attach / reposition a satellite on a mastery orbit (returns null when no tier has room). */
@@ -1172,13 +1271,80 @@ export function placeSatelliteOnMasteryOrbit(
   nodes: PassiveFlowNode[],
   masteryId: string,
   satelliteId: string,
-  preferredTier?: OrbitTier,
+  options?: PlaceOrbitOptions,
 ): PassiveFlowNode[] | null {
-  const tier = resolveOrbitAttachTier(nodes, masteryId, satelliteId, preferredTier)
+  const satellite = nodes.find((n) => n.id === satelliteId)
+  if (!satellite) return null
+
+  const wasOffOrbit = (satellite.data as PassiveNodeData).masteryId !== masteryId
+  const allowSwap = wasOffOrbit && options?.swapOriginPosition != null
+
+  const tier = resolveOrbitAttachTier(nodes, masteryId, satelliteId, options?.preferredTier, {
+    allowOccupiedSwap: allowSwap,
+  })
   if (tier == null) return null
+
+  const { slot } = orbitSlotFromDropAngle(nodes, masteryId, satelliteId, tier)
+  const occupant = getOrbitSlotOccupant(nodes, masteryId, tier, slot, satelliteId)
+
+  if (allowSwap && occupant && options?.swapOriginPosition) {
+    return swapExternalWithOrbitOccupant(
+      nodes,
+      masteryId,
+      satelliteId,
+      tier,
+      slot,
+      occupant.id,
+      options.swapOriginPosition,
+    )
+  }
 
   let next = applySatelliteOrbitPlacement(nodes, masteryId, satelliteId, tier)
   return layoutMasteryOrbit(next, masteryId)
+}
+
+/** External drag: preview or finalize attach with occupant swap. */
+export function placeExternalSatelliteOnOrbit(
+  nodes: PassiveFlowNode[],
+  satelliteId: string,
+  currentPosition: { x: number; y: number },
+  swapOrigin: { x: number; y: number },
+): PassiveFlowNode[] {
+  let next = nodes.map((n) =>
+    n.id === satelliteId ? { ...n, position: currentPosition } : n,
+  )
+  const dragged = next.find((n) => n.id === satelliteId)
+  if (!dragged) return nodes
+
+  const target = findOrbitAttachTarget(next, dragged)
+  if (!target) {
+    return nodes.map((n) =>
+      n.id === satelliteId
+        ? {
+            ...n,
+            position: swapOrigin,
+            data: {
+              ...(n.data as PassiveNodeData),
+              masteryId: null,
+              orbitSlot: undefined,
+            },
+          }
+        : n,
+    )
+  }
+
+  next = next.map((n) => {
+    if (n.id !== satelliteId) return n
+    const d = n.data as PassiveNodeData
+    return { ...n, data: { ...d, masteryId: target.mastery.id } }
+  })
+
+  return (
+    placeSatelliteOnMasteryOrbit(next, target.mastery.id, satelliteId, {
+      preferredTier: target.tier,
+      swapOriginPosition: swapOrigin,
+    }) ?? next
+  )
 }
 
 /** Insert satellite into tier-local clockwise order using drop angle around mastery. */

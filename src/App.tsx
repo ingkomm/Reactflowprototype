@@ -61,7 +61,7 @@ import {
   normalizeOrbitTierCount,
   normalizeAngleDelta,
   ORBIT_DETACH_SLACK,
-  orbitTierFreeSlots,
+  placeExternalSatelliteOnOrbit,
   placeSatelliteOnMasteryOrbit,
   removeSatelliteFromOrbitOrders,
   rotateAllMasteryTiersByDelta,
@@ -211,6 +211,11 @@ export default function App() {
   const resizingInspector = useRef(false)
   const clipboardRef = useRef<NodeClipboard | null>(null)
   const pasteSerialRef = useRef(0)
+  const orbitDragSessionRef = useRef<{
+    nodeId: string
+    originPosition: { x: number; y: number }
+    snapshotNodes: PassiveFlowNode[]
+  } | null>(null)
 
   const stateRef = useRef({ nodes, edges })
   stateRef.current = { nodes, edges }
@@ -482,21 +487,10 @@ export default function App() {
       if (isMasteryOrbitLocked(nodes, masteryId)) return
       const mastery = nodes.find((n) => n.id === masteryId)
       if (!mastery) return
-      const md = mastery.data as PassiveNodeData
-      const tierCount = normalizeOrbitTierCount(md.orbitTierCount)
       const current = nodes.find((n) => n.id === satelliteId)
       const alreadyOn =
         (current?.data as PassiveNodeData | undefined)?.masteryId === masteryId
-      if (!alreadyOn) {
-        let hasFree = false
-        for (let t = 1; t <= tierCount; t++) {
-          if (orbitTierFreeSlots(nodes, masteryId, t as OrbitTier) > 0) {
-            hasFree = true
-            break
-          }
-        }
-        if (!hasFree) return
-      }
+      const swapOrigin = current ? { ...current.position } : { x: 0, y: 0 }
 
       commit()
       setNodes((nds) => {
@@ -522,12 +516,10 @@ export default function App() {
           return node
         })
 
-        const placed = placeSatelliteOnMasteryOrbit(
-          next,
-          masteryId,
-          satelliteId,
+        const placed = placeSatelliteOnMasteryOrbit(next, masteryId, satelliteId, {
           preferredTier,
-        )
+          swapOriginPosition: alreadyOn ? undefined : swapOrigin,
+        })
         if (!placed) return nds
 
         next = placed
@@ -1027,9 +1019,22 @@ export default function App() {
     setSelectedId(node.id)
   }, [])
 
-  const onNodeDragStart = useCallback(() => {
-    commit()
-  }, [commit])
+  const onNodeDragStart = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      commit()
+      const data = node.data as PassiveNodeData
+      if (isOrbitMemberKind(data.kind) && !data.masteryId) {
+        orbitDragSessionRef.current = {
+          nodeId: node.id,
+          originPosition: { ...node.position },
+          snapshotNodes: structuredClone(nodesRef.current),
+        }
+      } else {
+        orbitDragSessionRef.current = null
+      }
+    },
+    [commit],
+  )
 
   const onEdgeDoubleClick = useCallback(
     (_event: ReactMouseEvent, edge: Edge) => {
@@ -1108,37 +1113,22 @@ export default function App() {
       }
 
       if (isOrbitMemberKind(data.kind) && !data.masteryId) {
-        const dragged = {
-          ...(nodes.find((n) => n.id === node.id) ?? node),
-          position: node.position,
-        } as PassiveFlowNode
-        const target = findOrbitAttachTarget(nodes, dragged)
-        if (target) {
-          setNodes((nds) => {
-            let next = nds.map((n) => {
-              if (n.id !== node.id) return n
-              const d = n.data as PassiveNodeData
-              return {
-                ...n,
-                position: node.position,
-                data: { ...d, masteryId: target.mastery.id },
-              }
-            })
-            const placed = placeSatelliteOnMasteryOrbit(
-              next,
-              target.mastery.id,
-              node.id,
-              target.tier,
-            )
-            if (!placed) {
-              return stack(
-                nds.map((n) =>
-                  n.id === node.id ? { ...n, position: node.position } : n,
-                ),
-              )
-            }
-            return stack(placed)
-          })
+        const session = orbitDragSessionRef.current
+        if (session?.nodeId === node.id) {
+          setNodes(() =>
+            stack(
+              placeExternalSatelliteOnOrbit(
+                session.snapshotNodes,
+                node.id,
+                node.position,
+                session.originPosition,
+              ),
+            ),
+          )
+        } else {
+          setNodes((nds) =>
+            stack(nds.map((n) => (n.id === node.id ? { ...n, position: node.position } : n))),
+          )
         }
       }
     },
@@ -1148,6 +1138,10 @@ export default function App() {
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node) => {
       const data = node.data as PassiveNodeData
+      const dragSession = orbitDragSessionRef.current
+      orbitDragSessionRef.current = null
+      const externalSwapOrigin =
+        dragSession?.nodeId === node.id ? dragSession.originPosition : { ...node.position }
 
       if (isMasteryKind(data.kind)) {
         setNodes((nds) => {
@@ -1230,7 +1224,10 @@ export default function App() {
                   next,
                   otherTarget.mastery.id,
                   freeSat.id,
-                  otherTarget.tier,
+                  {
+                    preferredTier: otherTarget.tier,
+                    swapOriginPosition: freeSat.position,
+                  },
                 )
                 if (placed) next = placed
               }
@@ -1264,7 +1261,10 @@ export default function App() {
             next,
             attachTarget.mastery.id,
             satellite.id,
-            attachTarget.tier,
+            {
+              preferredTier: attachTarget.tier,
+              swapOriginPosition: externalSwapOrigin,
+            },
           )
           if (placed) return stack(placed)
         }
