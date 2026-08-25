@@ -9,8 +9,6 @@ import {
   isConnectKind,
   isMasteryKind,
   isOrbitMemberKind,
-  isSatelliteKind,
-  isStealthPassiveKind,
   shareSameOrbit,
 } from './orbit'
 
@@ -35,11 +33,7 @@ function isConnectEnabled(data: PassiveNodeData) {
 }
 
 function isMastery(data: PassiveNodeData) {
-  return data.kind === 'mastery' || data.kind === 'voidMastery'
-}
-
-function isStealth(data: PassiveNodeData) {
-  return isStealthPassiveKind(data.kind)
+  return isMasteryKind(data.kind)
 }
 
 /**
@@ -53,7 +47,7 @@ export function canTransmitPower(data: PassiveNodeData): boolean {
   if (isInitial(data)) return true
   if (isConnect(data)) return isConnectEnabled(data)
   if (data.kind === 'small') return true
-  if (isStealth(data) || isMastery(data)) return false
+  if (isMastery(data)) return false
   if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
   return false
 }
@@ -92,7 +86,6 @@ export function computePoweredNodeIds(
         if (!canTransmitPower(fromData)) continue
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
-        if (isStealth(toData)) continue
         if (!powered.has(to.id)) {
           powered.add(to.id)
           changed = true
@@ -107,7 +100,6 @@ export function computePoweredNodeIds(
     const satellites = getOrderedOrbitSatellites(nodes, node.id)
     for (const sat of satellites) {
       const satData = sat.data as PassiveNodeData
-      if (isStealth(satData)) continue
       if (!powered.has(sat.id)) continue
       if (!canTransmitPower(satData)) continue
       powered.add(node.id)
@@ -162,7 +154,6 @@ export function computePowerFlowMeta(
         if (!canTransmitPower(fromData)) continue
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
-        if (isStealth(toData)) continue
         if (!depth.has(to.id)) {
           depth.set(to.id, depth.get(from.id)! + 1)
           parent.set(to.id, from.id)
@@ -178,7 +169,6 @@ export function computePowerFlowMeta(
     const satellites = getOrderedOrbitSatellites(nodes, node.id)
     for (const sat of satellites) {
       const satData = sat.data as PassiveNodeData
-      if (isStealth(satData)) continue
       if (!depth.has(sat.id)) continue
       if (!canTransmitPower(satData)) continue
       const nextDepth = depth.get(sat.id)! + 1
@@ -311,8 +301,6 @@ export function classifyPassiveConnection(
   const sd = source.data as PassiveNodeData
   const td = target.data as PassiveNodeData
 
-  if (isStealth(sd) || isStealth(td)) return null
-
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
     if (isConnect(other)) return 'center'
@@ -333,8 +321,8 @@ export function classifyPassiveConnection(
 
   if (
     shareSameOrbit({ data: sd }, { data: td }) &&
-    isSatelliteKind(sd.kind) &&
-    isSatelliteKind(td.kind)
+    isOrbitMemberKind(sd.kind) &&
+    isOrbitMemberKind(td.kind)
   ) {
     const masteryId = sd.masteryId!
     if (canOrbitLink(nodes, masteryId, source.id, target.id)) return 'orbit'

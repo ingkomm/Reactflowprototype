@@ -64,7 +64,7 @@ function shouldIgnoreRotateTarget(target: Element | null): boolean {
   if (!flowNode) return false
 
   const isMasteryNode = Boolean(
-    flowNode.querySelector('.passive-node--mastery, .passive-node--voidMastery'),
+    flowNode.querySelector('.passive-node--mastery'),
   )
   if (isMasteryNode) {
     return !target.closest('.passive-node__orbit')
