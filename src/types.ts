@@ -1,11 +1,4 @@
-export type PassiveKind =
-  | 'initial'
-  | 'connect'
-  | 'small'
-  | 'notable'
-  | 'mastery'
-  | 'voidMastery'
-  | 'void'
+export type PassiveKind = 'initial' | 'connect' | 'small' | 'notable' | 'mastery'
 
 /** Fixed singleton Initial node id — not creatable or deletable. */
 export const INITIAL_NODE_ID = 'initial-main'
@@ -18,7 +11,6 @@ export type TrainingLog = {
   id: string
   label: string
   count: number
-  note?: string
 }
 
 /** A progression stage with its own band, goal, and training log. */
@@ -29,8 +21,6 @@ export type StageData = {
   label: string
   /** Target training count (= segment count on the ring). */
   goal: number
-  /** Manual completion override (also completes when logged ≥ goal). */
-  completedManually: boolean
   logs: TrainingLog[]
 }
 
@@ -62,8 +52,6 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   small: '#9B9A97',
   notable: '#D9730D',
   mastery: '#0F7B6C',
-  voidMastery: '#0F7B6C',
-  void: '#6CB6EA',
 }
 
 export type PassiveNodeData = {
@@ -76,8 +64,6 @@ export type PassiveNodeData = {
    * Icon + color come from the class catalog (not stored per-node).
    */
   classId: string
-  /** Mastery: radius of the circular orbit for attached passives. */
-  orbitRadius?: number
   /** Mastery: number of concentric orbit tiers (1–3). */
   orbitTierCount?: OrbitTierCount
   /**
@@ -94,19 +80,17 @@ export type PassiveNodeData = {
   orbitOrderByTier?: Partial<Record<OrbitTier, string[]>>
   /**
    * Mastery: max members per tier. Unfilled slots are conceptual voids
-   * (no separate Void Master node).
+   * (empty capacity, not a separate node kind).
    */
   orbitCapacityByTier?: Partial<Record<OrbitTier, number>>
   /** Mastery: when true, orbit membership count/order cannot change (rotation still allowed). */
   orbitLocked?: boolean
-  /** Small/Notable/Void only: the single Mastery this passive belongs to. */
+  /** Small/Notable only: the single Mastery this passive belongs to. */
   masteryId?: string | null
   /** Small/Notable on an orbit: which tier ring (1 = innermost). */
   orbitTier?: OrbitTier
   /** Satellite slot index (0-based) within tier capacity; empty slots = void spacing. */
   orbitSlot?: number
-  /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
-  voidPassing?: boolean
   /** Connect only: circuit breaker — when false, blocks power from Initial. */
   connectEnabled?: boolean
 }
@@ -117,8 +101,6 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   small: 'Small',
   notable: 'Notable',
   mastery: 'Mastery',
-  voidMastery: 'Void Master (retired)',
-  void: 'Void spacer',
 }
 
 /** Kinds the user can add from the toolbar. */

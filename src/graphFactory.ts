@@ -25,20 +25,18 @@ export function createPassiveData(
       | 'masteryId'
       | 'orbitTier'
       | 'orbitSlot'
-      | 'voidPassing'
       | 'connectEnabled'
       | 'classId'
       | 'stages'
     >
   > = {},
 ): PassiveNodeData {
-  const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
   return {
     label,
-    kind: resolvedKind,
-    stages: extras.stages ?? stagesForKind(resolvedKind),
-    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[resolvedKind],
-    ...(isMasteryKind(resolvedKind)
+    kind,
+    stages: extras.stages ?? stagesForKind(kind),
+    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[kind],
+    ...(isMasteryKind(kind)
       ? {
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
           orbitStartAngleByTier: extras.orbitStartAngleByTier,
@@ -50,21 +48,15 @@ export function createPassiveData(
           orbitLocked: extras.orbitLocked ?? false,
           orbitTierCount: extras.orbitTierCount ?? 1,
         }
-      : resolvedKind === 'void'
-        ? {
-            masteryId: extras.masteryId ?? null,
-            voidPassing: extras.voidPassing ?? false,
-            orbitTier: extras.orbitTier ?? 1,
-          }
-        : resolvedKind === 'initial'
-          ? {}
-          : resolvedKind === 'connect'
-            ? { connectEnabled: extras.connectEnabled ?? true }
-            : {
-                masteryId: extras.masteryId ?? null,
-                orbitTier: extras.orbitTier ?? 1,
-                orbitSlot: extras.orbitSlot,
-              }),
+      : kind === 'initial'
+        ? {}
+        : kind === 'connect'
+          ? { connectEnabled: extras.connectEnabled ?? true }
+          : {
+              masteryId: extras.masteryId ?? null,
+              orbitTier: extras.orbitTier ?? 1,
+              orbitSlot: extras.orbitSlot,
+            }),
   }
 }
 

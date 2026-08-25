@@ -130,13 +130,11 @@ function buildPastedNode(
           orbitOrder: [],
           orbitTierCount: source.orbitTierCount ?? 1,
         }
-      : kind === 'void'
-        ? { masteryId: null, voidPassing: source.voidPassing ?? false, orbitTier: 1 }
-        : kind === 'initial'
-          ? {}
-          : kind === 'connect'
-            ? { connectEnabled: source.connectEnabled ?? true }
-            : { masteryId: null, orbitTier: 1 }),
+      : kind === 'initial'
+        ? {}
+        : kind === 'connect'
+          ? { connectEnabled: source.connectEnabled ?? true }
+          : { masteryId: null, orbitTier: 1 }),
   }
 
   return {
@@ -862,13 +860,12 @@ export default function App() {
           const data = node.data as PassiveNodeData
 
           if (node.id === nodeId) {
-            const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
             const nextData: PassiveNodeData = {
               label: data.label,
-              kind: resolvedKind,
-              stages: stagesForKind(resolvedKind, data.stages),
-              classId: resolvePassiveClass(classes, data.classId, resolvedKind).id,
-              ...(isMasteryKind(resolvedKind)
+              kind,
+              stages: stagesForKind(kind, data.stages),
+              classId: resolvePassiveClass(classes, data.classId, kind).id,
+              ...(isMasteryKind(kind)
                 ? {
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
                     orbitStartAngleByTier: isMasteryKind(prev.kind)
@@ -887,33 +884,16 @@ export default function App() {
                       : 1,
                     masteryId: null,
                   }
-                : resolvedKind === 'void'
-                  ? {
-                      masteryId:
-                        isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
-                          ? data.masteryId ?? null
-                          : null,
-                      voidPassing: prev.kind === 'void' ? (data.voidPassing ?? false) : false,
-                      orbitTier: normalizeOrbitTier(
-                        data.orbitTier,
-                        data.masteryId
-                          ? normalizeOrbitTierCount(
-                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
-                                ?.orbitTierCount,
-                            )
-                          : 1,
-                      ),
-                    }
-                : resolvedKind === 'initial'
+                : kind === 'initial'
                   ? {}
-                  : resolvedKind === 'connect'
+                  : kind === 'connect'
                     ? {
                         connectEnabled:
                           prev.kind === 'connect' ? (data.connectEnabled ?? true) : true,
                       }
                     : {
                       masteryId:
-                        isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
+                        isOrbitMemberKind(kind) && !isMasteryKind(prev.kind)
                           ? data.masteryId ?? null
                           : null,
                       orbitTier: normalizeOrbitTier(

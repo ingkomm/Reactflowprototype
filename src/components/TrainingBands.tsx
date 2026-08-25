@@ -27,10 +27,6 @@ export const MASTERY_NEON_LABEL_GAP = 14
 /** Angular gap between segment cells (radians). */
 const SEGMENT_GAP = 0.09
 
-export function bandCountForStages(stages: StageData[]) {
-  return stages.length
-}
-
 /** Radius from node center to the middle of the outermost stage band. */
 export function outermostBandRadius(stageCount: number, nodeSize: number) {
   if (stageCount <= 0) return nodeSize / 2

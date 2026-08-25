@@ -17,7 +17,6 @@ import {
   getOrbitTierCapacity,
   getTierStartAngle,
   isMasteryKind,
-  isStealthPassiveKind,
   normalizeOrbitTierCount,
   orbitAngleOptions,
 } from '../orbit'
@@ -105,7 +104,7 @@ export function Inspector({
       <aside className="inspector">
         <h2 className="inspector__title">Node Inspector</h2>
         <p className="inspector__empty">
-          노드를 선택하면 클래스·단계별 띠와 트레이닝 로그를 편집할 수 있습니다.
+          노드를 선택하면 클래스, 오르빗, Notable 링크와 트레이닝 로그를 편집할 수 있습니다.
         </p>
       </aside>
     )
@@ -206,7 +205,7 @@ export function Inspector({
 
       <div className="field">
         <span>클래스</span>
-        {data.kind !== 'initial' && data.kind !== 'connect' && !isStealthPassiveKind(data.kind) ? (
+        {data.kind !== 'initial' && data.kind !== 'connect' ? (
           <>
             <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
               {kindClasses.map((cls) => {
@@ -242,14 +241,6 @@ export function Inspector({
             Mastery — 띠·개인 링크 없음. 오르빗 위성에 파워가 도달하면 Mastery가 켜집니다. 용량
             미달 빈 슬롯은 자동 void 스페이싱.
           </p>
-          <label className="field field--row">
-            <span>Orbit lock</span>
-            <input
-              type="checkbox"
-              checked={data.orbitLocked ?? false}
-              onChange={(e) => onChangeOrbitLocked(nodeId, e.target.checked)}
-            />
-          </label>
           <p className="field-hint">
             {data.orbitLocked
               ? 'Lock 시 멤버 추가/제거·순서 변경 불가 · 오르빗 궤도 숨김 · 1~3단 함께 회전'

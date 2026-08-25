@@ -9,18 +9,10 @@ export const NODE_SIZE: Record<PassiveKind, number> = {
   small: 48,
   notable: 68,
   mastery: 104,
-  voidMastery: 104,
-  void: 36,
 }
 
-/** Mastery hubs (Void Master is retired — treated as mastery when present). */
 export function isMasteryKind(kind: PassiveKind) {
-  return kind === 'mastery' || kind === 'voidMastery'
-}
-
-/** Void spacer slots only — no icon, bands, links, or power. */
-export function isStealthPassiveKind(kind: PassiveKind) {
-  return kind === 'void'
+  return kind === 'mastery'
 }
 
 export const DEFAULT_ORBIT_RADIUS = 180
@@ -165,17 +157,8 @@ export function isConnectKind(kind: PassiveKind) {
   return kind === 'connect'
 }
 
-export function isSatelliteKind(kind: PassiveKind) {
-  return kind === 'small' || kind === 'notable'
-}
-
-/** Nodes that may sit on a mastery orbit. */
 export function isOrbitMemberKind(kind: PassiveKind) {
   return kind === 'small' || kind === 'notable'
-}
-
-export function isVoidPassing(data: PassiveNodeData) {
-  return data.kind === 'void' && Boolean(data.voidPassing)
 }
 
 /** Merge tier orders into flat orbitOrder (tier 1 → tier N). */
@@ -276,17 +259,6 @@ export function getOrderedTierSatellites(
   return ordered
 }
 
-/** Orbit order with passing void nodes removed (used for link adjacency on one tier). */
-export function getOrbitAdjacencyMembers(
-  nodes: PassiveFlowNode[],
-  masteryId: string,
-  tier: OrbitTier,
-): PassiveFlowNode[] {
-  return getOrderedTierSatellites(nodes, masteryId, tier).filter(
-    (sat) => !isVoidPassing(sat.data as PassiveNodeData),
-  )
-}
-
 export function isMasteryOrbitLocked(nodes: PassiveFlowNode[], masteryId: string) {
   const mastery = nodes.find((n) => n.id === masteryId)
   if (!mastery) return false
@@ -312,30 +284,6 @@ export function getSatelliteOrbitSlot(
   const tierOrder = md.orbitOrderByTier?.[tier] ?? md.orbitOrder ?? []
   const index = tierOrder.indexOf(satelliteId)
   return index >= 0 ? index : 0
-}
-
-/** First unused slot index on a tier ring. */
-export function findFirstFreeOrbitSlot(
-  nodes: PassiveFlowNode[],
-  masteryId: string,
-  tier: OrbitTier,
-): number | null {
-  const mastery = nodes.find((n) => n.id === masteryId)
-  if (!mastery) return null
-  const md = mastery.data as PassiveNodeData
-  const capacity = getOrbitTierCapacity(md, tier)
-  const used = new Set<number>()
-  for (const sat of getOrbitSatellites(nodes, masteryId)) {
-    const sd = sat.data as PassiveNodeData
-    if (normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount)) !== tier) {
-      continue
-    }
-    used.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
-  }
-  for (let slot = 0; slot < capacity; slot++) {
-    if (!used.has(slot)) return slot
-  }
-  return null
 }
 
 export type AssignOrbitSlotOptions = {
@@ -744,7 +692,6 @@ export function areOrbitAdjacent(
     if (normalizeOrbitTier(sd.orbitTier, normalizeOrbitTierCount(md.orbitTierCount)) !== tierA) {
       continue
     }
-    if (isVoidPassing(sd)) continue
     occupied.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
   }
 
@@ -842,7 +789,7 @@ export function canOrbitLink(
   if (!source || !target) return false
   const sd = source.data as PassiveNodeData
   const td = target.data as PassiveNodeData
-  if (!isSatelliteKind(sd.kind) || !isSatelliteKind(td.kind)) return false
+  if (!isOrbitMemberKind(sd.kind) || !isOrbitMemberKind(td.kind)) return false
   if (sd.masteryId !== masteryId || td.masteryId !== masteryId) return false
 
   const tierA = getSatelliteOrbitTier(nodes, masteryId, aId)
@@ -932,7 +879,6 @@ export function orbitLinkSpec(
     if (sat.id === sourceId || sat.id === targetId) continue
     const satData = sat.data as PassiveNodeData
     if (normalizeOrbitTier(satData.orbitTier, tierCount) !== tierA) continue
-    if (isVoidPassing(satData)) continue
     occupied.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
   }
 
@@ -957,18 +903,6 @@ export function orbitLinkSpec(
     arcRadius: orbitR,
     clockwise,
   }
-}
-
-/** @deprecated Use orbitLinkSpec */
-export function orbitAdjacentArcSpec(
-  nodes: PassiveFlowNode[],
-  masteryId: string,
-  sourceId: string,
-  targetId: string,
-): { a1: number; a2: number; arcRadius: number; clockwise: boolean } | null {
-  const spec = orbitLinkSpec(nodes, masteryId, sourceId, targetId)
-  if (!spec || spec.kind !== 'arc') return null
-  return spec
 }
 
 /** Pad link endpoints outside visible bands (links never draw through band rings). */
@@ -1001,18 +935,6 @@ export function trimStraightEndpoints(
   }
 }
 
-/** Same-orbit Notable ↔ its Mastery center link. */
-export function isSameOrbitNotableMasteryLink(
-  sd: PassiveNodeData,
-  td: PassiveNodeData,
-  sourceId: string,
-  targetId: string,
-) {
-  if (sd.kind === 'notable' && isMasteryKind(td.kind) && td.kind === 'mastery' && sd.masteryId === targetId) return true
-  if (td.kind === 'notable' && isMasteryKind(sd.kind) && sd.kind === 'mastery' && td.masteryId === sourceId) return true
-  return false
-}
-
 export function linkGlowStyle(color: string, selected: boolean, powered: boolean) {
   const strokeMix = powered ? 82 : 38
   const glowMix = powered ? 50 : 14
@@ -1023,10 +945,6 @@ export function linkGlowStyle(color: string, selected: boolean, powered: boolean
     opacity: powered ? 1 : 0.38,
     cursor: 'pointer' as const,
   }
-}
-
-export function poweredLinkGlowStyle(color: string, selected: boolean) {
-  return linkGlowStyle(color, selected, true)
 }
 
 export const CROSS_ORBIT_GLOW_COLOR = '#9fe8dd'
@@ -1429,21 +1347,6 @@ export function removeNodesAndRelayout(
   return withMasteryDragFlags(next, selectedId)
 }
 
-export function totalTrainingCount(trainings: { count: number }[]) {
-  return trainings.reduce((sum, t) => sum + (Number.isFinite(t.count) ? t.count : 0), 0)
-}
-
-export function trainingProgressLabel(total: number) {
-  const rem = total % 3
-  const filled = rem === 0 && total > 0 ? 3 : rem
-  return `${filled}/3`
-}
-
-/** Fractional band level (3 trainings = 1.0). */
-export function trainingBandLevel(total: number) {
-  return Math.max(0, total) / 3
-}
-
 /** True when both satellites belong to the same Mastery orbit. */
 export function shareSameOrbit(
   a: { data: PassiveNodeData },
@@ -1455,7 +1358,6 @@ export function shareSameOrbit(
 }
 
 export const ORBIT_ATTACH_SLACK = 56
-export const ORBIT_DETACH_SLACK = 72
 
 export function distanceBetweenCenters(
   a: PassiveFlowNode,
@@ -1869,56 +1771,4 @@ export function findOrbitMemberNearPointer(
     }
   }
   return best?.node ?? null
-}
-
-/** Insert satellite into tier-local clockwise order using drop angle around mastery. */
-export function orbitOrderByDropAngleInTier(
-  nodes: PassiveFlowNode[],
-  masteryId: string,
-  satelliteId: string,
-): { tier: OrbitTier; order: string[] } {
-  const mastery = nodes.find((n) => n.id === masteryId)
-  const satellite = nodes.find((n) => n.id === satelliteId)
-  if (!mastery || !satellite) return { tier: 1, order: [satelliteId] }
-
-  const tier = getSatelliteOrbitTier(nodes, masteryId, satelliteId)
-  const mc = nodeCenter(mastery, nodes)
-  const md = mastery.data as PassiveNodeData
-  const start = (getTierStartAngle(md, tier) * Math.PI) / 180
-
-  const norm = (angle: number) => {
-    let rel = angle - start
-    while (rel < 0) rel += Math.PI * 2
-    while (rel >= Math.PI * 2) rel -= Math.PI * 2
-    return rel
-  }
-
-  const others = getOrderedTierSatellites(nodes, masteryId, tier).filter(
-    (s) => s.id !== satelliteId,
-  )
-  const items = [
-    ...others.map((o) => {
-      const c = nodeCenter(o, nodes)
-      return { id: o.id, rel: norm(Math.atan2(c.y - mc.y, c.x - mc.x)) }
-    }),
-    (() => {
-      const c = nodeCenter(satellite, nodes)
-      return { id: satelliteId, rel: norm(Math.atan2(c.y - mc.y, c.x - mc.x)) }
-    })(),
-  ]
-  items.sort((a, b) => a.rel - b.rel)
-  return { tier, order: items.map((i) => i.id) }
-}
-
-/** @deprecated Use orbitOrderByDropAngleInTier */
-export function orbitOrderByDropAngle(
-  nodes: PassiveFlowNode[],
-  masteryId: string,
-  satelliteId: string,
-): string[] {
-  const mastery = nodes.find((n) => n.id === masteryId)
-  if (!mastery) return [satelliteId]
-  const { tier, order } = orbitOrderByDropAngleInTier(nodes, masteryId, satelliteId)
-  const data = mastery.data as PassiveNodeData
-  return setMasteryTierOrbitOrder(data, tier, order).orbitOrder ?? order
 }
