@@ -29,3 +29,10 @@ Hello-world sanity check (no login/secrets required): open the dev server, click
 to add a node to the canvas, select the node, then rename it in the right-side Inspector
 panel. Select a Notable node and add an entry under the training log ("+ 로그") to exercise
 node-specific editing. Live updates should appear on both the Inspector and the canvas node.
+
+Layout notes (for extending kinds / graph rules):
+- `src/kinds.ts` — kind predicates and node sizes. Adding a kind starts here and in `types.ts`.
+- `src/graph/nodeData.ts` — kind-specific `PassiveNodeData` fields (`createPassiveData` / `remapNodeDataToKind`).
+- `src/graph/edges.ts` — edge constructors and sanitization. Power/connection rules live in `src/power.ts`.
+- Retired `void` / `voidMastery` node kinds were removed; empty orbit slots are visual dots only
+  ("빈 슬롯 표시"), not nodes.

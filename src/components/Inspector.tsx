@@ -17,7 +17,6 @@ import {
   getOrbitTierCapacity,
   getTierStartAngle,
   isMasteryKind,
-  isStealthPassiveKind,
   normalizeOrbitTierCount,
   orbitAngleOptions,
 } from '../orbit'
@@ -206,7 +205,7 @@ export function Inspector({
 
       <div className="field">
         <span>클래스</span>
-        {data.kind !== 'initial' && data.kind !== 'connect' && !isStealthPassiveKind(data.kind) ? (
+        {data.kind !== 'initial' && data.kind !== 'connect' ? (
           <>
             <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
               {kindClasses.map((cls) => {

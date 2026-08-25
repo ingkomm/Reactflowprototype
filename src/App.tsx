@@ -23,9 +23,9 @@ import { NotableEdge } from './components/NotableEdge'
 import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
-import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
-import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from './types'
-import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta } from './power'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount } from './types'
+import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
   resolvePassiveClass,
@@ -33,9 +33,21 @@ import {
 } from './passiveClass'
 import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
-import { stagesForKind, uid as stageUid } from './stage'
+import { uid } from './stage'
 import { snapNodeTopLeft } from './grid'
-import { createPassiveData, passiveLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
+import {
+  createPassiveData,
+  remapNodeDataToKind,
+  passiveLinkEdge,
+  orbitLinkEdge,
+  notableLinkEdge,
+  findLinkEdge,
+  resolveMasteryPair,
+  sanitizeEdges,
+  type NodeClipboard,
+  nextCopyLabel,
+  buildPastedNode,
+} from './graph'
 import {
   DEFAULT_SELECTED_NODE_ID,
   SEED_EDGES,
@@ -45,7 +57,6 @@ import {
   assignSatelliteOrbitSlot,
   canAcceptOrbitMember,
   countOrbitTierMembers,
-  DEFAULT_ORBIT_START_ANGLE,
   findOrbitAttachTarget,
   getOrbitTierCapacity,
   getOrderedTierSatellites,
@@ -75,136 +86,20 @@ import {
 import { OrbitRotateController, shouldSuppressOrbitSelectionClear } from './components/OrbitRotateController'
 import { MiniMapCircleNode } from './components/MiniMapCircleNode'
 import { ZoomKeyboardController } from './components/ZoomKeyboardController'
-import { VoidHighlightProvider } from './VoidHighlightContext'
+import { EmptySlotHighlightProvider } from './EmptySlotHighlightContext'
+import { TopBar } from './components/TopBar'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
 
 const nodeTypes = { passive: PassiveNode }
 const edgeTypes = { center: CenterEdge, orbit: OrbitEdge, notable: NotableEdge }
 
-function uid(prefix: string) {
-  return stageUid(prefix)
-}
-
-type NodeClipboard = {
-  data: PassiveNodeData
-  position: { x: number; y: number }
-}
-
-function cloneStagesWithNewIds(stages: StageData[]): StageData[] {
-  return stages.map((stage) => ({
-    ...stage,
-    id: uid('stage'),
-    logs: stage.logs.map((log) => ({ ...log, id: uid('log') })),
-  }))
-}
-
-/** Append `_N` using the next free number for this exact title stem. */
-function nextCopyLabel(baseLabel: string, existingLabels: Iterable<string>): string {
-  const escaped = baseLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`^${escaped}_(\\d+)$`)
-  let max = 0
-  for (const label of existingLabels) {
-    const match = label.match(re)
-    if (match) max = Math.max(max, Number(match[1]))
-  }
-  return `${baseLabel}_${max + 1}`
-}
-
-function buildPastedNode(
-  clipboard: NodeClipboard,
-  label: string,
-  offsetIndex: number,
-): PassiveFlowNode {
-  const source = clipboard.data
-  const kind = source.kind
-  const stages = cloneStagesWithNewIds(source.stages ?? [])
-  const data: PassiveNodeData = {
-    label,
-    kind,
-    stages,
-    classId: source.classId,
-    ...(isMasteryKind(kind)
-      ? {
-          orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
-          orbitOrder: [],
-          orbitTierCount: source.orbitTierCount ?? 1,
-        }
-      : kind === 'void'
-        ? { masteryId: null, voidPassing: source.voidPassing ?? false, orbitTier: 1 }
-        : kind === 'initial'
-          ? {}
-          : kind === 'connect'
-            ? { connectEnabled: source.connectEnabled ?? true }
-            : { masteryId: null, orbitTier: 1 }),
-  }
-
-  return {
-    id: uid(kind),
-    type: 'passive',
-    position: {
-      x: clipboard.position.x + offsetIndex * 36,
-      y: clipboard.position.y + offsetIndex * 36,
-    },
-    dragHandle: '.node-drag-handle',
-    draggable: true,
-    data,
-  }
-}
-
-function resolveMasteryPair(
-  source: PassiveFlowNode,
-  target: PassiveFlowNode,
-): { mastery: PassiveFlowNode; satellite: PassiveFlowNode } | null {
-  const sourceData = source.data as PassiveNodeData
-  const targetData = target.data as PassiveNodeData
-
-  if (isMasteryKind(sourceData.kind) && isOrbitMemberKind(targetData.kind)) {
-    return { mastery: source, satellite: target }
-  }
-  if (isMasteryKind(targetData.kind) && isOrbitMemberKind(sourceData.kind)) {
-    return { mastery: target, satellite: source }
-  }
-  return null
-}
-
-function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit' | 'notable') {
-  return edges.find((e) => {
-    if (type && e.type !== type) return false
-    return (e.source === a && e.target === b) || (e.source === b && e.target === a)
-  })
-}
-
-function classifyLink(
-  source: PassiveFlowNode,
-  target: PassiveFlowNode,
-  nodes: PassiveFlowNode[],
-) {
-  return classifyPassiveConnection(source, target, nodes)
-}
-
-function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
-  return edges.filter((e) => {
-    const source = nodes.find((n) => n.id === e.source)
-    const target = nodes.find((n) => n.id === e.target)
-    if (!source || !target) return false
-    const linkKind = classifyLink(source, target, nodes)
-    if (e.type === 'orbit') return linkKind === 'orbit'
-    if (e.type === 'notable') return linkKind === 'notable'
-    return linkKind === 'center'
-  })
-}
-
-function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
-  return pruneEdgesReachableFromInitial(nodes, pruneInvalidEdges(nodes, edges))
-}
-
 export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState(SEED_NODES)
   const [edges, setEdges, onEdgesChange] = useEdgesState(SEED_EDGES)
   const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
-  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
+  const [emptySlotHighlightEnabled, setEmptySlotHighlightEnabled] = useState(false)
   const [addKind, setAddKind] = useState<PassiveKind>('connect')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
@@ -465,7 +360,7 @@ export default function App() {
         if (n.id === selectedNode.id || linked.has(n.id)) return false
         const d = n.data as PassiveNodeData
         if (d.kind !== 'notable') return false
-        return classifyLink(selectedNode, n, nodes) === 'notable'
+        return classifyPassiveConnection(selectedNode, n, nodes) === 'notable'
       })
       .map((n) => {
         const d = n.data as PassiveNodeData
@@ -483,7 +378,7 @@ export default function App() {
       const source = nodes.find((n) => n.id === connection.source)
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
-      const kind = classifyLink(source, target, nodes)
+      const kind = classifyPassiveConnection(source, target, nodes)
       return kind === 'center' || kind === 'orbit' || kind === 'notable' || kind === 'attach'
     },
     [nodes],
@@ -547,7 +442,7 @@ export default function App() {
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target) return
 
-      const linkKind = classifyLink(source, target, nodes)
+      const linkKind = classifyPassiveConnection(source, target, nodes)
       if (linkKind === 'attach') {
         const pair = resolveMasteryPair(source, target)
         if (pair && !isMasteryOrbitLocked(nodes, pair.mastery.id)) {
@@ -752,7 +647,7 @@ export default function App() {
       const source = nodes.find((n) => n.id === selectedId)
       const target = nodes.find((n) => n.id === peerId)
       if (!source || !target) return
-      const linkKind = classifyLink(source, target, nodes)
+      const linkKind = classifyPassiveConnection(source, target, nodes)
       if (linkKind !== 'notable') return
       commit()
       setEdges((eds) => {
@@ -862,70 +757,14 @@ export default function App() {
           const data = node.data as PassiveNodeData
 
           if (node.id === nodeId) {
-            const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
-            const nextData: PassiveNodeData = {
-              label: data.label,
-              kind: resolvedKind,
-              stages: stagesForKind(resolvedKind, data.stages),
-              classId: resolvePassiveClass(classes, data.classId, resolvedKind).id,
-              ...(isMasteryKind(resolvedKind)
-                ? {
-                    orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
-                    orbitStartAngleByTier: isMasteryKind(prev.kind)
-                      ? data.orbitStartAngleByTier
-                      : undefined,
-                    orbitOrder: isMasteryKind(prev.kind) ? (data.orbitOrder ?? []) : [],
-                    orbitOrderByTier: isMasteryKind(prev.kind)
-                      ? data.orbitOrderByTier
-                      : undefined,
-                    orbitCapacityByTier: isMasteryKind(prev.kind)
-                      ? data.orbitCapacityByTier
-                      : { 1: 6 },
-                    orbitLocked: data.orbitLocked ?? false,
-                    orbitTierCount: isMasteryKind(prev.kind)
-                      ? normalizeOrbitTierCount(data.orbitTierCount)
-                      : 1,
-                    masteryId: null,
-                  }
-                : resolvedKind === 'void'
-                  ? {
-                      masteryId:
-                        isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
-                          ? data.masteryId ?? null
-                          : null,
-                      voidPassing: prev.kind === 'void' ? (data.voidPassing ?? false) : false,
-                      orbitTier: normalizeOrbitTier(
-                        data.orbitTier,
-                        data.masteryId
-                          ? normalizeOrbitTierCount(
-                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
-                                ?.orbitTierCount,
-                            )
-                          : 1,
-                      ),
-                    }
-                : resolvedKind === 'initial'
-                  ? {}
-                  : resolvedKind === 'connect'
-                    ? {
-                        connectEnabled:
-                          prev.kind === 'connect' ? (data.connectEnabled ?? true) : true,
-                      }
-                    : {
-                      masteryId:
-                        isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
-                          ? data.masteryId ?? null
-                          : null,
-                      orbitTier: normalizeOrbitTier(
-                        data.orbitTier,
-                        data.masteryId
-                          ? normalizeOrbitTierCount(
-                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
-                                ?.orbitTierCount,
-                            )
-                          : 1,
-                      ),
-                    }),
+            const classId = resolvePassiveClass(classes, data.classId, kind).id
+            const nextData = remapNodeDataToKind(data, kind, classId)
+            if (nextData.masteryId) {
+              const mastery = nds.find((n) => n.id === nextData.masteryId)
+              const tierCount = normalizeOrbitTierCount(
+                (mastery?.data as PassiveNodeData | undefined)?.orbitTierCount,
+              )
+              nextData.orbitTier = normalizeOrbitTier(nextData.orbitTier, tierCount)
             }
             return { ...node, data: nextData }
           }
@@ -1218,65 +1057,18 @@ export default function App() {
   return (
     <PassiveClassProvider classes={classes}>
     <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar__brand">
-          <span className="topbar__mark" aria-hidden />
-          <div>
-            <p className="topbar__eyebrow">Path of Building style</p>
-            <h1>Passive Tree Prototype</h1>
-          </div>
-        </div>
-
-        <div className="topbar__actions">
-          <label className="topbar__kind">
-            <span>Add as</span>
-            <select
-              value={addKind}
-              onChange={(e) => setAddKind(e.target.value as PassiveKind)}
-            >
-              {(ADDABLE_PASSIVE_KINDS).map((kind) => (
-                <option key={kind} value={kind}>
-                  {PASSIVE_KIND_LABEL[kind]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="btn btn--primary" onClick={addNode}>
-            Add Node
-          </button>
-          <label className="topbar__toggle">
-            <input
-              type="checkbox"
-              checked={gridSnapEnabled}
-              onChange={(e) => setGridSnapEnabled(e.target.checked)}
-            />
-            <span>그리드 스냅</span>
-          </label>
-          <label className="topbar__toggle">
-            <input
-              type="checkbox"
-              checked={voidHighlightEnabled}
-              onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
-            />
-            <span>빈 슬롯 표시</span>
-          </label>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={deleteSelected}
-            disabled={!selectedId}
-          >
-            Delete Selected
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setClassManagerOpen(true)}
-          >
-            클래스
-          </button>
-        </div>
-      </header>
+      <TopBar
+        addKind={addKind}
+        onAddKindChange={setAddKind}
+        onAddNode={addNode}
+        gridSnapEnabled={gridSnapEnabled}
+        onGridSnapChange={setGridSnapEnabled}
+        emptySlotHighlightEnabled={emptySlotHighlightEnabled}
+        onEmptySlotHighlightChange={setEmptySlotHighlightEnabled}
+        onDeleteSelected={deleteSelected}
+        hasSelection={Boolean(selectedId)}
+        onOpenClassManager={() => setClassManagerOpen(true)}
+      />
 
       <main
         className="workspace"
@@ -1284,7 +1076,7 @@ export default function App() {
       >
         <section className="canvas-pane" aria-label="Passive tree canvas">
           <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
-          <VoidHighlightProvider enabled={voidHighlightEnabled}>
+          <EmptySlotHighlightProvider enabled={emptySlotHighlightEnabled}>
           <ReactFlow
             nodes={flowNodes}
             edges={edges}
@@ -1344,7 +1136,7 @@ export default function App() {
               maskColor="rgba(8, 12, 16, 0.7)"
             />
           </ReactFlow>
-          </VoidHighlightProvider>
+          </EmptySlotHighlightProvider>
           </PowerProvider>
 
           <p className="canvas-hint">

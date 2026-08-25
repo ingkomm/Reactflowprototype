@@ -1,5 +1,7 @@
 /** Solid monochrome vector infographic icons (24×24 viewBox). */
 
+import type { PassiveKind } from './types'
+
 export type IconSetId = 'training' | 'dance' | 'fitness' | 'focus'
 
 export type IconDef = {
@@ -213,17 +215,12 @@ export const NODE_ICONS: IconDef[] = [
   },
 ]
 
-export const DEFAULT_ICON_ID_BY_KIND: Record<
-  'initial' | 'connect' | 'small' | 'notable' | 'mastery' | 'voidMastery' | 'void',
-  string
-> = {
+export const DEFAULT_ICON_ID_BY_KIND: Record<PassiveKind, string> = {
   initial: 'tr-bolt',
   connect: 'tr-bolt',
   small: 'tr-target',
   notable: 'tr-star',
   mastery: 'tr-shield',
-  voidMastery: 'tr-shield',
-  void: 'fo-layers',
 }
 
 export function getIconDef(id: string | undefined | null): IconDef {

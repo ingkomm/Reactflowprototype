@@ -8,18 +8,13 @@ import {
   mergeOrbitOrderFromTiers,
   withMasteryDragFlags,
 } from './orbit'
-import {
-  createPassiveData,
-  orbitAdjacentEdges,
-  passiveLinkEdge,
-} from './graphFactory'
+import { createPassiveData } from './graph/nodeData'
+import { orbitAdjacentEdges, passiveLinkEdge } from './graph/edges'
 
-export { INITIAL_NODE_ID }
-
-export const DANCE_MASTERY_ID = 'mastery-dance'
-export const GYM_MASTERY_ID = 'mastery-gym'
-export const CONNECT_DANCE_ID = 'connect-dance'
-export const CONNECT_GYM_ID = 'connect-gym'
+const DANCE_MASTERY_ID = 'mastery-dance'
+const GYM_MASTERY_ID = 'mastery-gym'
+const CONNECT_DANCE_ID = 'connect-dance'
+const CONNECT_GYM_ID = 'connect-gym'
 
 const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
   1: ['notable-hiphop', 'notable-kpop', 'small-basic'],

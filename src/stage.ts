@@ -20,7 +20,6 @@ export function createStage(
     index,
     label: label ?? `단계 ${index}`,
     goal: Math.max(1, Math.floor(goal)),
-    completedManually: false,
     logs: logs.map((log) => ({
       ...log,
       count: Math.max(0, Number.isFinite(log.count) ? log.count : 0),
@@ -49,7 +48,7 @@ export function stageLoggedCount(stage: StageData): number {
 }
 
 export function isStageComplete(stage: StageData): boolean {
-  return stage.completedManually || stageRawLoggedCount(stage) >= stage.goal
+  return stageRawLoggedCount(stage) >= stage.goal
 }
 
 /** Normalize goal only; keep every training log intact. */
@@ -65,26 +64,13 @@ export function withNormalizedStage(stage: StageData): StageData {
   }
 }
 
-/** @deprecated Use withNormalizedStage — logs are no longer clamped away. */
-export function withClampedStage(stage: StageData): StageData {
-  return withNormalizedStage(stage)
-}
-
 export function sortedStages(stages: StageData[]): StageData[] {
   return [...stages].sort((a, b) => a.index - b.index)
-}
-
-export function completedStageCount(stages: StageData[]): number {
-  return stages.filter(isStageComplete).length
 }
 
 /** Total training count across all stage logs (Notable cumulative pool). */
 export function totalRawLoggedAcrossStages(stages: StageData[]): number {
   return stages.reduce((sum, s) => sum + stageRawLoggedCount(s), 0)
-}
-
-export function totalLoggedAcrossStages(stages: StageData[]): number {
-  return stages.reduce((sum, s) => sum + stageLoggedCount(s), 0)
 }
 
 /**
@@ -119,8 +105,8 @@ export function ensureNotableStages(stages: StageData[]): StageData[] {
   ) {
     return ordered.map((s, i) =>
       i === 0
-        ? { ...s, logs: poolLogs, goal: NOTABLE_BAND_GOALS[0]!, completedManually: false }
-        : { ...s, logs: [], goal: NOTABLE_BAND_GOALS[i]!, completedManually: false },
+        ? { ...s, logs: poolLogs, goal: NOTABLE_BAND_GOALS[0]! }
+        : { ...s, logs: [], goal: NOTABLE_BAND_GOALS[i]! },
     )
   }
   return createNotableStages(total, poolLogs)
@@ -145,13 +131,6 @@ export function visibleNotableBandCount(totalLogged: number): number {
   return NOTABLE_BAND_GOALS.length
 }
 
-export function isNotableBandComplete(totalLogged: number, bandIndex0: number): boolean {
-  const fills = notableBandFills(totalLogged)
-  const goal = NOTABLE_BAND_GOALS[bandIndex0]
-  if (goal == null) return false
-  return fills[bandIndex0]! >= goal
-}
-
 /** First Notable band (3) complete → can relay power. */
 export function canNotableTransmit(stages: StageData[]): boolean {
   return totalRawLoggedAcrossStages(stages) >= NOTABLE_BAND_GOALS[0]!
@@ -174,23 +153,6 @@ export function stageBandLevel(stages: StageData[]): number {
     }
   }
   return level
-}
-
-export function defaultStagesForSeed(
-  entries: { label: string; goal: number; logged: number }[],
-): StageData[] {
-  return entries.map((entry, i) => {
-    const logs: TrainingLog[] = []
-    let remaining = entry.logged
-    let n = 1
-    while (remaining > 0) {
-      const chunk = Math.min(remaining, Math.max(1, Math.ceil(entry.goal / 3)))
-      logs.push(createTrainingLog(`${entry.label} #${n}`, chunk))
-      remaining -= chunk
-      n += 1
-    }
-    return createStage(i + 1, entry.label, entry.goal, logs)
-  })
 }
 
 /** Seed helper: one cumulative total → Notable 3/5/7 bands. */
