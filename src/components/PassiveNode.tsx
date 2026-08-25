@@ -18,7 +18,6 @@ import {
   getTierStartAngle,
   isConnectKind,
   isMasteryKind,
-  isStealthPassiveKind,
   normalizeOrbitTierCount,
   NODE_SIZE,
   nodeInteractRadius,
@@ -36,7 +35,7 @@ import {
   masteryNeonOuterRadius,
   outermostBandRadius,
 } from './TrainingBands'
-import { useVoidHighlight } from '../VoidHighlightContext'
+import { useEmptySlotHighlight } from '../EmptySlotHighlightContext'
 import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>
@@ -47,23 +46,19 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
-  const voidHighlight = useVoidHighlight()
-  const isStealth = isStealthPassiveKind(data.kind)
+  const emptySlotHighlight = useEmptySlotHighlight()
   const isMastery = isMasteryKind(data.kind)
   const isInitialNode = data.kind === 'initial'
   const isConnectNode = isConnectKind(data.kind)
   const connectOn = data.connectEnabled !== false
-  const showVoidHighlight = voidHighlight && isStealth
   const orbitSatelliteCount = useMemo(() => {
     if (!isMastery) return 0
     return getOrderedOrbitSatellites(nodes, id).length
   }, [nodes, id, isMastery])
-  const isAmbientVisible =
-    (data.kind === 'void' && !data.masteryId) ||
-    (isMastery && orbitSatelliteCount === 0)
+  const isAmbientVisible = isMastery && orbitSatelliteCount === 0
   const nodePowered = useNodePowered(id)
-  const powered = !isStealth && (nodePowered || isInitialNode)
-  const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
+  const powered = nodePowered || isInitialNode
+  const showOrbitHighlight = emptySlotHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
   const passiveClass = resolve(data.classId, data.kind)
   const stages = data.stages ?? []
@@ -78,8 +73,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const showOrbitRings = isMastery
   const orbitRingsUnlocked = isMastery && !data.orbitLocked
-  const orbitRingsLocked = isMastery && Boolean(data.orbitLocked) && !voidHighlight
-  const orbitRingsForced = isMastery && Boolean(data.orbitLocked) && voidHighlight
+  const orbitRingsLocked = isMastery && Boolean(data.orbitLocked) && !emptySlotHighlight
+  const orbitRingsForced = isMastery && Boolean(data.orbitLocked) && emptySlotHighlight
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
@@ -123,17 +118,13 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       className={`passive-node passive-node--${data.kind}${selected ? ' is-selected' : ''}${
         powered ? '' : ' is-unpowered'
       }${showBands || masteryNeonLit ? ' has-bands' : ''}${
-        isStealth ? ' is-stealth' : ''
-      }${isAmbientVisible ? ' is-ambient-visible' : ''}${
-        showVoidHighlight ? ' is-void-highlighted' : ''
+        isAmbientVisible ? ' is-ambient-visible' : ''
       }${
         showOrbitHighlight ? ' is-orbit-highlighted' : ''
       }${orbitRingsUnlocked ? ' has-orbit-rings-visible' : ''}${
         orbitRingsLocked ? ' has-orbit-rings-locked' : ''
       }${orbitRingsForced ? ' is-orbit-forced-visible' : ''}${
         masteryNeonLit ? ' is-mastery-powered' : ''
-      }${
-        data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }${connectGlowClass}`}
       style={
         {
@@ -161,11 +152,11 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
             const occupied = new Set(
               tierSats.map((sat) => getSatelliteOrbitSlot(nodes, id, sat.id)),
             )
-            const voidSlots = Array.from({ length: capacity }, (_, slot) => slot).filter(
+            const emptySlots = Array.from({ length: capacity }, (_, slot) => slot).filter(
               (slot) => !occupied.has(slot),
             )
             const startRad = (getTierStartAngle(data, tier) * Math.PI) / 180
-            const showVoidSlots = !data.orbitLocked
+            const showEmptySlots = !data.orbitLocked
             return (
               <div
                 key={tier}
@@ -177,15 +168,15 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
                   style={{ width: tierR * 2, height: tierR * 2 }}
                   aria-hidden
                 />
-                {showVoidSlots &&
-                  voidSlots.map((slotIndex) => {
+                {showEmptySlots &&
+                  emptySlots.map((slotIndex) => {
                   const angle = startRad + (2 * Math.PI * slotIndex) / capacity
                   const x = tierR + tierR * Math.cos(angle)
                   const y = tierR + tierR * Math.sin(angle)
                   return (
                     <div
-                      key={`void-${tier}-${slotIndex}`}
-                      className={`passive-node__void-slot${voidHighlight ? ' is-highlighted' : ''}`}
+                      key={`empty-${tier}-${slotIndex}`}
+                      className={`passive-node__empty-slot${emptySlotHighlight ? ' is-highlighted' : ''}`}
                       style={{ left: x, top: y }}
                       aria-hidden
                     />
@@ -201,27 +192,23 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       {masteryNeonLit && <div className="passive-node__neon-rim" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
-      {!isStealth && (
-        <>
-          <Handle
-            id="center"
-            type="source"
-            position={Position.Top}
-            className="passive-node__handle"
-            isConnectable
-          />
-          <Handle
-            id="center-target"
-            type="target"
-            position={Position.Top}
-            className="passive-node__handle"
-            isConnectable
-          />
-        </>
-      )}
+      <Handle
+        id="center"
+        type="source"
+        position={Position.Top}
+        className="passive-node__handle"
+        isConnectable
+      />
+      <Handle
+        id="center-target"
+        type="target"
+        position={Position.Top}
+        className="passive-node__handle"
+        isConnectable
+      />
 
       <div className="passive-node__ring" aria-hidden>
-        {!isStealth && !isConnectNode && (
+        {!isConnectNode && (
           <IconGlyph iconId={iconId} className="passive-node__glyph" />
         )}
       </div>
@@ -230,8 +217,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       <p className="passive-node__title">{data.label}</p>
 
-      {!isStealth && (
-        <div className="passive-node__tooltip" role="tooltip">
+      <div className="passive-node__tooltip" role="tooltip">
           <p className="passive-node__tooltip-title">{data.label}</p>
           <p className="passive-node__tooltip-meta">{PASSIVE_KIND_LABEL[data.kind]}</p>
           {!powered && !isInitialNode && (
@@ -255,7 +241,6 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
             </p>
           )}
         </div>
-      )}
     </div>
   )
 }

@@ -239,118 +239,6 @@
   max-width: 5em;
 }
 
-.passive-node--void {
-  --node-size: 36px;
-  --ring: transparent;
-  --core: transparent;
-  --accent: #6a7580;
-}
-
-.passive-node--voidMastery {
-  --node-size: 104px;
-  --ring: transparent;
-  --core: transparent;
-  --accent: #6a7580;
-}
-
-.passive-node.is-stealth.is-void-highlighted .passive-node__ring {
-  opacity: 1;
-  border: 1px dashed color-mix(in srgb, #6cb6ea 62%, transparent);
-  box-shadow:
-    0 0 10px color-mix(in srgb, #6cb6ea 40%, transparent),
-    0 0 22px color-mix(in srgb, #6cb6ea 18%, transparent);
-}
-
-.passive-node.is-stealth.is-void-highlighted .passive-node__title {
-  opacity: 1;
-  visibility: visible;
-  color: #9ed4f0;
-}
-
-.passive-node.is-stealth.is-void-highlighted .passive-node__orbit {
-  opacity: 1;
-  border-color: color-mix(in srgb, #6cb6ea 38%, transparent);
-}
-
-.passive-node--voidMastery.is-void-highlighted .passive-node__ring {
-  border-style: dashed;
-}
-
-.passive-node--void.is-void-passing.is-void-highlighted .passive-node__ring {
-  border-style: dotted;
-}
-
-.passive-node.is-stealth .passive-node__halo {
-  display: none;
-}
-
-.passive-node.is-stealth .passive-node__ring {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  opacity: 0;
-  transition: opacity 0.15s ease, border-color 0.15s ease;
-}
-
-.passive-node.is-stealth.is-unpowered .passive-node__ring {
-  background: transparent;
-  box-shadow: none;
-}
-
-.passive-node.is-stealth:hover .passive-node__ring,
-.passive-node.is-stealth.is-selected .passive-node__ring,
-.passive-node.is-stealth.is-ambient-visible .passive-node__ring {
-  opacity: 1;
-  border: 1px dashed color-mix(in srgb, #9aa8b5 14%, transparent);
-}
-
-.passive-node.is-stealth .passive-node__title {
-  opacity: 0;
-  visibility: hidden;
-  color: #8a949e;
-  text-shadow:
-    -1px 0 0 rgba(0, 0, 0, 0.92),
-    1px 0 0 rgba(0, 0, 0, 0.92),
-    0 -1px 0 rgba(0, 0, 0, 0.92),
-    0 1px 0 rgba(0, 0, 0, 0.92);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
-}
-
-.passive-node--voidMastery .passive-node__title {
-  font-size: 0.78rem;
-  font-weight: 750;
-  max-width: min(12em, 168px);
-}
-
-.passive-node.is-stealth:hover .passive-node__title,
-.passive-node.is-stealth.is-selected .passive-node__title,
-.passive-node.is-stealth.is-ambient-visible .passive-node__title {
-  opacity: 1;
-  visibility: visible;
-}
-
-.passive-node.is-stealth .passive-node__tooltip {
-  display: none;
-}
-
-.passive-node.is-stealth .passive-node__orbit {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.passive-node.is-stealth:hover .passive-node__orbit,
-.passive-node.is-stealth.is-selected .passive-node__orbit,
-.passive-node.is-stealth.is-ambient-visible .passive-node__orbit {
-  opacity: 1;
-}
-
-.passive-node--void.is-void-passing .passive-node__ring {
-  border-style: dotted;
-}
-
 .passive-node.is-unpowered .passive-node__ring {
   box-shadow: none;
   background:
@@ -443,7 +331,7 @@
   transform: none;
 }
 
-.passive-node__void-slot {
+.passive-node__empty-slot {
   position: absolute;
   width: 10px;
   height: 10px;
@@ -454,7 +342,7 @@
   opacity: 0.5;
 }
 
-.passive-node__void-slot.is-highlighted {
+.passive-node__empty-slot.is-highlighted {
   opacity: 0.9;
   border-color: color-mix(in srgb, #6cb6ea 58%, transparent);
   box-shadow: 0 0 8px color-mix(in srgb, #6cb6ea 38%, transparent);

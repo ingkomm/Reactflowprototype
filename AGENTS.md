@@ -1,0 +1,38 @@
+# AGENTS.md
+
+## Cursor Cloud specific instructions
+
+This repo is a single Vite + React 19 + TypeScript app (`pob-app`) — a Path of Building
+style passive skill tree editor built with `@xyflow/react` (React Flow). There is no
+backend; everything runs client-side in the browser.
+
+Standard commands live in `package.json` `scripts` (do not duplicate them here):
+- `npm run dev` — Vite dev server (see notes below).
+- `npm run build` — `tsc -b && vite build` (type-check + production build).
+- `npm run lint` — oxlint (config in `.oxlintrc.json`).
+- `npm run preview` — serve the production build.
+
+Non-obvious notes:
+- Package manager is npm (`package-lock.json`). The update script runs `npm install`, so
+  dependencies are already present when a cloud agent starts; you normally do not need to
+  reinstall.
+- `npm run dev` serves on `http://localhost:5173/` and runs in the foreground — start it in
+  a background/tmux terminal, not inline, or it will block the session.
+- The dev server binds to localhost only. Use `npm run dev -- --host` if you need to reach
+  it from outside the VM.
+- Lint uses `oxlint` (the fast Rust linter), not ESLint — there is no `.eslintrc`. It
+  currently reports only warnings (exit code 0); a clean run is warnings-only, not zero output.
+- `tsconfig` requires the `@types/node` dev dependency (used by `vite.config.ts`); a plain
+  `tsc` without deps installed will fail.
+
+Hello-world sanity check (no login/secrets required): open the dev server, click "Add Node"
+to add a node to the canvas, select the node, then rename it in the right-side Inspector
+panel. Select a Notable node and add an entry under the training log ("+ 로그") to exercise
+node-specific editing. Live updates should appear on both the Inspector and the canvas node.
+
+Layout notes (for extending kinds / graph rules):
+- `src/kinds.ts` — kind predicates and node sizes. Adding a kind starts here and in `types.ts`.
+- `src/graph/nodeData.ts` — kind-specific `PassiveNodeData` fields (`createPassiveData` / `remapNodeDataToKind`).
+- `src/graph/edges.ts` — edge constructors and sanitization. Power/connection rules live in `src/power.ts`.
+- Retired `void` / `voidMastery` node kinds were removed; empty orbit slots are visual dots only
+  ("빈 슬롯 표시"), not nodes.

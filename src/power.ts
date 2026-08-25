@@ -1,16 +1,11 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { PassiveNodeData } from './types'
-import { NODE_SIZE } from './orbit'
+import { NODE_SIZE, isConnectKind, isMasteryKind, isOrbitMemberKind, isSatelliteKind } from './kinds'
 import { canNotableTransmit, kindUsesTrainingBands } from './stage'
 import {
   getOrderedOrbitSatellites,
   canOrbitLink,
-  isConnectKind,
-  isMasteryKind,
-  isOrbitMemberKind,
-  isSatelliteKind,
-  isStealthPassiveKind,
   shareSameOrbit,
 } from './orbit'
 
@@ -26,20 +21,8 @@ function isInitial(data: PassiveNodeData) {
   return data.kind === 'initial'
 }
 
-function isConnect(data: PassiveNodeData) {
-  return isConnectKind(data.kind)
-}
-
 function isConnectEnabled(data: PassiveNodeData) {
   return data.connectEnabled !== false
-}
-
-function isMastery(data: PassiveNodeData) {
-  return data.kind === 'mastery' || data.kind === 'voidMastery'
-}
-
-function isStealth(data: PassiveNodeData) {
-  return isStealthPassiveKind(data.kind)
 }
 
 /**
@@ -51,9 +34,9 @@ function isStealth(data: PassiveNodeData) {
  */
 export function canTransmitPower(data: PassiveNodeData): boolean {
   if (isInitial(data)) return true
-  if (isConnect(data)) return isConnectEnabled(data)
+  if (isConnectKind(data.kind)) return isConnectEnabled(data)
   if (data.kind === 'small') return true
-  if (isStealth(data) || isMastery(data)) return false
+  if (isMasteryKind(data.kind)) return false
   if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
   return false
 }
@@ -91,8 +74,7 @@ export function computePoweredNodeIds(
         if (!powered.has(from.id)) continue
         if (!canTransmitPower(fromData)) continue
         const toData = to.data as PassiveNodeData
-        if (isMastery(toData)) continue
-        if (isStealth(toData)) continue
+        if (isMasteryKind(toData.kind)) continue
         if (!powered.has(to.id)) {
           powered.add(to.id)
           changed = true
@@ -103,11 +85,10 @@ export function computePoweredNodeIds(
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (!isMastery(data)) continue
+    if (!isMasteryKind(data.kind)) continue
     const satellites = getOrderedOrbitSatellites(nodes, node.id)
     for (const sat of satellites) {
       const satData = sat.data as PassiveNodeData
-      if (isStealth(satData)) continue
       if (!powered.has(sat.id)) continue
       if (!canTransmitPower(satData)) continue
       powered.add(node.id)
@@ -161,8 +142,7 @@ export function computePowerFlowMeta(
         if (!depth.has(from.id)) continue
         if (!canTransmitPower(fromData)) continue
         const toData = to.data as PassiveNodeData
-        if (isMastery(toData)) continue
-        if (isStealth(toData)) continue
+        if (isMasteryKind(toData.kind)) continue
         if (!depth.has(to.id)) {
           depth.set(to.id, depth.get(from.id)! + 1)
           parent.set(to.id, from.id)
@@ -174,11 +154,10 @@ export function computePowerFlowMeta(
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (!isMastery(data)) continue
+    if (!isMasteryKind(data.kind)) continue
     const satellites = getOrderedOrbitSatellites(nodes, node.id)
     for (const sat of satellites) {
       const satData = sat.data as PassiveNodeData
-      if (isStealth(satData)) continue
       if (!depth.has(sat.id)) continue
       if (!canTransmitPower(satData)) continue
       const nextDepth = depth.get(sat.id)! + 1
@@ -234,13 +213,6 @@ export function orientPowerLinkVisual(
     ty: toPt.y,
     targetFlareR: NODE_SIZE[toData.kind] / 2,
   }
-}
-
-export function isEdgePowered(
-  edge: Edge,
-  powered: Set<string>,
-): boolean {
-  return powered.has(edge.source) && powered.has(edge.target)
 }
 
 /** Nodes reachable from any Initial node via center/orbit links. */
@@ -311,11 +283,9 @@ export function classifyPassiveConnection(
   const sd = source.data as PassiveNodeData
   const td = target.data as PassiveNodeData
 
-  if (isStealth(sd) || isStealth(td)) return null
-
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
-    if (isConnect(other)) return 'center'
+    if (isConnectKind(other.kind)) return 'center'
     return null
   }
 
@@ -342,9 +312,9 @@ export function classifyPassiveConnection(
   }
 
   if (!shareSameOrbit({ data: sd }, { data: td })) {
-    if (isConnect(sd) && isConnect(td)) return 'center'
-    if (isConnect(sd) && (td.kind === 'small' || td.kind === 'notable')) return 'center'
-    if (isConnect(td) && (sd.kind === 'small' || sd.kind === 'notable')) return 'center'
+    if (isConnectKind(sd.kind) && isConnectKind(td.kind)) return 'center'
+    if (isConnectKind(sd.kind) && (td.kind === 'small' || td.kind === 'notable')) return 'center'
+    if (isConnectKind(td.kind) && (sd.kind === 'small' || sd.kind === 'notable')) return 'center'
     if (sd.kind === 'small' && td.kind === 'small') return 'center'
     if (
       (sd.kind === 'small' && td.kind === 'notable') ||

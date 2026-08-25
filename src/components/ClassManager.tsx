@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { NodeIconColor, PassiveKind } from '../types'
-import { NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from '../types'
+import { CLASS_MANAGED_KINDS, NODE_ICON_COLORS, PASSIVE_KIND_LABEL } from '../types'
 import { getIconDef } from '../icons'
 import {
   classesForKind,
@@ -18,7 +18,7 @@ type Props = {
   onChange: (next: PassiveClass[]) => void
 }
 
-const KIND_TABS: PassiveKind[] = ['initial', 'connect', 'mastery', 'voidMastery', 'notable', 'small', 'void']
+const KIND_TABS = CLASS_MANAGED_KINDS
 
 export function ClassManager({ open, classes, onClose, onChange }: Props) {
   const [kind, setKind] = useState<PassiveKind>('mastery')
