@@ -94,6 +94,19 @@ export function computePoweredNodeIds(
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
         if (isStealth(toData)) continue
+        if (isConnect(toData)) {
+          if (!isInitial(fromData)) continue
+          if (
+            !isValidRootConnectHandles(
+              isInitial(sd) ? source : target,
+              isConnect(sd) ? source : target,
+              edge.sourceHandle,
+              edge.targetHandle,
+            )
+          ) {
+            continue
+          }
+        }
         if (!powered.has(to.id)) {
           powered.add(to.id)
           changed = true
@@ -164,6 +177,19 @@ export function computePowerFlowMeta(
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
         if (isStealth(toData)) continue
+        if (isConnect(toData)) {
+          if (!isInitial(fromData)) continue
+          if (
+            !isValidRootConnectHandles(
+              isInitial(sd) ? source : target,
+              isConnect(sd) ? source : target,
+              edge.sourceHandle,
+              edge.targetHandle,
+            )
+          ) {
+            continue
+          }
+        }
         if (!depth.has(to.id)) {
           depth.set(to.id, depth.get(from.id)! + 1)
           parent.set(to.id, from.id)

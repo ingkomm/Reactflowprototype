@@ -225,12 +225,17 @@
 }
 
 .passive-node__title--initial {
-  bottom: 8px;
-  top: auto;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
+  top: 50%;
+  left: 50%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  font-size: clamp(1rem, 2.8vw, 1.75rem);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  opacity: 0.85;
+  opacity: 0.9;
+  max-width: 62%;
+  white-space: normal;
+  line-height: 1.15;
 }
 
 .passive-node--connect {

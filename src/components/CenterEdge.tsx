@@ -12,16 +12,47 @@ import {
   linkGlowStyle,
   trimStraightEndpoints,
 } from '../orbit'
+import { rootSocketFlowPosition } from '../initialHub'
 import { usePowerSet, usePowerFlowMeta } from '../PowerContext'
 import { orientPowerLinkVisual } from '../power'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
 
 export type CenterFlowEdge = Edge<Record<string, unknown>, 'center'>
 
+function nodeCenter(node: NonNullable<ReturnType<typeof useInternalNode>>) {
+  return {
+    x: node.internals.positionAbsolute.x + (node.measured.width ?? 0) / 2,
+    y: node.internals.positionAbsolute.y + (node.measured.height ?? 0) / 2,
+  }
+}
+
+function endpointForNode(
+  node: NonNullable<ReturnType<typeof useInternalNode>>,
+  data: PassiveNodeData,
+  handleId: string | null | undefined,
+  rfX: number | undefined,
+  rfY: number | undefined,
+) {
+  if (data.kind === 'initial') {
+    const socket = rootSocketFlowPosition(node.internals.positionAbsolute, handleId)
+    if (socket) return socket
+  }
+  if (typeof rfX === 'number' && typeof rfY === 'number') {
+    return { x: rfX, y: rfY }
+  }
+  return nodeCenter(node)
+}
+
 export function CenterEdge({
   id,
   source,
   target,
+  sourceHandleId,
+  targetHandleId,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
   interactionWidth = 28,
   selected,
 }: EdgeProps) {
@@ -37,40 +68,39 @@ export function CenterEdge({
   const sd = sourceNode.data as PassiveNodeData
   const td = targetNode.data as PassiveNodeData
 
-  const sourceCX =
-    sourceNode.internals.positionAbsolute.x + (sourceNode.measured.width ?? 0) / 2
-  const sourceCY =
-    sourceNode.internals.positionAbsolute.y + (sourceNode.measured.height ?? 0) / 2
-  const targetCX =
-    targetNode.internals.positionAbsolute.x + (targetNode.measured.width ?? 0) / 2
-  const targetCY =
-    targetNode.internals.positionAbsolute.y + (targetNode.measured.height ?? 0) / 2
+  const sourcePt = endpointForNode(sourceNode, sd, sourceHandleId, sourceX, sourceY)
+  const targetPt = endpointForNode(targetNode, td, targetHandleId, targetX, targetY)
 
   const sourceLit = powered.has(source)
   const targetLit = powered.has(target)
   const lit = sourceLit && targetLit
 
-  const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
-    sourceCX,
-    sourceCY,
-    targetCX,
-    targetCY,
-    linkEndpointPad(sd, sourceLit),
-    linkEndpointPad(td, targetLit),
+  const sourcePad =
+    sd.kind === 'initial' ? 2 : linkEndpointPad(sd, sourceLit)
+  const targetPad =
+    td.kind === 'initial' ? 2 : linkEndpointPad(td, targetLit)
+
+  const { sourceX: sx, sourceY: sy, targetX: tx, targetY: ty } = trimStraightEndpoints(
+    sourcePt.x,
+    sourcePt.y,
+    targetPt.x,
+    targetPt.y,
+    sourcePad,
+    targetPad,
   )
 
   const hitPath = getStraightPath({
-    sourceX: sourceCX,
-    sourceY: sourceCY,
-    targetX: targetCX,
-    targetY: targetCY,
+    sourceX: sourcePt.x,
+    sourceY: sourcePt.y,
+    targetX: targetPt.x,
+    targetY: targetPt.y,
   })[0]
-  const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+  const [path] = getStraightPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty })
   const beam = orientPowerLinkVisual(
     source,
     target,
-    { x: sourceX, y: sourceY },
-    { x: targetX, y: targetY },
+    { x: sx, y: sy },
+    { x: tx, y: ty },
     sd,
     td,
     flowMeta,

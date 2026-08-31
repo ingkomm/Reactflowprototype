@@ -55,3 +55,17 @@ export function initialSocketOffset(slot: InitialConnectSlot): { left: number; t
     top: cy + socketR * Math.sin(rad),
   }
 }
+
+/** Absolute flow position of a Root socket handle. */
+export function rootSocketFlowPosition(
+  nodeTopLeft: { x: number; y: number },
+  handleId: string | null | undefined,
+): { x: number; y: number } | null {
+  const slot = parseRootSocketHandle(handleId)
+  if (slot === null) return null
+  const offset = initialSocketOffset(slot)
+  return {
+    x: nodeTopLeft.x + offset.left,
+    y: nodeTopLeft.y + offset.top,
+  }
+}
