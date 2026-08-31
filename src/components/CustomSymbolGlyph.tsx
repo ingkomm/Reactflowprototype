@@ -1,5 +1,6 @@
-import type { CSSProperties } from 'react'
+import { useId, type CSSProperties } from 'react'
 import type { CustomSymbol } from '../types'
+import { SYMBOL_MASK_ID } from '../customSymbol'
 
 type Props = {
   symbol: CustomSymbol
@@ -12,6 +13,11 @@ type Props = {
 
 /** Renders imported SVG as a monochrome glyph tinted by `color`. */
 export function CustomSymbolGlyph({ symbol, color, className, style, title }: Props) {
+  const reactId = useId().replace(/:/g, '')
+  const markup = symbol.markup.includes(SYMBOL_MASK_ID)
+    ? symbol.markup.split(SYMBOL_MASK_ID).join(`mask-${reactId}`)
+    : symbol.markup
+
   return (
     <svg
       className={className}
@@ -23,7 +29,7 @@ export function CustomSymbolGlyph({ symbol, color, className, style, title }: Pr
       role={title ? 'img' : undefined}
     >
       {title ? <title>{title}</title> : null}
-      <g fill="currentColor" dangerouslySetInnerHTML={{ __html: symbol.markup }} />
+      <g fill="currentColor" dangerouslySetInnerHTML={{ __html: markup }} />
     </svg>
   )
 }

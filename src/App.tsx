@@ -18,7 +18,7 @@ import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { CustomSymbolProvider } from './CustomSymbolContext'
-import { sanitizeSvgFile } from './customSymbol'
+import { importSymbolFile } from './customSymbol'
 import { SymbolKindEditor } from './components/SymbolKindEditor'
 import {
   buildGraphDocument,
@@ -1059,14 +1059,7 @@ export default function App() {
   )
 
   const handleImportSvg = useCallback(async (file: File, kind: SymbolEditorKind) => {
-    let text: string
-    try {
-      text = await file.text()
-    } catch {
-      setSymbolImportError('SVG 파일을 읽을 수 없습니다.')
-      return
-    }
-    const result = sanitizeSvgFile(text, file.name.replace(/\.svg$/i, ''))
+    const result = await importSymbolFile(file)
     if (!result.ok) {
       setSymbolImportError(result.message)
       return

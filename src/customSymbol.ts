@@ -1,10 +1,12 @@
 import type { CustomSymbol } from './types'
 
-const BLOCKED_TAG = /<\/?(script|foreignObject|iframe|object|embed|use)\b[^>]*>/gi
-const EVENT_ATTR = /\s(on[a-z]+|formaction|xlink:href|href)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi
-const EXTERNAL_REF = /\s(xlink:)?href\s*=\s*("|')?(https?:|javascript:|data:)/gi
-
+const BLOCKED_TAG = /<\/?(script|foreignObject|iframe|object|embed)\b[^>]*>/gi
+const EVENT_ATTR = /\s(on[a-z]+|formaction)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi
 const KEEP_PAINT = /^(none|transparent|currentcolor|inherit|url\()/i
+const RASTER_MIME = /^image\/(png|jpe?g|webp|gif)$/i
+const MAX_RASTER_EDGE = 256
+/** Placeholder replaced per render so mask ids never collide across nodes. */
+export const SYMBOL_MASK_ID = '__SYMBOL_MASK__'
 
 export function createCustomSymbolId() {
   return `cs-${crypto.randomUUID().slice(0, 8)}`
@@ -23,17 +25,44 @@ function parseViewBox(raw: string): { viewBox: string; width: number; height: nu
   return { viewBox: parts.join(' '), width, height }
 }
 
+function parseLength(raw: string | undefined): number | null {
+  if (!raw) return null
+  const match = raw.trim().match(/^([0-9]*\.?[0-9]+)(px|pt|pc|mm|cm|in|%)?$/i)
+  if (!match?.[1]) return null
+  const value = Number(match[1])
+  if (!Number.isFinite(value) || value <= 0) return null
+  const unit = (match[2] ?? 'px').toLowerCase()
+  if (unit === '%' ) return null
+  if (unit === 'pt') return value * (96 / 72)
+  if (unit === 'pc') return value * 16
+  if (unit === 'mm') return value * (96 / 25.4)
+  if (unit === 'cm') return value * (96 / 2.54)
+  if (unit === 'in') return value * 96
+  return value
+}
+
+function inferViewBox(svgText: string): { viewBox: string; width: number; height: number } | null {
+  const openTag = svgText.match(/<svg\b[^>]*>/i)?.[0]
+  if (!openTag) return null
+
+  const viewBoxMatch = openTag.match(/\bviewBox\s*=\s*("|')([^"']+)\1/i)
+  if (viewBoxMatch?.[2]) {
+    const parsed = parseViewBox(viewBoxMatch[2])
+    if (parsed) return parsed
+  }
+
+  const width = parseLength(openTag.match(/\bwidth\s*=\s*("|')([^"']+)\1/i)?.[2])
+  const height = parseLength(openTag.match(/\bheight\s*=\s*("|')([^"']+)\1/i)?.[2])
+  if (width && height) {
+    return { viewBox: `0 0 ${width} ${height}`, width, height }
+  }
+  return null
+}
+
 function stripOuterSvg(svgText: string): string | null {
   const match = svgText.match(/<svg\b[^>]*>([\s\S]*)<\/svg>/i)
   if (!match?.[1]) return null
   return match[1].trim()
-}
-
-function sanitizeInnerMarkup(markup: string): string {
-  let next = markup.replace(BLOCKED_TAG, '')
-  next = next.replace(EVENT_ATTR, '')
-  next = next.replace(EXTERNAL_REF, '')
-  return next.trim()
 }
 
 function unwrapAttrValue(raw: string): string {
@@ -45,6 +74,34 @@ function unwrapAttrValue(raw: string): string {
     return trimmed.slice(1, -1).trim()
   }
   return trimmed
+}
+
+function isAllowedHref(value: string): boolean {
+  if (!value) return false
+  if (value.startsWith('#')) return true
+  if (/^data:image\/(png|jpe?g|webp|gif)[;,]/i.test(value)) return true
+  return false
+}
+
+function sanitizeHrefs(markup: string): string {
+  return markup.replace(/\s(xlink:)?href\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (match, _prefix, raw) => {
+    const value = unwrapAttrValue(String(raw))
+    if (isAllowedHref(value)) return match
+    return ''
+  })
+}
+
+function sanitizeInnerMarkup(markup: string): string {
+  let next = markup.replace(BLOCKED_TAG, '')
+  next = next.replace(EVENT_ATTR, '')
+  next = sanitizeHrefs(next)
+  // Drop <use> that points outside fragment ids (keep internal #refs).
+  next = next.replace(/<use\b([^>]*)\/?>/gi, (full, attrs: string) => {
+    const href = attrs.match(/\b(?:xlink:)?href\s*=\s*("|')([^"']+)\1/i)?.[2]
+    if (href && href.startsWith('#')) return full
+    return ''
+  })
+  return next.trim()
 }
 
 function shouldKeepPaint(value: string): boolean {
@@ -71,10 +128,7 @@ function rewriteStylePaint(styleValue: string): string {
     .join('; ')
 }
 
-/**
- * Replace hardcoded paints with currentColor so symbol tinting works.
- * Preserves none / transparent / url(...) paints.
- */
+/** Replace hardcoded paints with currentColor so symbol tinting works. */
 export function toMonochromeMarkup(markup: string): string {
   let next = markup
 
@@ -96,20 +150,165 @@ export function toMonochromeMarkup(markup: string): string {
   return next.trim()
 }
 
+export function buildMaskedImageMarkup(dataUrl: string, width: number, height: number): string {
+  return [
+    `<defs>`,
+    `<mask id="${SYMBOL_MASK_ID}" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">`,
+    `<image href="${dataUrl}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`,
+    `</mask>`,
+    `</defs>`,
+    `<rect width="${width}" height="${height}" fill="currentColor" mask="url(#${SYMBOL_MASK_ID})"/>`,
+  ].join('')
+}
+
+function extractFirstDataImage(markup: string): string | null {
+  const match = markup.match(
+    /\b(?:xlink:)?href\s*=\s*("|')(data:image\/(?:png|jpe?g|webp|gif)[^"']*)\1/i,
+  )
+  return match?.[2] ?? null
+}
+
+function isMostlyRasterMarkup(markup: string): boolean {
+  const withoutImages = markup
+    .replace(/<image\b[^>]*(?:\/>|>[\s\S]*?<\/image>)/gi, '')
+    .replace(/<defs\b[^>]*>[\s\S]*?<\/defs>/gi, '')
+  return !/<path\b|<circle\b|<rect\b|<polygon\b|<ellipse\b|<line\b|<polyline\b|<text\b/i.test(
+    withoutImages,
+  )
+}
+
+function parseSymbolColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed
+  return undefined
+}
+
+export function isRasterSymbolFile(file: File): boolean {
+  if (RASTER_MIME.test(file.type)) return true
+  return /\.(png|jpe?g|webp|gif)$/i.test(file.name)
+}
+
+export function isSvgSymbolFile(file: File): boolean {
+  if (file.type === 'image/svg+xml') return true
+  return /\.svg$/i.test(file.name)
+}
+
+function scaleToMaxEdge(width: number, height: number, maxEdge: number) {
+  const edge = Math.max(width, height)
+  if (edge <= maxEdge) return { width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) }
+  const scale = maxEdge / edge
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
+
+function luminanceToAlpha(data: Uint8ClampedArray) {
+  // Prefer dark-on-transparent / dark-on-light icons: dark pixels become opaque.
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]!
+    const g = data[i + 1]!
+    const b = data[i + 2]!
+    const a = data[i + 3]!
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b
+    const darkness = 1 - lum / 255
+    const alpha = Math.round(a * darkness)
+    data[i] = 255
+    data[i + 1] = 255
+    data[i + 2] = 255
+    data[i + 3] = alpha
+  }
+}
+
+async function canvasFromImageSource(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
+  const sized = scaleToMaxEdge(sourceWidth, sourceHeight, MAX_RASTER_EDGE)
+  const canvas = document.createElement('canvas')
+  canvas.width = sized.width
+  canvas.height = sized.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('캔버스를 초기화할 수 없습니다.')
+  ctx.clearRect(0, 0, sized.width, sized.height)
+  ctx.drawImage(source, 0, 0, sized.width, sized.height)
+  const imageData = ctx.getImageData(0, 0, sized.width, sized.height)
+  luminanceToAlpha(imageData.data)
+  ctx.putImageData(imageData, 0, 0)
+  return { canvas, width: sized.width, height: sized.height }
+}
+
+async function canvasToPngDataUrl(canvas: HTMLCanvasElement): Promise<string> {
+  return canvas.toDataURL('image/png')
+}
+
+async function loadHtmlImage(src: string): Promise<HTMLImageElement> {
+  const img = new Image()
+  img.decoding = 'async'
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('이미지를 읽을 수 없습니다.'))
+    img.src = src
+  })
+  return img
+}
+
+export async function rasterDataUrlToSymbol(
+  dataUrl: string,
+  name: string,
+  id = createCustomSymbolId(),
+): Promise<SanitizeSvgResult> {
+  try {
+    const img = await loadHtmlImage(dataUrl)
+    const width = img.naturalWidth || img.width
+    const height = img.naturalHeight || img.height
+    if (!width || !height) {
+      return { ok: false, message: '이미지 크기를 읽을 수 없습니다.' }
+    }
+    const { canvas, width: w, height: h } = await canvasFromImageSource(img, width, height)
+    const maskUrl = await canvasToPngDataUrl(canvas)
+    return {
+      ok: true,
+      symbol: {
+        id,
+        name: name.trim() || 'Symbol',
+        viewBox: `0 0 ${w} ${h}`,
+        width: w,
+        height: h,
+        markup: buildMaskedImageMarkup(maskUrl, w, h),
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : '이미지를 심볼로 변환할 수 없습니다.',
+    }
+  }
+}
+
+export async function importRasterSymbol(file: File, name: string): Promise<SanitizeSvgResult> {
+  const url = URL.createObjectURL(file)
+  try {
+    return await rasterDataUrlToSymbol(url, name)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 export function sanitizeSvgFile(svgText: string, name: string): SanitizeSvgResult {
-  const trimmed = svgText.trim()
+  const trimmed = svgText.replace(/^\uFEFF/, '').trim()
   if (!/<svg\b/i.test(trimmed)) {
     return { ok: false, message: 'SVG root element가 필요합니다.' }
   }
 
-  const viewBoxMatch = trimmed.match(/\bviewBox\s*=\s*("|')([^"']+)\1/i)
-  if (!viewBoxMatch?.[2]) {
-    return { ok: false, message: 'viewBox 속성이 있는 SVG만 가져올 수 있습니다.' }
-  }
-
-  const view = parseViewBox(viewBoxMatch[2])
+  const view = inferViewBox(trimmed)
   if (!view) {
-    return { ok: false, message: 'viewBox 형식이 올바르지 않습니다.' }
+    return {
+      ok: false,
+      message: 'viewBox 또는 width/height가 있는 SVG만 가져올 수 있습니다.',
+    }
   }
 
   const inner = stripOuterSvg(trimmed)
@@ -136,6 +335,37 @@ export function sanitizeSvgFile(svgText: string, name: string): SanitizeSvgResul
   }
 }
 
+/** Unified importer for SVG / PNG / JPEG / WebP / GIF. */
+export async function importSymbolFile(file: File): Promise<SanitizeSvgResult> {
+  const name = file.name.replace(/\.[^.]+$/, '') || 'Symbol'
+
+  if (isRasterSymbolFile(file)) {
+    return importRasterSymbol(file, name)
+  }
+
+  if (!isSvgSymbolFile(file) && file.type && file.type !== 'image/svg+xml') {
+    return { ok: false, message: 'SVG 또는 PNG/JPEG/WebP 이미지만 가져올 수 있습니다.' }
+  }
+
+  let text: string
+  try {
+    text = await file.text()
+  } catch {
+    return { ok: false, message: '파일을 읽을 수 없습니다.' }
+  }
+
+  const base = sanitizeSvgFile(text, name)
+  if (!base.ok) return base
+
+  // High-res design exports are often a single embedded PNG — convert so tint works.
+  const embedded = extractFirstDataImage(base.symbol.markup)
+  if (embedded && isMostlyRasterMarkup(base.symbol.markup)) {
+    return rasterDataUrlToSymbol(embedded, name, base.symbol.id)
+  }
+
+  return base
+}
+
 export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Partial<CustomSymbol>
@@ -146,7 +376,10 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   const view = parseViewBox(raw.viewBox)
   if (!view) return null
 
-  const markup = toMonochromeMarkup(sanitizeInnerMarkup(raw.markup))
+  // Masked raster symbols already use currentColor rect + image mask — don't rewrite fills.
+  const markup = raw.markup.includes(SYMBOL_MASK_ID)
+    ? sanitizeInnerMarkup(raw.markup)
+    : toMonochromeMarkup(sanitizeInnerMarkup(raw.markup))
   if (!markup) return null
 
   const symbol: CustomSymbol = {
@@ -163,13 +396,6 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   const color = parseSymbolColor(raw.color)
   if (color) symbol.color = color
   return symbol
-}
-
-function parseSymbolColor(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed
-  return undefined
 }
 
 export function validateCustomSymbols(value: unknown): CustomSymbol[] | null {

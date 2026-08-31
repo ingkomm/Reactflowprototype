@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeSvgFile, validateCustomSymbol } from './customSymbol'
+import {
+  buildMaskedImageMarkup,
+  sanitizeSvgFile,
+  SYMBOL_MASK_ID,
+  validateCustomSymbol,
+} from './customSymbol'
 
 const SAMPLE = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#D9730D"/></svg>`
 
@@ -14,7 +19,30 @@ describe('customSymbol', () => {
     expect(result.symbol.markup.toLowerCase()).not.toContain('#d9730d')
   })
 
-  it('rejects svg without viewBox', () => {
+  it('infers viewBox from width/height when missing', () => {
+    const result = sanitizeSvgFile(
+      `<svg width="1024px" height="512"><rect width="1024" height="512" fill="#fff"/></svg>`,
+      'HiRes',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.symbol.viewBox).toBe('0 0 1024 512')
+    expect(result.symbol.width).toBe(1024)
+    expect(result.symbol.height).toBe(512)
+  })
+
+  it('keeps embedded data:image hrefs', () => {
+    const dataUrl = 'data:image/png;base64,aaaa'
+    const result = sanitizeSvgFile(
+      `<svg width="100" height="100"><image href="${dataUrl}" width="100" height="100"/></svg>`,
+      'Embed',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.symbol.markup).toContain(dataUrl)
+  })
+
+  it('rejects svg without viewBox or size', () => {
     const result = sanitizeSvgFile('<svg><rect width="10" height="10"/></svg>', 'Bad')
     expect(result.ok).toBe(false)
   })
@@ -39,6 +67,13 @@ describe('customSymbol', () => {
     expect(result.symbol.markup).toContain('fill="none"')
     expect(result.symbol.markup).toContain('fill="currentColor"')
     expect(result.symbol.markup).toContain('stroke="currentColor"')
+  })
+
+  it('builds masked image markup for raster tinting', () => {
+    const markup = buildMaskedImageMarkup('data:image/png;base64,xx', 64, 32)
+    expect(markup).toContain(SYMBOL_MASK_ID)
+    expect(markup).toContain('fill="currentColor"')
+    expect(markup).toContain('data:image/png;base64,xx')
   })
 
   it('validates stored symbols', () => {
