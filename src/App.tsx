@@ -1,30 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   ReactFlowProvider,
   useNodesState,
   useEdgesState,
-  useReactFlow,
-  ConnectionMode,
-  ConnectionLineType,
   type Connection,
   type Edge,
   type Node,
   type OnSelectionChangeParams,
-  BackgroundVariant,
   type IsValidConnection,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { PassiveNode, type PassiveFlowNode } from './components/PassiveNode'
-import { CenterEdge } from './components/CenterEdge'
-import { NotableEdge } from './components/NotableEdge'
-import { OrbitEdge } from './components/OrbitEdge'
-import { Inspector } from './components/Inspector'
-import { PowerProvider } from './PowerContext'
+import { type PassiveFlowNode } from './components/PassiveNode'
+import { TreeWorkspace } from './components/TreeWorkspace'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
@@ -36,7 +24,6 @@ import {
 import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
 import { CustomSymbolProvider } from './CustomSymbolContext'
-import { NodeLibrary } from './components/NodeLibrary'
 import { sanitizeSvgFile } from './customSymbol'
 import {
   buildGraphDocument,
@@ -46,7 +33,6 @@ import {
 } from './graphDocument'
 import { createVideoMediaId } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
-import { decodePalettePayload, PALETTE_MIME } from './nodeTemplate'
 import { stagesForKind, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
 import { createPassiveData, passiveLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
@@ -73,7 +59,6 @@ import {
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
-  NODE_SIZE,
   placeSatelliteFromDrag,
   placeSatelliteOnMasteryOrbit,
   rematerializeOrbitTierSlots,
@@ -87,15 +72,9 @@ import {
   type SatelliteDragOrigin,
   withMasteryDragFlags,
 } from './orbit'
-import { OrbitRotateController, shouldSuppressOrbitSelectionClear } from './components/OrbitRotateController'
-import { MiniMapCircleNode } from './components/MiniMapCircleNode'
-import { ZoomKeyboardController } from './components/ZoomKeyboardController'
-import { VoidHighlightProvider } from './VoidHighlightContext'
+import { shouldSuppressOrbitSelectionClear } from './components/OrbitRotateController'
 import { useGraphHistory } from './useGraphHistory'
 import './App.css'
-
-const nodeTypes = { passive: PassiveNode }
-const edgeTypes = { center: CenterEdge, orbit: OrbitEdge, notable: NotableEdge }
 
 function uid(prefix: string) {
   return stageUid(prefix)
@@ -1333,181 +1312,35 @@ export default function App() {
     [gridSnapEnabled, setNodes, stack],
   )
 
-  const canvasWrapperRef = useRef<HTMLDivElement>(null)
+  const handleDeleteSymbol = useCallback(
+    (symbolId: string) => {
+      handleCustomSymbolsChange(customSymbols.filter((s) => s.id !== symbolId))
+    },
+    [customSymbols, handleCustomSymbolsChange],
+  )
 
-  function TreeWorkspace() {
-    const { screenToFlowPosition } = useReactFlow()
+  const onRenameNode = useCallback(
+    (nodeId: string, label: string) => {
+      if (nodeId === INITIAL_NODE_ID) return
+      updateNodeData(nodeId, (d) => ({ ...d, label }))
+    },
+    [updateNodeData],
+  )
 
-    const flowPositionForKind = (
-      screen: { x: number; y: number },
-      kind: PassiveKind,
-    ): { x: number; y: number } => {
-      const center = screenToFlowPosition(screen)
-      const size = NODE_SIZE[kind]
-      return { x: center.x - size / 2, y: center.y - size / 2 }
-    }
+  const onChangeClassId = useCallback(
+    (nodeId: string, classId: string) => updateNodeData(nodeId, (d) => ({ ...d, classId })),
+    [updateNodeData],
+  )
 
-    const placeTemplateAtCenter = (template: NodeTemplatePayload) => {
-      const bounds = canvasWrapperRef.current?.getBoundingClientRect()
-      if (!bounds) return
-      const kind = template.source === 'system' ? template.kind : 'small'
-      createFromTemplate(
-        template,
-        flowPositionForKind(
-          { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 },
-          kind,
-        ),
-      )
-    }
+  const onChangeNodeMedia = useCallback(
+    (nodeId: string, media: VideoMedia[]) => updateNodeData(nodeId, (d) => ({ ...d, media })),
+    [updateNodeData],
+  )
 
-    const onCanvasDragOver = (event: DragEvent) => {
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'copy'
-    }
-
-    const onCanvasDrop = (event: DragEvent) => {
-      event.preventDefault()
-      const template = decodePalettePayload(event.dataTransfer.getData(PALETTE_MIME))
-      if (!template) return
-      const kind = template.source === 'system' ? template.kind : 'small'
-      createFromTemplate(
-        template,
-        flowPositionForKind({ x: event.clientX, y: event.clientY }, kind),
-      )
-    }
-
-    return (
-      <main
-        className="workspace"
-        style={{ gridTemplateColumns: `168px minmax(0, 1fr) ${inspectorWidth}px` }}
-      >
-        <NodeLibrary
-          customSymbols={customSymbols}
-          symbolImportError={symbolImportError}
-          onPlaceTemplate={placeTemplateAtCenter}
-          onImportSvg={(file) => void handleImportSvg(file)}
-          onDeleteSymbol={(symbolId) =>
-            handleCustomSymbolsChange(customSymbols.filter((s) => s.id !== symbolId))
-          }
-        />
-
-        <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
-          <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
-            <VoidHighlightProvider enabled={voidHighlightEnabled}>
-              <ReactFlow
-                nodes={flowNodes}
-                edges={edges}
-                onNodesChange={handleNodesChange}
-                onEdgesChange={handleEdgesChange}
-                onConnect={onConnect}
-                isValidConnection={isValidConnection}
-                onSelectionChange={onSelectionChange}
-                onPaneClick={onPaneClick}
-                onNodeClick={onNodeClick}
-                onNodeDragStart={onNodeDragStart}
-                onNodeDrag={onNodeDrag}
-                onNodeDragStop={onNodeDragStop}
-                onEdgeDoubleClick={onEdgeDoubleClick}
-                onDragOver={onCanvasDragOver}
-                onDrop={onCanvasDrop}
-                zoomOnDoubleClick={false}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                connectionMode={ConnectionMode.Loose}
-                connectionRadius={36}
-                connectionLineType={ConnectionLineType.Straight}
-                connectionLineStyle={{
-                  stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
-                  strokeWidth: 1,
-                }}
-                fitView
-                elevateNodesOnSelect
-                deleteKeyCode={['Backspace', 'Delete']}
-                defaultEdgeOptions={{
-                  type: 'center',
-                  style: {
-                    stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
-                    strokeWidth: 1,
-                  },
-                  zIndex: 0,
-                }}
-                proOptions={{ hideAttribution: true }}
-              >
-                <OrbitRotateController
-                  commit={commit}
-                  selectedIdRef={selectedIdRef}
-                  setNodes={setNodes}
-                  stack={stack}
-                  restoreSelection={restoreFlowSelection}
-                />
-                <ZoomKeyboardController />
-                <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
-                <Controls position="top-left" />
-                <MiniMap
-                  pannable
-                  zoomable
-                  nodeComponent={MiniMapCircleNode}
-                  nodeColor={(node) => {
-                    const d = node.data as PassiveNodeData | undefined
-                    if (!d?.kind) return '#9B9A97'
-                    return resolvePassiveClass(classes, d.classId, d.kind).iconColor
-                  }}
-                  maskColor="rgba(8, 12, 16, 0.7)"
-                />
-              </ReactFlow>
-            </VoidHighlightProvider>
-          </PowerProvider>
-
-          <p className="canvas-hint">
-            Initial 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 인접 단(1↔2, 2↔3) 호 링크 · 단별 독립 회전
-          </p>
-        </section>
-
-        <div className="inspector-pane" style={{ width: inspectorWidth }}>
-          <button
-            type="button"
-            className="inspector-resizer"
-            aria-label="편집 창 너비 조절"
-            title="드래그해서 편집 창 너비 조절"
-            onMouseDown={onInspectorResizeStart}
-          />
-          <Inspector
-            nodeId={selectedNode?.id ?? null}
-            data={selectedData}
-            masteryLabel={selectedMasteryLabel}
-            masteryTierCount={selectedMasteryTierCount}
-            orbitMembers={orbitMembers}
-            selectedLinks={selectedLinks}
-            linkCandidates={linkCandidates}
-            onRename={(nodeId, label) => {
-              if (nodeId === INITIAL_NODE_ID) return
-              updateNodeData(nodeId, (d) => ({ ...d, label }))
-            }}
-            onChangeKind={changeKind}
-            onChangeClassId={(nodeId, classId) =>
-              updateNodeData(nodeId, (d) => ({ ...d, classId }))
-            }
-            onChangeNodeMedia={(nodeId, media) =>
-              updateNodeData(nodeId, (d) => ({ ...d, media }))
-            }
-            onChangeStages={(nodeId, stages) =>
-              updateNodeData(nodeId, (d) => ({ ...d, stages }))
-            }
-            onChangeConnectEnabled={changeConnectEnabled}
-            onChangeOrbitTierCount={changeOrbitTierCount}
-            onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
-            onChangeOrbitStartAngle={changeOrbitStartAngle}
-            onChangeOrbitOrder={changeOrbitOrder}
-            onChangeOrbitLocked={changeOrbitLocked}
-            onChangeOrbitCapacity={changeOrbitCapacity}
-            onDetachFromMastery={detachFromMastery}
-            onAddLink={addLink}
-            onDeleteNode={deleteNode}
-          />
-        </div>
-      </main>
-    )
-  }
+  const onChangeStages = useCallback(
+    (nodeId: string, stages: StageData[]) => updateNodeData(nodeId, (d) => ({ ...d, stages })),
+    [updateNodeData],
+  )
 
   return (
     <PassiveClassProvider classes={classes}>
@@ -1585,7 +1418,59 @@ export default function App() {
               </p>
             )}
 
-            <TreeWorkspace />
+            <TreeWorkspace
+              inspectorWidth={inspectorWidth}
+              customSymbols={customSymbols}
+              symbolImportError={symbolImportError}
+              classes={classes}
+              flowNodes={flowNodes}
+              edges={edges}
+              poweredIds={poweredIds}
+              powerFlowMeta={powerFlowMeta}
+              voidHighlightEnabled={voidHighlightEnabled}
+              selectedNode={selectedNode}
+              selectedData={selectedData}
+              masteryLabel={selectedMasteryLabel}
+              masteryTierCount={selectedMasteryTierCount}
+              orbitMembers={orbitMembers}
+              selectedLinks={selectedLinks}
+              linkCandidates={linkCandidates}
+              onImportSvg={(file) => void handleImportSvg(file)}
+              onDeleteSymbol={handleDeleteSymbol}
+              onCreateFromTemplate={createFromTemplate}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onConnect={onConnect}
+              isValidConnection={isValidConnection}
+              onSelectionChange={onSelectionChange}
+              onPaneClick={onPaneClick}
+              onNodeClick={onNodeClick}
+              onNodeDragStart={onNodeDragStart}
+              onNodeDrag={onNodeDrag}
+              onNodeDragStop={onNodeDragStop}
+              onEdgeDoubleClick={onEdgeDoubleClick}
+              onInspectorResizeStart={onInspectorResizeStart}
+              commit={commit}
+              selectedIdRef={selectedIdRef}
+              setNodes={setNodes}
+              stack={stack}
+              restoreFlowSelection={restoreFlowSelection}
+              onRename={onRenameNode}
+              onChangeKind={changeKind}
+              onChangeClassId={onChangeClassId}
+              onChangeNodeMedia={onChangeNodeMedia}
+              onChangeStages={onChangeStages}
+              onChangeConnectEnabled={changeConnectEnabled}
+              onChangeOrbitTierCount={changeOrbitTierCount}
+              onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
+              onChangeOrbitStartAngle={changeOrbitStartAngle}
+              onChangeOrbitOrder={changeOrbitOrder}
+              onChangeOrbitLocked={changeOrbitLocked}
+              onChangeOrbitCapacity={changeOrbitCapacity}
+              onDetachFromMastery={detachFromMastery}
+              onAddLink={addLink}
+              onDeleteNode={deleteNode}
+            />
 
             <ClassManager
               open={classManagerOpen}
