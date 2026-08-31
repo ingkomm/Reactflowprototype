@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import { validateCustomIcons } from './customIcon'
+import { validateCustomSymbols } from './customSymbol'
 import { layoutMasteryOrbit, isMasteryKind } from './orbit'
 import {
   buildSeedClasses,
@@ -9,7 +9,7 @@ import {
 } from './passiveClass'
 import { ensureNotableStages, stagesForKind } from './stage'
 import type {
-  CustomIcon,
+  CustomSymbol,
   GraphDocumentSettings,
   PassiveKind,
   PassiveNodeData,
@@ -42,7 +42,7 @@ export type GraphDocumentV01 = {
   nodes: SerializedFlowNode[]
   edges: SerializedEdge[]
   classes: PassiveClass[]
-  customIcons: CustomIcon[]
+  customSymbols: CustomSymbol[]
   settings?: GraphDocumentSettings
 }
 
@@ -50,7 +50,7 @@ export type GraphExportInput = {
   nodes: PassiveFlowNode[]
   edges: Edge[]
   classes: PassiveClass[]
-  customIcons: CustomIcon[]
+  customSymbols: CustomSymbol[]
   settings?: GraphDocumentSettings
 }
 
@@ -58,7 +58,7 @@ export type GraphImportResult = {
   nodes: PassiveFlowNode[]
   edges: Edge[]
   classes: PassiveClass[]
-  customIcons: CustomIcon[]
+  customSymbols: CustomSymbol[]
   settings: GraphDocumentSettings
 }
 
@@ -195,7 +195,11 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   if (optionalBool('voidPassing') != null) data.voidPassing = optionalBool('voidPassing')
   if (optionalBool('connectEnabled') != null) data.connectEnabled = optionalBool('connectEnabled')
   if (value.customIconId === null || typeof value.customIconId === 'string') {
-    data.customIconId = value.customIconId as string | null
+    // Legacy dot icon — ignored (fallback to class icon).
+    delete (data as { customIconId?: string | null }).customIconId
+  }
+  if (value.customSymbolId === null || typeof value.customSymbolId === 'string') {
+    data.customSymbolId = value.customSymbolId as string | null
   }
   if (media.length > 0) data.media = media
 
@@ -321,15 +325,16 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
   const classes = normalizeClasses(value.classes)
   if (!classes) return { ok: false, message: 'classes 배열 형식이 올바르지 않습니다.' }
 
-  const customIcons = validateCustomIcons(value.customIcons)
-  if (!customIcons) return { ok: false, message: 'customIcons 배열 형식이 올바르지 않습니다.' }
+  const customSymbols = validateCustomSymbols(value.customSymbols)
+  if (customSymbols === null) return { ok: false, message: 'customSymbols 배열 형식이 올바르지 않습니다.' }
 
-  const iconIds = new Set(customIcons.map((i) => i.id))
+  const symbolIds = new Set(customSymbols.map((s) => s.id))
   for (const node of nodes) {
-    const customIconId = node.data.customIconId
-    if (customIconId && !iconIds.has(customIconId)) {
-      return { ok: false, message: `노드 ${node.id}가 존재하지 않는 customIconId를 참조합니다.` }
+    const customSymbolId = node.data.customSymbolId
+    if (customSymbolId && !symbolIds.has(customSymbolId)) {
+      node.data.customSymbolId = null
     }
+    delete node.data.customIconId
     if (node.data.kind === 'notable' && node.data.stages) {
       node.data.stages = ensureNotableStages(node.data.stages)
     }
@@ -340,7 +345,7 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
     nodes,
     edges,
     classes,
-    customIcons,
+    customSymbols,
     settings: normalizeSettings(value.settings),
   }
 
@@ -367,7 +372,7 @@ export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
       zIndex: edge.zIndex,
     })),
     classes: structuredClone(input.classes),
-    customIcons: structuredClone(input.customIcons),
+    customSymbols: structuredClone(input.customSymbols),
     settings: input.settings ? structuredClone(input.settings) : undefined,
   }
 }
@@ -407,7 +412,7 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
     nodes,
     edges,
     classes: structuredClone(document.classes),
-    customIcons: structuredClone(document.customIcons),
+    customSymbols: structuredClone(document.customSymbols),
     settings: document.settings ?? {},
   }
 }

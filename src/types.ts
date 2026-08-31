@@ -35,14 +35,15 @@ export type VideoMedia = {
   kind?: 'youtube' | 'external'
 }
 
-/** User-authored 16×16 dot icon (stored once, referenced by id on nodes). */
-export type CustomIcon = {
+/** User-imported SVG symbol (stored once, referenced by id on nodes). */
+export type CustomSymbol = {
   id: string
   name: string
+  viewBox: string
   width: number
   height: number
-  /** Row-major pixel colors; null = transparent. */
-  pixels: (string | null)[]
+  /** Sanitized inner SVG markup (without outer svg wrapper). */
+  markup: string
 }
 
 export const GRAPH_SCHEMA_VERSION = '0.1' as const
@@ -141,7 +142,9 @@ export type PassiveNodeData = {
   voidPassing?: boolean
   /** Connect only: circuit breaker — when false, blocks power from Initial. */
   connectEnabled?: boolean
-  /** Optional user dot icon id (overrides class icon when set). */
+  /** Optional user SVG symbol id (overrides class icon when set). */
+  customSymbolId?: string | null
+  /** @deprecated Ignored — legacy dot icon reference. */
   customIconId?: string | null
   /** Optional external videos attached to this node. */
   media?: VideoMedia[]
@@ -157,12 +160,7 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   void: 'Void spacer',
 }
 
-/** Kinds the user can add from the toolbar. */
-export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = [
-  'connect',
-  'small',
-  'notable',
-  'mastery',
-]
+/** Kinds the user can add from the Library palette. */
+export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = ['small', 'notable', 'mastery']
 
 export const DEFAULT_STAGE_GOAL = 3

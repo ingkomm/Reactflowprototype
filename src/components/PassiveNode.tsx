@@ -28,7 +28,9 @@ import type { OrbitTier } from '../types'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
-import { NodeIconDisplay } from './NodeIconDisplay'
+import { IconGlyph } from './IconGlyph'
+import { CustomSymbolGlyph } from './CustomSymbolGlyph'
+import { useCustomSymbols } from '../CustomSymbolContext'
 import {
   TrainingBands,
   labelBelowBandOffset,
@@ -46,6 +48,7 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { resolve } = usePassiveClasses()
+  const { getCustomSymbol } = useCustomSymbols()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const voidHighlight = useVoidHighlight()
   const isStealth = isStealthPassiveKind(data.kind)
@@ -84,6 +87,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const nodeSize = NODE_SIZE[data.kind]
   const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
   const iconId = passiveClass.iconId
+  const customSymbol = data.customSymbolId ? getCustomSymbol(data.customSymbolId) : null
   /** Powered mastery: thin rotating neon rim + Notable-like halo (no training bands). */
   const masteryNeonLit = isMastery && powered
   const outerBandR = masteryNeonLit
@@ -222,11 +226,11 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       <div className="passive-node__ring" aria-hidden>
         {!isStealth && !isConnectNode && (
-          <NodeIconDisplay
-            iconId={iconId}
-            customIconId={data.customIconId}
-            className="passive-node__glyph"
-          />
+          customSymbol ? (
+            <CustomSymbolGlyph symbol={customSymbol} className="passive-node__glyph passive-node__glyph--symbol" />
+          ) : (
+            <IconGlyph iconId={iconId} className="passive-node__glyph" />
+          )
         )}
       </div>
 

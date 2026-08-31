@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
+  ReactFlowProvider,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   ConnectionMode,
   ConnectionLineType,
   type Connection,
@@ -24,8 +26,8 @@ import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
-import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomIcon, VideoMedia } from './types'
-import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia } from './types'
+import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
   resolvePassiveClass,
@@ -33,8 +35,9 @@ import {
 } from './passiveClass'
 import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
-import { CustomIconManager } from './components/CustomIconManager'
-import { CustomIconProvider } from './CustomIconContext'
+import { CustomSymbolProvider } from './CustomSymbolContext'
+import { NodeLibrary } from './components/NodeLibrary'
+import { sanitizeSvgFile } from './customSymbol'
 import {
   buildGraphDocument,
   documentToFlowState,
@@ -42,6 +45,8 @@ import {
   parseGraphDocumentJson,
 } from './graphDocument'
 import { createVideoMediaId } from './videoMedia'
+import type { NodeTemplatePayload } from './nodeTemplate'
+import { decodePalettePayload, PALETTE_MIME } from './nodeTemplate'
 import { stagesForKind, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
 import { createPassiveData, passiveLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
@@ -68,6 +73,7 @@ import {
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
+  NODE_SIZE,
   placeSatelliteFromDrag,
   placeSatelliteOnMasteryOrbit,
   rematerializeOrbitTierSlots,
@@ -142,7 +148,7 @@ function buildPastedNode(
     kind,
     stages,
     classId: source.classId,
-    customIconId: source.customIconId ?? null,
+    customSymbolId: source.customSymbolId ?? null,
     media: cloneMediaList(source.media),
     ...(isMasteryKind(kind)
       ? {
@@ -225,12 +231,11 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
-  const [addKind, setAddKind] = useState<PassiveKind>('connect')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
-  const [customIcons, setCustomIcons] = useState<CustomIcon[]>([])
+  const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
+  const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [classManagerOpen, setClassManagerOpen] = useState(false)
-  const [customIconManagerOpen, setCustomIconManagerOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
@@ -1031,25 +1036,67 @@ export default function App() {
     [classes, setNodes, stack],
   )
 
-  const handleCustomIconsChange = useCallback(
-    (next: CustomIcon[]) => {
+  const handleCustomSymbolsChange = useCallback(
+    (next: CustomSymbol[]) => {
       const removedIds = new Set(
-        customIcons.filter((icon) => !next.some((n) => n.id === icon.id)).map((icon) => icon.id),
+        customSymbols.filter((s) => !next.some((n) => n.id === s.id)).map((s) => s.id),
       )
-      setCustomIcons(next)
+      setCustomSymbols(next)
       if (removedIds.size === 0) return
       commit()
       setNodes((nds) =>
         stack(
           nds.map((node) => {
             const data = node.data as PassiveNodeData
-            if (!data.customIconId || !removedIds.has(data.customIconId)) return node
-            return { ...node, data: { ...data, customIconId: null } }
+            if (!data.customSymbolId || !removedIds.has(data.customSymbolId)) return node
+            return { ...node, data: { ...data, customSymbolId: null } }
           }),
         ),
       )
     },
-    [commit, customIcons, setNodes, stack],
+    [commit, customSymbols, setNodes, stack],
+  )
+
+  const handleImportSvg = useCallback(async (file: File) => {
+    let text: string
+    try {
+      text = await file.text()
+    } catch {
+      setSymbolImportError('SVG 파일을 읽을 수 없습니다.')
+      return
+    }
+    const result = sanitizeSvgFile(text, file.name.replace(/\.svg$/i, ''))
+    if (!result.ok) {
+      setSymbolImportError(result.message)
+      return
+    }
+    setSymbolImportError(null)
+    setCustomSymbols((prev) => [...prev, result.symbol])
+  }, [])
+
+  const createFromTemplate = useCallback(
+    (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
+      const kind: PassiveKind = template.source === 'system' ? template.kind : 'small'
+      let position = flowPosition
+      if (gridSnapEnabled) position = snapNodeTopLeft(position)
+      commit()
+      const id = uid(kind)
+      const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`)
+      if (template.source === 'custom') {
+        data.customSymbolId = template.symbolId
+      }
+      const newNode: PassiveFlowNode = {
+        id,
+        type: 'passive',
+        position,
+        dragHandle: '.node-drag-handle',
+        draggable: true,
+        data,
+      }
+      setNodes((nds) => stack([...nds, newNode]))
+      setSelectedId(id)
+    },
+    [commit, gridSnapEnabled, setNodes, stack],
   )
 
   const handleExportJson = useCallback(() => {
@@ -1057,12 +1104,12 @@ export default function App() {
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       classes,
-      customIcons,
+      customSymbols,
       settings: { gridSnapEnabled, voidHighlightEnabled },
     })
     downloadGraphDocument(document)
     setImportError(null)
-  }, [classes, customIcons, gridSnapEnabled, voidHighlightEnabled])
+  }, [classes, customSymbols, gridSnapEnabled, voidHighlightEnabled])
 
   const handleImportJson = useCallback(
     async (file: File) => {
@@ -1081,7 +1128,7 @@ export default function App() {
       const imported = documentToFlowState(parsed.document)
       resetHistory()
       setClasses(imported.classes)
-      setCustomIcons(imported.customIcons)
+      setCustomSymbols(imported.customSymbols)
       setNodes(stack(imported.nodes))
       setEdges(sanitizeEdges(imported.nodes, imported.edges))
       if (imported.settings.gridSnapEnabled != null) {
@@ -1095,24 +1142,6 @@ export default function App() {
     },
     [resetHistory, setEdges, setNodes, stack],
   )
-
-  const addNode = useCallback(() => {
-    const id = uid(addKind)
-    const offset = nodes.length * 18
-    const raw = { x: 280 + (offset % 220), y: 180 + (offset % 160) }
-    const position = gridSnapEnabled ? snapNodeTopLeft(raw) : raw
-    commit()
-    const newNode: PassiveFlowNode = {
-      id,
-      type: 'passive',
-      position,
-      dragHandle: '.node-drag-handle',
-      draggable: true,
-      data: createPassiveData(addKind, `New ${PASSIVE_KIND_LABEL[addKind]}`),
-    }
-    setNodes((nds) => stack([...nds, newNode]))
-    setSelectedId(id)
-  }, [addKind, commit, gridSnapEnabled, nodes.length, setNodes, stack])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -1304,171 +1333,129 @@ export default function App() {
     [gridSnapEnabled, setNodes, stack],
   )
 
-  return (
-    <PassiveClassProvider classes={classes}>
-    <CustomIconProvider customIcons={customIcons}>
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar__brand">
-          <span className="topbar__mark" aria-hidden />
-          <div>
-            <p className="topbar__eyebrow">Path of Building style</p>
-            <h1>Passive Tree Prototype</h1>
-          </div>
-        </div>
+  const canvasWrapperRef = useRef<HTMLDivElement>(null)
 
-        <div className="topbar__actions">
-          <label className="topbar__kind">
-            <span>Add as</span>
-            <select
-              value={addKind}
-              onChange={(e) => setAddKind(e.target.value as PassiveKind)}
-            >
-              {(ADDABLE_PASSIVE_KINDS).map((kind) => (
-                <option key={kind} value={kind}>
-                  {PASSIVE_KIND_LABEL[kind]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="btn btn--primary" onClick={addNode}>
-            Add Node
-          </button>
-          <label className="topbar__toggle">
-            <input
-              type="checkbox"
-              checked={gridSnapEnabled}
-              onChange={(e) => setGridSnapEnabled(e.target.checked)}
-            />
-            <span>그리드 스냅</span>
-          </label>
-          <label className="topbar__toggle">
-            <input
-              type="checkbox"
-              checked={voidHighlightEnabled}
-              onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
-            />
-            <span>빈 슬롯 표시</span>
-          </label>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={deleteSelected}
-            disabled={!selectedId}
-          >
-            Delete Selected
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setCustomIconManagerOpen(true)}
-          >
-            아이콘
-          </button>
-          <button type="button" className="btn" onClick={handleExportJson}>
-            JSON보내기
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => importInputRef.current?.click()}
-          >
-            JSON 불러오기
-          </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              e.target.value = ''
-              if (file) void handleImportJson(file)
-            }}
-          />
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setClassManagerOpen(true)}
-          >
-            클래스
-          </button>
-        </div>
-      </header>
+  function TreeWorkspace() {
+    const { screenToFlowPosition } = useReactFlow()
 
-      {importError && (
-        <p className="import-error" role="alert">
-          {importError}
-        </p>
-      )}
+    const flowPositionForKind = (
+      screen: { x: number; y: number },
+      kind: PassiveKind,
+    ): { x: number; y: number } => {
+      const center = screenToFlowPosition(screen)
+      const size = NODE_SIZE[kind]
+      return { x: center.x - size / 2, y: center.y - size / 2 }
+    }
 
+    const placeTemplateAtCenter = (template: NodeTemplatePayload) => {
+      const bounds = canvasWrapperRef.current?.getBoundingClientRect()
+      if (!bounds) return
+      const kind = template.source === 'system' ? template.kind : 'small'
+      createFromTemplate(
+        template,
+        flowPositionForKind(
+          { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 },
+          kind,
+        ),
+      )
+    }
+
+    const onCanvasDragOver = (event: DragEvent) => {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'copy'
+    }
+
+    const onCanvasDrop = (event: DragEvent) => {
+      event.preventDefault()
+      const template = decodePalettePayload(event.dataTransfer.getData(PALETTE_MIME))
+      if (!template) return
+      const kind = template.source === 'system' ? template.kind : 'small'
+      createFromTemplate(
+        template,
+        flowPositionForKind({ x: event.clientX, y: event.clientY }, kind),
+      )
+    }
+
+    return (
       <main
         className="workspace"
-        style={{ gridTemplateColumns: `minmax(0, 1fr) ${inspectorWidth}px` }}
+        style={{ gridTemplateColumns: `168px minmax(0, 1fr) ${inspectorWidth}px` }}
       >
-        <section className="canvas-pane" aria-label="Passive tree canvas">
+        <NodeLibrary
+          customSymbols={customSymbols}
+          symbolImportError={symbolImportError}
+          onPlaceTemplate={placeTemplateAtCenter}
+          onImportSvg={(file) => void handleImportSvg(file)}
+          onDeleteSymbol={(symbolId) =>
+            handleCustomSymbolsChange(customSymbols.filter((s) => s.id !== symbolId))
+          }
+        />
+
+        <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
           <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
-          <VoidHighlightProvider enabled={voidHighlightEnabled}>
-          <ReactFlow
-            nodes={flowNodes}
-            edges={edges}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={handleEdgesChange}
-            onConnect={onConnect}
-            isValidConnection={isValidConnection}
-            onSelectionChange={onSelectionChange}
-            onPaneClick={onPaneClick}
-            onNodeClick={onNodeClick}
-            onNodeDragStart={onNodeDragStart}
-            onNodeDrag={onNodeDrag}
-            onNodeDragStop={onNodeDragStop}
-            onEdgeDoubleClick={onEdgeDoubleClick}
-            zoomOnDoubleClick={false}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            connectionMode={ConnectionMode.Loose}
-            connectionRadius={36}
-            connectionLineType={ConnectionLineType.Straight}
-            connectionLineStyle={{
-              stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
-              strokeWidth: 1,
-            }}
-            fitView
-            elevateNodesOnSelect
-            deleteKeyCode={['Backspace', 'Delete']}
-            defaultEdgeOptions={{
-              type: 'center',
-              style: {
-                stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
-                strokeWidth: 1,
-              },
-              zIndex: 0,
-            }}
-            proOptions={{ hideAttribution: true }}
-          >
-            <OrbitRotateController
-              commit={commit}
-              selectedIdRef={selectedIdRef}
-              setNodes={setNodes}
-              stack={stack}
-              restoreSelection={restoreFlowSelection}
-            />
-            <ZoomKeyboardController />
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
-            <Controls position="top-left" />
-            <MiniMap
-              pannable
-              zoomable
-              nodeComponent={MiniMapCircleNode}
-              nodeColor={(node) => {
-                const d = node.data as PassiveNodeData | undefined
-                if (!d?.kind) return '#9B9A97'
-                return resolvePassiveClass(classes, d.classId, d.kind).iconColor
-              }}
-              maskColor="rgba(8, 12, 16, 0.7)"
-            />
-          </ReactFlow>
-          </VoidHighlightProvider>
+            <VoidHighlightProvider enabled={voidHighlightEnabled}>
+              <ReactFlow
+                nodes={flowNodes}
+                edges={edges}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onConnect={onConnect}
+                isValidConnection={isValidConnection}
+                onSelectionChange={onSelectionChange}
+                onPaneClick={onPaneClick}
+                onNodeClick={onNodeClick}
+                onNodeDragStart={onNodeDragStart}
+                onNodeDrag={onNodeDrag}
+                onNodeDragStop={onNodeDragStop}
+                onEdgeDoubleClick={onEdgeDoubleClick}
+                onDragOver={onCanvasDragOver}
+                onDrop={onCanvasDrop}
+                zoomOnDoubleClick={false}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                connectionMode={ConnectionMode.Loose}
+                connectionRadius={36}
+                connectionLineType={ConnectionLineType.Straight}
+                connectionLineStyle={{
+                  stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
+                  strokeWidth: 1,
+                }}
+                fitView
+                elevateNodesOnSelect
+                deleteKeyCode={['Backspace', 'Delete']}
+                defaultEdgeOptions={{
+                  type: 'center',
+                  style: {
+                    stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
+                    strokeWidth: 1,
+                  },
+                  zIndex: 0,
+                }}
+                proOptions={{ hideAttribution: true }}
+              >
+                <OrbitRotateController
+                  commit={commit}
+                  selectedIdRef={selectedIdRef}
+                  setNodes={setNodes}
+                  stack={stack}
+                  restoreSelection={restoreFlowSelection}
+                />
+                <ZoomKeyboardController />
+                <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
+                <Controls position="top-left" />
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeComponent={MiniMapCircleNode}
+                  nodeColor={(node) => {
+                    const d = node.data as PassiveNodeData | undefined
+                    if (!d?.kind) return '#9B9A97'
+                    return resolvePassiveClass(classes, d.classId, d.kind).iconColor
+                  }}
+                  maskColor="rgba(8, 12, 16, 0.7)"
+                />
+              </ReactFlow>
+            </VoidHighlightProvider>
           </PowerProvider>
 
           <p className="canvas-hint">
@@ -1500,9 +1487,6 @@ export default function App() {
             onChangeClassId={(nodeId, classId) =>
               updateNodeData(nodeId, (d) => ({ ...d, classId }))
             }
-            onChangeCustomIconId={(nodeId, customIconId) =>
-              updateNodeData(nodeId, (d) => ({ ...d, customIconId }))
-            }
             onChangeNodeMedia={(nodeId, media) =>
               updateNodeData(nodeId, (d) => ({ ...d, media }))
             }
@@ -1522,21 +1506,96 @@ export default function App() {
           />
         </div>
       </main>
+    )
+  }
 
-      <ClassManager
-        open={classManagerOpen}
-        classes={classes}
-        onClose={() => setClassManagerOpen(false)}
-        onChange={handleClassesChange}
-      />
-      <CustomIconManager
-        open={customIconManagerOpen}
-        customIcons={customIcons}
-        onClose={() => setCustomIconManagerOpen(false)}
-        onChange={handleCustomIconsChange}
-      />
-    </div>
-    </CustomIconProvider>
+  return (
+    <PassiveClassProvider classes={classes}>
+      <CustomSymbolProvider customSymbols={customSymbols}>
+        <ReactFlowProvider>
+          <div className="app-shell">
+            <header className="topbar">
+              <div className="topbar__brand">
+                <span className="topbar__mark" aria-hidden />
+                <div>
+                  <p className="topbar__eyebrow">Path of Building style</p>
+                  <h1>Passive Tree Prototype</h1>
+                </div>
+              </div>
+
+              <div className="topbar__actions">
+                <label className="topbar__toggle">
+                  <input
+                    type="checkbox"
+                    checked={gridSnapEnabled}
+                    onChange={(e) => setGridSnapEnabled(e.target.checked)}
+                  />
+                  <span>그리드 스냅</span>
+                </label>
+                <label className="topbar__toggle">
+                  <input
+                    type="checkbox"
+                    checked={voidHighlightEnabled}
+                    onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
+                  />
+                  <span>빈 슬롯 표시</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  onClick={deleteSelected}
+                  disabled={!selectedId}
+                >
+                  Delete Selected
+                </button>
+                <button type="button" className="btn" onClick={handleExportJson}>
+                  JSON보내기
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  JSON 불러오기
+                </button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) void handleImportJson(file)
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setClassManagerOpen(true)}
+                >
+                  클래스
+                </button>
+              </div>
+            </header>
+
+            {importError && (
+              <p className="import-error" role="alert">
+                {importError}
+              </p>
+            )}
+
+            <TreeWorkspace />
+
+            <ClassManager
+              open={classManagerOpen}
+              classes={classes}
+              onClose={() => setClassManagerOpen(false)}
+              onChange={handleClassesChange}
+            />
+          </div>
+        </ReactFlowProvider>
+      </CustomSymbolProvider>
     </PassiveClassProvider>
   )
 }

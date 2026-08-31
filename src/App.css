@@ -261,18 +261,13 @@ body.is-resizing-inspector .react-flow {
     justify-content: stretch;
   }
 
-  .topbar__kind {
-    flex: 1;
-  }
-
-  .topbar__kind select,
   .btn {
     flex: 1;
   }
 
   .workspace {
     grid-template-columns: 1fr !important;
-    grid-template-rows: minmax(52vh, 1fr) auto;
+    grid-template-rows: auto minmax(52vh, 1fr) auto;
   }
 
   .inspector-pane {

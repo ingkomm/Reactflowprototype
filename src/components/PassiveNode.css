@@ -512,6 +512,10 @@
   display: block;
 }
 
+.passive-node__glyph--symbol {
+  object-fit: contain;
+}
+
 .passive-node.is-selected .passive-node__ring {
   box-shadow:
     0 0 0 2px #f4f7fa,

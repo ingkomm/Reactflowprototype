@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { createCustomIcon } from './customIcon'
 import {
   buildGraphDocument,
   graphDocumentsEqual,
@@ -7,6 +6,7 @@ import {
   serializeGraphDocument,
   validateGraphDocument,
 } from './graphDocument'
+import { sanitizeSvgFile } from './customSymbol'
 import { buildSeedClasses } from './passiveClass'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import { createVideoMediaId } from './videoMedia'
@@ -17,7 +17,7 @@ describe('graphDocument', () => {
       nodes: SEED_NODES,
       edges: SEED_EDGES,
       classes: buildSeedClasses(),
-      customIcons: [],
+      customSymbols: [],
       settings: { gridSnapEnabled: true, voidHighlightEnabled: false },
     })
     const parsed = parseGraphDocumentJson(serializeGraphDocument(doc))
@@ -27,21 +27,46 @@ describe('graphDocument', () => {
   })
 
   it('rejects unsupported schema versions without mutating parse state', () => {
-    const bad = { schemaVersion: '9.9', nodes: [], edges: [], classes: [], customIcons: [] }
+    const bad = { schemaVersion: '9.9', nodes: [], edges: [], classes: [], customSymbols: [] }
     const result = validateGraphDocument(bad)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.message).toContain('schemaVersion')
   })
 
-  it('preserves custom icons and media references', () => {
-    const customIcons = [createCustomIcon('Star')]
-    customIcons[0]!.pixels[0] = '#D9730D'
+  it('ignores legacy customIcons and customIconId references', () => {
+    const legacy = {
+      schemaVersion: '0.1',
+      nodes: SEED_NODES.map((n) => ({
+        id: n.id,
+        type: 'passive',
+        position: n.position,
+        data: { ...n.data, customIconId: 'ci-old' },
+      })),
+      edges: SEED_EDGES,
+      classes: buildSeedClasses(),
+      customIcons: [{ id: 'ci-old', name: 'Legacy', width: 16, height: 16, pixels: [] }],
+    }
+    const result = validateGraphDocument(legacy)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.document.customSymbols).toEqual([])
+    const node = result.document.nodes[0]
+    expect(node?.data.customIconId).toBeUndefined()
+  })
+
+  it('preserves custom symbols and media references', () => {
+    const imported = sanitizeSvgFile(
+      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>',
+      'Star',
+    )
+    if (!imported.ok) throw new Error('svg import failed')
+    const customSymbols = [imported.symbol]
     const nodes = structuredClone(SEED_NODES)
     const notable = nodes.find((n) => n.id === 'notable-hiphop')
     if (notable) {
       const data = notable.data
-      data.customIconId = customIcons[0]!.id
+      data.customSymbolId = customSymbols[0]!.id
       data.media = [
         {
           id: createVideoMediaId(),
@@ -51,31 +76,19 @@ describe('graphDocument', () => {
           provider: 'youtube',
         },
       ]
-      if (data.stages[0]?.logs[0]) {
-        data.stages[0].logs[0].media = [
-          {
-            id: createVideoMediaId(),
-            url: 'https://example.com/workout',
-            kind: 'external',
-            provider: 'link',
-          },
-        ]
-      }
     }
 
     const doc = buildGraphDocument({
       nodes,
       edges: SEED_EDGES,
       classes: buildSeedClasses(),
-      customIcons,
+      customSymbols,
     })
     const parsed = parseGraphDocumentJson(serializeGraphDocument(doc))
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
-    expect(parsed.document.customIcons).toHaveLength(1)
+    expect(parsed.document.customSymbols).toHaveLength(1)
     const restored = parsed.document.nodes.find((n) => n.id === 'notable-hiphop')
-    expect(restored?.data.customIconId).toBe(customIcons[0]!.id)
-    expect(restored?.data.media?.[0]?.url).toContain('youtu.be')
-    expect(restored?.data.stages[0]?.logs[0]?.media?.[0]?.url).toBe('https://example.com/workout')
+    expect(restored?.data.customSymbolId).toBe(customSymbols[0]!.id)
   })
 })
