@@ -16,8 +16,10 @@ import { TreeWorkspace } from './components/TreeWorkspace'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
-import { resolveLibrarySymbol } from './librarySymbols'
+import { normalizeSymbolId, type LibraryKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { CustomSymbolProvider } from './CustomSymbolContext'
+import { sanitizeSvgFile } from './customSymbol'
+import { SymbolKindEditor } from './components/SymbolKindEditor'
 import {
   buildGraphDocument,
   documentToFlowState,
@@ -205,6 +207,8 @@ export default function App() {
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
+  const [symbolEditorKind, setSymbolEditorKind] = useState<LibraryKind | null>(null)
+  const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
@@ -865,7 +869,7 @@ export default function App() {
               label: data.label,
               kind: resolvedKind,
               stages: stagesForKind(resolvedKind, data.stages),
-              symbolId: resolveLibrarySymbol(data.symbolId, resolvedKind).id,
+              symbolId: normalizeSymbolId(data.symbolId, customSymbols, resolvedKind),
               ...(isMasteryKind(resolvedKind)
                 ? {
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
@@ -981,7 +985,41 @@ export default function App() {
         }),
       )
     },
-    [commit, nodes, setEdges, setNodes, stack],
+    [commit, nodes, setEdges, setNodes, customSymbols, stack],
+  )
+
+  const handleImportSvg = useCallback(async (file: File, kind: LibraryKind) => {
+    let text: string
+    try {
+      text = await file.text()
+    } catch {
+      setSymbolImportError('SVG 파일을 읽을 수 없습니다.')
+      return
+    }
+    const result = sanitizeSvgFile(text, file.name.replace(/\.svg$/i, ''))
+    if (!result.ok) {
+      setSymbolImportError(result.message)
+      return
+    }
+    setSymbolImportError(null)
+    setCustomSymbols((prev) => [...prev, { ...result.symbol, kind }])
+  }, [])
+
+  const handleDeleteSymbol = useCallback(
+    (symbolId: string) => {
+      setCustomSymbols((prev) => prev.filter((s) => s.id !== symbolId))
+      commit()
+      setNodes((nds) =>
+        stack(
+          nds.map((node) => {
+            const data = node.data as PassiveNodeData
+            if (data.symbolId !== symbolId) return node
+            return { ...node, data: { ...data, symbolId: DEFAULT_SYMBOL_ID } }
+          }),
+        ),
+      )
+    },
+    [commit, setNodes, stack],
   )
 
   const createFromTemplate = useCallback(
@@ -1333,6 +1371,7 @@ export default function App() {
 
             <TreeWorkspace
               inspectorWidth={inspectorWidth}
+              onOpenSymbolEditor={setSymbolEditorKind}
               flowNodes={flowNodes}
               edges={edges}
               poweredIds={poweredIds}
@@ -1378,6 +1417,19 @@ export default function App() {
               onDetachFromMastery={detachFromMastery}
               onAddLink={addLink}
               onDeleteNode={deleteNode}
+            />
+
+            <SymbolKindEditor
+              kind={symbolEditorKind ?? 'mastery'}
+              open={symbolEditorKind != null}
+              customSymbols={customSymbols}
+              importError={symbolImportError}
+              onClose={() => {
+                setSymbolEditorKind(null)
+                setSymbolImportError(null)
+              }}
+              onImportSvg={(file, kind) => void handleImportSvg(file, kind)}
+              onDeleteSymbol={handleDeleteSymbol}
             />
           </div>
         </ReactFlowProvider>

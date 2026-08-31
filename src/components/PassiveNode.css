@@ -23,7 +23,7 @@
 }
 
 .passive-node--small {
-  --node-size: 48px;
+  --node-size: 36px;
   --ring: #8b9aa8;
   --core: #24313b;
   --accent: #d5dde5;
@@ -41,7 +41,7 @@
 }
 
 .passive-node--notable {
-  --node-size: 68px;
+  --node-size: 52px;
   --ring: #d4a24c;
   --core: #2a2418;
   --accent: #f0d59a;
@@ -49,7 +49,7 @@
 }
 
 .passive-node--mastery {
-  --node-size: 104px;
+  --node-size: 76px;
   --ring: #3db8a8;
   --core: #142528;
   --accent: #9fe8dd;
@@ -240,14 +240,14 @@
 }
 
 .passive-node--void {
-  --node-size: 36px;
+  --node-size: 28px;
   --ring: transparent;
   --core: transparent;
   --accent: #6a7580;
 }
 
 .passive-node--voidMastery {
-  --node-size: 104px;
+  --node-size: 76px;
   --ring: transparent;
   --core: transparent;
   --accent: #6a7580;
@@ -489,6 +489,26 @@
     color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
 }
 
+.passive-node--notable .passive-node__ring {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+}
+
+.passive-node--notable .passive-node__hit {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+}
+
+.passive-node__glyph--default {
+  width: 100%;
+  height: 100%;
+}
+
+.passive-node--small .passive-node__glyph--default {
+  width: 78%;
+  height: 78%;
+}
+
 .passive-node__ring {
   position: absolute;
   inset: 0;
@@ -607,10 +627,11 @@
   left: 50%;
   top: calc(100% + 12px);
   bottom: auto;
-  transform: translateX(-50%) translateY(-4px);
-  min-width: 148px;
-  max-width: 220px;
-  padding: 10px 12px;
+  transform: translateX(-50%) translateY(-4px) scale(var(--tooltip-scale, 1));
+  transform-origin: top center;
+  min-width: 168px;
+  max-width: 240px;
+  padding: 12px 14px;
   border-radius: 10px;
   background: color-mix(in srgb, #0a0e14 94%, transparent);
   border: 1px solid color-mix(in srgb, #9eb0c2 22%, transparent);
@@ -620,13 +641,15 @@
   pointer-events: none;
   z-index: 20;
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 /* Unselected hover: softer tooltip */
 .passive-node:hover .passive-node__tooltip {
-  opacity: 0.48;
+  opacity: 0.72;
   visibility: visible;
-  transform: translateX(-50%) translateY(0);
+  transform: translateX(-50%) translateY(0) scale(var(--tooltip-scale, 1));
 }
 
 /* Selected hover: full-strength tooltip */
@@ -635,15 +658,15 @@
 }
 
 .passive-node__tooltip-title {
-  margin: 0 0 4px;
-  font-size: 0.86rem;
+  margin: 0 0 6px;
+  font-size: 14px;
   font-weight: 700;
   color: #f4f7fa;
 }
 
 .passive-node__tooltip-meta {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 12px;
   color: #9aa8b5;
 }
 

@@ -31,8 +31,9 @@ import { VoidHighlightProvider } from '../VoidHighlightContext'
 import { OrbitRotateController } from './OrbitRotateController'
 import { MiniMapCircleNode } from './MiniMapCircleNode'
 import { ZoomKeyboardController } from './ZoomKeyboardController'
-import { resolveLibrarySymbol } from '../librarySymbols'
+import type { LibraryKind } from '../librarySymbols'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, VideoMedia } from '../types'
+import { DEFAULT_ICON_BY_KIND } from '../types'
 import type { NodeTemplatePayload } from '../nodeTemplate'
 import { decodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
 import { NODE_SIZE } from '../orbit'
@@ -69,6 +70,7 @@ export type TreeWorkspaceProps = {
   orbitMembers: OrbitMember[]
   selectedLinks: SelectedLink[]
   linkCandidates: LinkCandidate[]
+  onOpenSymbolEditor: (kind: LibraryKind) => void
   onCreateFromTemplate: (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => void
   onNodesChange: OnNodesChange<PassiveFlowNode>
   onEdgesChange: OnEdgesChange
@@ -119,6 +121,7 @@ export function TreeWorkspace({
   orbitMembers,
   selectedLinks,
   linkCandidates,
+  onOpenSymbolEditor,
   onCreateFromTemplate,
   onNodesChange,
   onEdgesChange,
@@ -204,7 +207,7 @@ export function TreeWorkspace({
     (node: Node) => {
       const d = node.data as PassiveNodeData | undefined
       if (!d?.kind) return '#9B9A97'
-      return resolveLibrarySymbol(d.symbolId, d.kind).iconColor
+      return DEFAULT_ICON_BY_KIND[d.kind]
     },
     [],
   )
@@ -214,7 +217,7 @@ export function TreeWorkspace({
       className="workspace"
       style={{ gridTemplateColumns: `168px minmax(0, 1fr) ${inspectorWidth}px` }}
     >
-      <NodeLibrary onPlaceTemplate={placeTemplateAtCenter} />
+      <NodeLibrary onPlaceTemplate={placeTemplateAtCenter} onOpenSymbolEditor={onOpenSymbolEditor} />
 
       <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
         <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
@@ -222,6 +225,8 @@ export function TreeWorkspace({
             <ReactFlow
               nodes={flowNodes}
               edges={edges}
+              minZoom={0.08}
+              maxZoom={2.5}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}

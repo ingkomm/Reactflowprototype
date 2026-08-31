@@ -2,7 +2,10 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { validateCustomSymbols } from './customSymbol'
 import { layoutMasteryOrbit, isMasteryKind } from './orbit'
-import { migrateLegacyClassId, resolveLibrarySymbol } from './librarySymbols'
+import {
+  migrateLegacyClassId,
+  normalizeSymbolId,
+} from './librarySymbols'
 import { ensureNotableStages, stagesForKind } from './stage'
 import type {
   CustomSymbol,
@@ -303,7 +306,11 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
       node.data.customSymbolId = null
     }
     delete node.data.classId
-    node.data.symbolId = resolveLibrarySymbol(node.data.symbolId, node.data.kind).id
+    if (node.data.customSymbolId) {
+      node.data.symbolId = node.data.customSymbolId
+      node.data.customSymbolId = null
+    }
+    node.data.symbolId = normalizeSymbolId(node.data.symbolId, customSymbols, node.data.kind)
     if (node.data.kind === 'notable' && node.data.stages) {
       node.data.stages = ensureNotableStages(node.data.stages)
     }

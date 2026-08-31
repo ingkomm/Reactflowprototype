@@ -22,8 +22,14 @@ import {
   normalizeOrbitTierCount,
   orbitAngleOptions,
 } from '../orbit'
-import { resolveLibrarySymbol, symbolsForKind } from '../librarySymbols'
-import { IconGlyph } from './IconGlyph'
+import {
+  DEFAULT_SYMBOL_ID,
+  customSymbolsForKind,
+  isDefaultSymbolId,
+} from '../librarySymbols'
+import { useCustomSymbols } from '../CustomSymbolContext'
+import { DefaultNodeShape } from './DefaultNodeShape'
+import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { VideoMediaPanel } from './VideoMediaPanel'
 import './Inspector.css'
 
@@ -100,6 +106,7 @@ export function Inspector({
   onAddLink,
   onDeleteNode,
 }: Props) {
+  const { customSymbols } = useCustomSymbols()
   const [addPeerId, setAddPeerId] = useState('')
 
   if (!nodeId || !data) {
@@ -116,8 +123,11 @@ export function Inspector({
   const angleOptions = orbitAngleOptions()
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const stages = sortedStages(data.stages ?? [])
-  const kindSymbols = symbolsForKind(data.kind)
-  const currentSymbol = resolveLibrarySymbol(data.symbolId, data.kind)
+  const kindCustomSymbols =
+    data.kind === 'mastery' || data.kind === 'notable' || data.kind === 'small'
+      ? customSymbolsForKind(customSymbols, data.kind)
+      : []
+  const currentSymbolId = isDefaultSymbolId(data.symbolId) ? DEFAULT_SYMBOL_ID : data.symbolId
   const notableLogs = ensureNotableStages(stages)[0]?.logs ?? []
   const isFixedInitial = nodeId === INITIAL_NODE_ID
 
@@ -211,8 +221,21 @@ export function Inspector({
         {data.kind !== 'initial' && data.kind !== 'void' && !isStealthPassiveKind(data.kind) ? (
           <>
             <div className="class-pick-grid" role="listbox" aria-label="Library symbol">
-              {kindSymbols.map((symbol) => {
-                const selected = currentSymbol.id === symbol.id
+              <button
+                type="button"
+                role="option"
+                aria-selected={currentSymbolId === DEFAULT_SYMBOL_ID}
+                className={`class-pick${currentSymbolId === DEFAULT_SYMBOL_ID ? ' is-selected' : ''}`}
+                title="Default"
+                onClick={() => onChangeSymbolId(nodeId, DEFAULT_SYMBOL_ID)}
+              >
+                <span className="class-pick__icon class-pick__icon--default">
+                  <DefaultNodeShape kind={data.kind} size={28} />
+                </span>
+                <span className="class-pick__label">Default</span>
+              </button>
+              {kindCustomSymbols.map((symbol) => {
+                const selected = currentSymbolId === symbol.id
                 return (
                   <button
                     key={symbol.id}
@@ -220,18 +243,18 @@ export function Inspector({
                     role="option"
                     aria-selected={selected}
                     className={`class-pick${selected ? ' is-selected' : ''}`}
-                    title={symbol.label}
+                    title={symbol.name}
                     onClick={() => onChangeSymbolId(nodeId, symbol.id)}
                   >
-                    <span className="class-pick__icon" style={{ color: symbol.iconColor }}>
-                      <IconGlyph iconId={symbol.iconId} />
+                    <span className="class-pick__icon class-pick__icon--custom">
+                      <CustomSymbolGlyph symbol={symbol} />
                     </span>
-                    <span className="class-pick__label">{symbol.label}</span>
+                    <span className="class-pick__label">{symbol.name}</span>
                   </button>
                 )
               })}
             </div>
-            <p className="field-hint">왼쪽 Nodes 트리와 동일한 심볼 목록입니다.</p>
+            <p className="field-hint">왼쪽 Nodes의 ⚙ 버튼에서 SVG 심볼을 추가할 수 있습니다.</p>
           </>
         ) : (
           <p className="inspector__empty">이 종류는 심볼을 선택할 수 없습니다.</p>

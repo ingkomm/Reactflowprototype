@@ -4,13 +4,13 @@ import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
 import { kindUsesTrainingBands } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
-  initial: 56,
-  connect: 28,
-  small: 48,
-  notable: 68,
-  mastery: 104,
-  voidMastery: 104,
-  void: 36,
+  initial: 44,
+  connect: 22,
+  small: 36,
+  notable: 52,
+  mastery: 76,
+  voidMastery: 76,
+  void: 28,
 }
 
 /** Mastery hubs (Void Master is retired — treated as mastery when present). */

@@ -6,6 +6,7 @@ import {
   serializeGraphDocument,
   validateGraphDocument,
 } from './graphDocument'
+import { DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { sanitizeSvgFile } from './customSymbol'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import { createVideoMediaId } from './videoMedia'
@@ -32,7 +33,7 @@ describe('graphDocument', () => {
     expect(result.message).toContain('schemaVersion')
   })
 
-  it('ignores legacy classes/customIcons and migrates classId to symbolId', () => {
+  it('ignores legacy classes/customIcons and migrates classId to default symbolId', () => {
     const legacy = {
       schemaVersion: '0.1',
       nodes: SEED_NODES.map((n) => ({
@@ -54,7 +55,7 @@ describe('graphDocument', () => {
     if (!result.ok) return
     expect(result.document.customSymbols).toEqual([])
     const node = result.document.nodes.find((n) => n.id === 'mastery-dance')
-    expect(node?.data.symbolId).toBe('m-2')
+    expect(node?.data.symbolId).toBe(DEFAULT_SYMBOL_ID)
     expect(node?.data.classId).toBeUndefined()
   })
 
@@ -64,12 +65,12 @@ describe('graphDocument', () => {
       'Star',
     )
     if (!imported.ok) throw new Error('svg import failed')
-    const customSymbols = [imported.symbol]
+    const customSymbols = [{ ...imported.symbol, kind: 'notable' as const }]
     const nodes = structuredClone(SEED_NODES)
     const notable = nodes.find((n) => n.id === 'notable-hiphop')
     if (notable) {
       const data = notable.data
-      data.customSymbolId = customSymbols[0]!.id
+      data.symbolId = customSymbols[0]!.id
       data.media = [
         {
           id: createVideoMediaId(),
@@ -91,6 +92,6 @@ describe('graphDocument', () => {
     if (!parsed.ok) return
     expect(parsed.document.customSymbols).toHaveLength(1)
     const restored = parsed.document.nodes.find((n) => n.id === 'notable-hiphop')
-    expect(restored?.data.customSymbolId).toBe(customSymbols[0]!.id)
+    expect(restored?.data.symbolId).toBe(customSymbols[0]!.id)
   })
 })

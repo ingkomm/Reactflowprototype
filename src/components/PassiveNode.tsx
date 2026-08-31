@@ -1,7 +1,7 @@
 import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react'
 import { useMemo, type CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
-import { PASSIVE_KIND_LABEL } from '../types'
+import { DEFAULT_ICON_BY_KIND, PASSIVE_KIND_LABEL } from '../types'
 import {
   kindUsesTrainingBands,
   notableBandFills,
@@ -25,10 +25,10 @@ import {
   orbitTierRadius,
 } from '../orbit'
 import type { OrbitTier } from '../types'
-import { resolveLibrarySymbol } from '../librarySymbols'
+import { isDefaultSymbolId, resolveSymbolLabel } from '../librarySymbols'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
-import { IconGlyph } from './IconGlyph'
+import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { useCustomSymbols } from '../CustomSymbolContext'
 import {
@@ -47,8 +47,9 @@ const UNPOWERED_ICON = '#4a5560'
 const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
-  const { getCustomSymbol } = useCustomSymbols()
+  const { customSymbols, getCustomSymbol } = useCustomSymbols()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
+  const zoom = useStore((s) => s.transform[2])
   const voidHighlight = useVoidHighlight()
   const isStealth = isStealthPassiveKind(data.kind)
   const isMastery = isMasteryKind(data.kind)
@@ -67,7 +68,9 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const powered = !isStealth && (nodePowered || isInitialNode)
   const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
-  const librarySymbol = resolveLibrarySymbol(data.symbolId, data.kind)
+  const symbolLabel = resolveSymbolLabel(data.symbolId, customSymbols)
+  const useDefaultShape = isDefaultSymbolId(data.symbolId)
+  const customSymbol = !useDefaultShape ? getCustomSymbol(data.symbolId) : null
   const stages = data.stages ?? []
   const totalLogged = totalRawLoggedAcrossStages(stages)
   const visibleBandCount =
@@ -84,9 +87,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const orbitRingsForced = isMastery && Boolean(data.orbitLocked) && voidHighlight
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
-  const iconColor = powered ? librarySymbol.iconColor : UNPOWERED_ICON
-  const iconId = librarySymbol.iconId
-  const customSymbol = data.customSymbolId ? getCustomSymbol(data.customSymbolId) : null
+  const iconColor = powered ? DEFAULT_ICON_BY_KIND[data.kind] : UNPOWERED_ICON
   /** Powered mastery: thin rotating neon rim + Notable-like halo (no training bands). */
   const masteryNeonLit = isMastery && powered
   const outerBandR = masteryNeonLit
@@ -151,6 +152,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           '--label-offset': `${labelOffset}px`,
           '--orbit-r': `${outerOrbitR}px`,
           '--unpowered-glow': UNPOWERED_GLOW,
+          '--tooltip-scale': String(1 / Math.max(zoom, 0.05)),
         } as CSSProperties
       }
     >
@@ -228,7 +230,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           customSymbol ? (
             <CustomSymbolGlyph symbol={customSymbol} className="passive-node__glyph passive-node__glyph--symbol" />
           ) : (
-            <IconGlyph iconId={iconId} className="passive-node__glyph" />
+            <DefaultNodeShape kind={data.kind} powered={powered} className="passive-node__glyph passive-node__glyph--default" />
           )
         )}
       </div>
@@ -251,7 +253,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
             <p className="passive-node__tooltip-meta">1밴드(3) 미완료 — 파워 전달 불가</p>
           )}
           {!isInitialNode && !isConnectNode && (
-            <p className="passive-node__tooltip-meta">Symbol · {librarySymbol.label}</p>
+            <p className="passive-node__tooltip-meta">Symbol · {symbolLabel}</p>
           )}
           {showBands && (
             <p className="passive-node__tooltip-meta">

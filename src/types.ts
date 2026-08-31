@@ -44,6 +44,8 @@ export type CustomSymbol = {
   height: number
   /** Sanitized inner SVG markup (without outer svg wrapper). */
   markup: string
+  /** Which library branch this symbol belongs to. */
+  kind?: 'mastery' | 'notable' | 'small'
 }
 
 export const GRAPH_SCHEMA_VERSION = '0.1' as const

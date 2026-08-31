@@ -87,7 +87,7 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   const markup = sanitizeInnerMarkup(raw.markup)
   if (!markup) return null
 
-  return {
+  const symbol: CustomSymbol = {
     id: raw.id.trim(),
     name: raw.name.trim(),
     viewBox: view.viewBox,
@@ -95,6 +95,10 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
     height: view.height,
     markup,
   }
+  if (raw.kind === 'mastery' || raw.kind === 'notable' || raw.kind === 'small') {
+    symbol.kind = raw.kind
+  }
+  return symbol
 }
 
 export function validateCustomSymbols(value: unknown): CustomSymbol[] | null {
@@ -109,5 +113,6 @@ export function validateCustomSymbols(value: unknown): CustomSymbol[] | null {
     seen.add(symbol.id)
     symbols.push(symbol)
   }
+
   return symbols
 }

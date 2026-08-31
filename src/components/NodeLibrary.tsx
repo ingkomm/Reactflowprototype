@@ -1,13 +1,18 @@
-import { useState } from 'react'
 import type { NodeTemplatePayload } from '../nodeTemplate'
 import { encodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
-import { LIBRARY_BRANCHES, type LibrarySymbol } from '../librarySymbols'
+import {
+  DEFAULT_SYMBOL_ID,
+  LIBRARY_KINDS,
+  LIBRARY_KIND_LABEL,
+  type LibraryKind,
+} from '../librarySymbols'
 import { NODE_SIZE } from '../orbit'
-import { IconGlyph } from './IconGlyph'
+import { DefaultNodeShape } from './DefaultNodeShape'
 import './NodeLibrary.css'
 
 type Props = {
   onPlaceTemplate: (template: NodeTemplatePayload) => void
+  onOpenSymbolEditor: (kind: LibraryKind) => void
 }
 
 function beginPaletteDrag(event: React.DragEvent, template: NodeTemplatePayload) {
@@ -15,106 +20,55 @@ function beginPaletteDrag(event: React.DragEvent, template: NodeTemplatePayload)
   event.dataTransfer.effectAllowed = 'copy'
 }
 
-function SymbolPreview({ symbol }: { symbol: LibrarySymbol }) {
-  const size = Math.min(NODE_SIZE[symbol.kind], 32)
+function SpannerIcon() {
   return (
-    <span
-      className="node-library__preview"
-      style={{ width: size, height: size, color: symbol.iconColor }}
-    >
-      <IconGlyph iconId={symbol.iconId} />
-    </span>
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M21.7 13.8 19 11.1l1.4-1.4a1 1 0 0 0 0-1.4l-2.8-2.8a1 1 0 0 0-1.4 0L14.8 6.9 12.1 4.2a1 1 0 0 0-1.4 0l-1.5 1.5 3.5 3.5-1.4 1.4-3.5-3.5L6.3 8.6a1 1 0 0 0 0 1.4l2.7 2.7-1.4 1.4L4.9 10.4a1 1 0 0 0-1.4 0L2 11.9l3.5 3.5-1.4 1.4L.6 13.3a1 1 0 0 0 0 1.4l2.8 2.8a1 1 0 0 0 1.4 0l1.5-1.5 3.5 3.5 1.4-1.4-3.5-3.5 1.4-1.4 3.5 3.5 1.5-1.5a1 1 0 0 0 0-1.4l-2.7-2.7 1.4-1.4 2.7 2.7a1 1 0 0 0 1.4 0l1.5-1.5a1 1 0 0 0 0-1.4l-2.8-2.8z"
+      />
+    </svg>
   )
 }
 
-function SymbolLeaf({
-  symbol,
-  onPlaceTemplate,
-}: {
-  symbol: LibrarySymbol
-  onPlaceTemplate: (template: NodeTemplatePayload) => void
-}) {
-  const template: NodeTemplatePayload = {
-    source: 'symbol',
-    symbolId: symbol.id,
-    kind: symbol.kind,
-  }
-  return (
-    <li className="node-library__tree-leaf">
-      <button
-        type="button"
-        className="node-library__tree-item"
-        draggable
-        onDragStart={(event) => beginPaletteDrag(event, template)}
-        onClick={() => onPlaceTemplate(template)}
-        title={`${symbol.label} — 클릭: 중앙 추가 · 드래그: 위치 지정`}
-      >
-        <SymbolPreview symbol={symbol} />
-        <span className="node-library__tree-label">{symbol.label}</span>
-      </button>
-    </li>
-  )
-}
-
-export function NodeLibrary({ onPlaceTemplate }: Props) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(LIBRARY_BRANCHES.filter((b) => b.expandable).map((b) => [b.kind, true])),
-  )
-
-  const toggleBranch = (kind: string) => {
-    setExpanded((prev) => ({ ...prev, [kind]: !prev[kind] }))
-  }
-
+export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
   return (
     <aside className="node-library" aria-label="Node library">
       <h2 className="node-library__heading">Nodes</h2>
-      <ul className="node-library__tree">
-        {LIBRARY_BRANCHES.map((branch) => {
-          if (!branch.expandable) {
-            const symbol = branch.symbols[0]!
-            const template: NodeTemplatePayload = {
-              source: 'symbol',
-              symbolId: symbol.id,
-              kind: symbol.kind,
-            }
-            return (
-              <li key={branch.kind} className="node-library__tree-branch">
-                <button
-                  type="button"
-                  className="node-library__tree-item node-library__tree-item--branch"
-                  draggable
-                  onDragStart={(event) => beginPaletteDrag(event, template)}
-                  onClick={() => onPlaceTemplate(template)}
-                  title={`${branch.label} — 클릭: 중앙 추가 · 드래그: 위치 지정`}
-                >
-                  <SymbolPreview symbol={symbol} />
-                  <span className="node-library__tree-label">{branch.label}</span>
-                </button>
-              </li>
-            )
+      <ul className="node-library__rows">
+        {LIBRARY_KINDS.map((kind) => {
+          const template: NodeTemplatePayload = {
+            source: 'symbol',
+            symbolId: DEFAULT_SYMBOL_ID,
+            kind,
           }
-
-          const isOpen = expanded[branch.kind] ?? true
+          const previewSize = Math.min(NODE_SIZE[kind], 34)
           return (
-            <li key={branch.kind} className="node-library__tree-branch">
+            <li key={kind} className="node-library__row">
               <button
                 type="button"
-                className="node-library__tree-toggle"
-                aria-expanded={isOpen}
-                onClick={() => toggleBranch(branch.kind)}
+                className="node-library__default"
+                draggable
+                onDragStart={(event) => beginPaletteDrag(event, template)}
+                onClick={() => onPlaceTemplate(template)}
+                title={`${LIBRARY_KIND_LABEL[kind]} Default — 클릭: 중앙 추가 · 드래그: 위치 지정`}
               >
-                <span className="node-library__tree-caret" aria-hidden>
-                  {isOpen ? '▾' : '▸'}
+                <span
+                  className={`node-library__preview${kind === 'notable' ? ' node-library__preview--hex' : ''}`}
+                >
+                  <DefaultNodeShape kind={kind} size={previewSize} />
                 </span>
-                <span className="node-library__tree-branch-label">{branch.label}</span>
+                <span className="node-library__label">{LIBRARY_KIND_LABEL[kind]}</span>
               </button>
-              {isOpen && (
-                <ul className="node-library__tree-children">
-                  {branch.symbols.map((symbol) => (
-                    <SymbolLeaf key={symbol.id} symbol={symbol} onPlaceTemplate={onPlaceTemplate} />
-                  ))}
-                </ul>
-              )}
+              <button
+                type="button"
+                className="node-library__settings btn btn--icon"
+                aria-label={`${LIBRARY_KIND_LABEL[kind]} 심볼 설정`}
+                title="심볼 커스터마이징"
+                onClick={() => onOpenSymbolEditor(kind)}
+              >
+                <SpannerIcon />
+              </button>
             </li>
           )
         })}
