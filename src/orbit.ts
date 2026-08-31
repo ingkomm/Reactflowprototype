@@ -4,7 +4,7 @@ import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
 import { kindUsesTrainingBands } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
-  initial: 120,
+  initial: 120, // replaced by ROOT_HUB_SIZE below once orbit constants are known
   connect: 22,
   small: 36,
   notable: 52,
@@ -97,6 +97,11 @@ export function canAcceptOrbitMember(
 export function orbitTierRadius(_tierCount: OrbitTierCount, tier: OrbitTier): number {
   return DEFAULT_ORBIT_RADIUS + (tier - 1) * ORBIT_TIER_STEP
 }
+
+/** Root hub diameter — matches the outer orbit span of a 3-tier Mastery hub. */
+export const ROOT_HUB_SIZE = orbitTierRadius(3, 3) * 2
+
+NODE_SIZE.initial = ROOT_HUB_SIZE
 
 export function masteryOuterOrbitRadius(data: PassiveNodeData): number {
   const tierCount = normalizeOrbitTierCount(data.orbitTierCount)

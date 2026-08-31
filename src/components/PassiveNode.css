@@ -175,7 +175,6 @@
 }
 
 .passive-node--initial {
-  --node-size: 120px;
   --ring: #ffe066;
   --core: #1a1510;
   --accent: #ffe066;
@@ -204,15 +203,25 @@
 
 .passive-node__initial-socket {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
+  width: clamp(18px, 3.5%, 32px);
+  height: clamp(18px, 3.5%, 32px);
+  margin: 0;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 2px solid color-mix(in srgb, #ffe066 55%, transparent);
   background: color-mix(in srgb, #0a0e12 80%, transparent);
   box-shadow: 0 0 8px color-mix(in srgb, #ffe066 35%, transparent);
   pointer-events: none;
   z-index: 2;
+}
+
+.passive-node__handle--root-socket {
+  width: clamp(28px, 5%, 44px) !important;
+  height: clamp(28px, 5%, 44px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 4;
 }
 
 .passive-node__title--initial {

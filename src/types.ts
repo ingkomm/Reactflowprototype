@@ -9,7 +9,7 @@ export type PassiveKind =
   | 'voidMastery'
   | 'void'
 
-/** Fixed singleton Initial node id — not creatable or deletable. */
+/** Fixed singleton Root node id — not creatable or deletable. */
 export const INITIAL_NODE_ID = 'initial-main'
 
 export type OrbitTier = 1 | 2 | 3
@@ -141,9 +141,9 @@ export type PassiveNodeData = {
   orbitSlot?: number
   /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
   voidPassing?: boolean
-  /** Connect only: socket index on the Initial hub (0=top, 1=bottom-right, 2=bottom-left). */
+  /** Connect only: socket index on the Root hub (0=top, 1=bottom-right, 2=bottom-left). */
   initialSlot?: InitialConnectSlot
-  /** Connect only: circuit breaker — when false, blocks power from Initial. */
+  /** Connect only: circuit breaker — when false, blocks power from Root. */
   connectEnabled?: boolean
   /** Optional user SVG symbol id (overrides library icon when set). */
   customSymbolId?: string | null
@@ -156,7 +156,7 @@ export type PassiveNodeData = {
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
-  initial: 'Initial',
+  initial: 'Root',
   connect: 'Connect',
   small: 'Small',
   notable: 'Notable',

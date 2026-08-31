@@ -13,8 +13,8 @@ import '@xyflow/react/dist/style.css'
 
 import { type PassiveFlowNode } from './components/PassiveNode'
 import { TreeWorkspace } from './components/TreeWorkspace'
-import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
-import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia } from './types'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial, resolveRootConnectSlot, isValidRootConnectHandles } from './power'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { CustomSymbolProvider } from './CustomSymbolContext'
@@ -30,7 +30,7 @@ import { createVideoMediaId } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
 import { stagesForKind, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
-import { createPassiveData, passiveLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
+import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
 import {
   DEFAULT_SELECTED_NODE_ID,
   SEED_EDGES,
@@ -47,6 +47,7 @@ import {
   getSatelliteOrbitSlot,
   getSatelliteOrbitTier,
   getTierStartAngle,
+  isConnectKind,
   isMasteryKind,
   isMasteryOrbitLocked,
   isOrbitMemberKind,
@@ -183,6 +184,18 @@ function classifyLink(
   return classifyPassiveConnection(source, target, nodes)
 }
 
+function isRootConnectSlotTaken(
+  nodes: PassiveFlowNode[],
+  slot: InitialConnectSlot,
+  exceptConnectId?: string,
+): boolean {
+  return nodes.some((node) => {
+    if (node.id === exceptConnectId) return false
+    const data = node.data as PassiveNodeData
+    return isConnectKind(data.kind) && data.initialSlot === slot
+  })
+}
+
 function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
   return edges.filter((e) => {
     const source = nodes.find((n) => n.id === e.source)
@@ -191,7 +204,13 @@ function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
     const linkKind = classifyLink(source, target, nodes)
     if (e.type === 'orbit') return linkKind === 'orbit'
     if (e.type === 'notable') return linkKind === 'notable'
-    return linkKind === 'center'
+    if (linkKind !== 'center') return false
+    const sd = source.data as PassiveNodeData
+    const td = target.data as PassiveNodeData
+    if (sd.kind === 'initial' || td.kind === 'initial') {
+      return isValidRootConnectHandles(source, target, e.sourceHandle, e.targetHandle)
+    }
+    return true
   })
 }
 
@@ -486,7 +505,25 @@ export default function App() {
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
       const kind = classifyLink(source, target, nodes)
-      return kind === 'center' || kind === 'orbit' || kind === 'notable' || kind === 'attach'
+      if (kind !== 'center' && kind !== 'orbit' && kind !== 'notable' && kind !== 'attach') {
+        return false
+      }
+      const sd = source.data as PassiveNodeData
+      const td = target.data as PassiveNodeData
+      if (sd.kind === 'initial' || td.kind === 'initial') {
+        if (kind !== 'center') return false
+        const slot = resolveRootConnectSlot(
+          source,
+          target,
+          connection.sourceHandle,
+          connection.targetHandle,
+        )
+        if (slot === null) return false
+        const connectId = sd.kind === 'connect' ? source.id : td.kind === 'connect' ? target.id : null
+        if (!connectId) return false
+        return !isRootConnectSlotTaken(nodes, slot, connectId)
+      }
+      return true
     },
     [nodes],
   )
@@ -560,6 +597,34 @@ export default function App() {
       if (linkKind !== 'center' && linkKind !== 'orbit' && linkKind !== 'notable') return
 
       commit()
+
+      const sd = source.data as PassiveNodeData
+      const td = target.data as PassiveNodeData
+      const isRootConnect =
+        linkKind === 'center' && (sd.kind === 'initial' || td.kind === 'initial')
+      let rootConnectSlot: InitialConnectSlot | null = null
+      let rootId: string | null = null
+      let connectId: string | null = null
+      if (isRootConnect) {
+        rootConnectSlot = resolveRootConnectSlot(
+          source,
+          target,
+          connection.sourceHandle,
+          connection.targetHandle,
+        )
+        if (rootConnectSlot === null) return
+        rootId = sd.kind === 'initial' ? source.id : target.id
+        connectId = sd.kind === 'connect' ? source.id : target.id
+        if (isRootConnectSlotTaken(nodes, rootConnectSlot, connectId)) return
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id !== connectId) return node
+            const data = node.data as PassiveNodeData
+            return { ...node, data: { ...data, initialSlot: rootConnectSlot! } }
+          }),
+        )
+      }
+
       setEdges((eds) => {
         const edgeType =
           linkKind === 'orbit' ? 'orbit' : linkKind === 'notable' ? 'notable' : 'center'
@@ -568,19 +633,20 @@ export default function App() {
         if (existing) {
           next = eds.filter((e) => e.id !== existing.id)
         } else if (linkKind === 'orbit') {
-          const sd = source.data as PassiveNodeData
-          const masteryId = sd.masteryId ?? (target.data as PassiveNodeData).masteryId
-          if (!masteryId) return eds
-          next = [...eds, orbitLinkEdge(source.id, target.id, masteryId)]
+          const orbitMasteryId = sd.masteryId ?? td.masteryId
+          if (!orbitMasteryId) return eds
+          next = [...eds, orbitLinkEdge(source.id, target.id, orbitMasteryId)]
         } else if (linkKind === 'notable') {
           next = [...eds, notableLinkEdge(source.id, target.id)]
+        } else if (isRootConnect && rootConnectSlot !== null && rootId && connectId) {
+          next = [...eds, rootSocketLinkEdge(rootId, connectId, rootConnectSlot)]
         } else {
           next = [...eds, passiveLinkEdge(source.id, target.id)]
         }
         return sanitizeEdges(nodes, next)
       })
     },
-    [attachSatellite, commit, nodes, setEdges],
+    [attachSatellite, commit, nodes, setEdges, setNodes],
   )
 
   const detachFromMastery = useCallback(

@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
+import { parseRootSocketHandle } from './initialHub'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import type { PassiveNodeData } from './types'
+import type { PassiveNodeData, InitialConnectSlot } from './types'
 import { NODE_SIZE } from './orbit'
 import { canNotableTransmit, kindUsesTrainingBands } from './stage'
 import {
@@ -355,4 +356,31 @@ export function classifyPassiveConnection(
   }
 
   return null
+}
+
+/** Root hub links must use a socket handle — not the generic center ring. */
+export function resolveRootConnectSlot(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+  sourceHandle?: string | null,
+  targetHandle?: string | null,
+): InitialConnectSlot | null {
+  const sd = source.data as PassiveNodeData
+  const td = target.data as PassiveNodeData
+  if (isInitial(sd) && isConnect(td)) {
+    return parseRootSocketHandle(sourceHandle)
+  }
+  if (isInitial(td) && isConnect(sd)) {
+    return parseRootSocketHandle(targetHandle)
+  }
+  return null
+}
+
+export function isValidRootConnectHandles(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+  sourceHandle?: string | null,
+  targetHandle?: string | null,
+): boolean {
+  return resolveRootConnectSlot(source, target, sourceHandle, targetHandle) !== null
 }

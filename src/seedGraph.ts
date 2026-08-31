@@ -13,18 +13,19 @@ import {
   createPassiveData,
   orbitAdjacentEdges,
   passiveLinkEdge,
+  rootSocketLinkEdge,
 } from './graphFactory'
 
 export { INITIAL_NODE_ID }
 
 export const DANCE_MASTERY_ID = 'mastery-dance'
 export const GYM_MASTERY_ID = 'mastery-gym'
-/** Initial hub sockets: top → dance, bottom-right → gym, bottom-left spare. */
+/** Root hub sockets: top → dance, bottom-right → gym, bottom-left spare. */
 export const CONNECT_TOP_ID = 'connect-top'
 export const CONNECT_BR_ID = 'connect-br'
 export const CONNECT_BL_ID = 'connect-bl'
 
-const INITIAL_POSITION = { x: 24, y: 240 }
+const INITIAL_POSITION = { x: 80, y: 80 }
 
 const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
   1: ['notable-hiphop', 'notable-kpop', 'small-basic'],
@@ -52,7 +53,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: INITIAL_POSITION,
       dragHandle: '.node-drag-handle',
       draggable: true,
-      data: createPassiveData('initial', 'Initial', { stages: [], symbolId: 'default' }),
+      data: createPassiveData('initial', 'Root', { stages: [], symbolId: 'default' }),
     },
     {
       id: CONNECT_TOP_ID,
@@ -263,11 +264,11 @@ function buildSeedNodes(): PassiveFlowNode[] {
 
 export const SEED_NODES = buildSeedNodes()
 
-/** Initial hub → 3 Connect sockets; trees branch from top & bottom-right Connect. */
+/** Root hub → 3 Connect sockets; trees branch from top & bottom-right Connect. */
 export const SEED_EDGES: Edge[] = [
-  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_TOP_ID),
-  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID),
-  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID),
+  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_TOP_ID, 0),
+  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID, 1),
+  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID, 2),
   passiveLinkEdge(CONNECT_TOP_ID, 'small-basic'),
   passiveLinkEdge(CONNECT_BR_ID, 'small-legs'),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], DANCE_MASTERY_ID),

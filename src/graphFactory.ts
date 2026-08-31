@@ -1,5 +1,5 @@
 import type { Edge } from '@xyflow/react'
-import type { PassiveKind, PassiveNodeData } from './types'
+import type { PassiveKind, PassiveNodeData, InitialConnectSlot } from './types'
 import { DEFAULT_SYMBOL_ID_BY_KIND } from './librarySymbols'
 import { stagesForKind } from './stage'
 import {
@@ -7,6 +7,7 @@ import {
   DEFAULT_ORBIT_TIER_CAPACITY,
   isMasteryKind,
 } from './orbit'
+import { rootSocketSourceHandle } from './initialHub'
 
 /** Build default `PassiveNodeData` for a new node. */
 export function createPassiveData(
@@ -79,6 +80,22 @@ export function passiveLinkEdge(sourceId: string, targetId: string): Edge {
     source: sourceId,
     target: targetId,
     sourceHandle: 'center',
+    targetHandle: 'center-target',
+  }
+}
+
+/** Root hub socket → Connect (Initial is always source). */
+export function rootSocketLinkEdge(
+  rootId: string,
+  connectId: string,
+  slot: InitialConnectSlot,
+): Edge {
+  return {
+    id: `link-${rootId}-${connectId}`,
+    type: 'center',
+    source: rootId,
+    target: connectId,
+    sourceHandle: rootSocketSourceHandle(slot),
     targetHandle: 'center-target',
   }
 }

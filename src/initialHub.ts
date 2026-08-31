@@ -8,7 +8,24 @@ export function initialConnectSlotAngle(slot: InitialConnectSlot): number {
   return -90 + slot * 120
 }
 
-/** Place a Connect node's top-left so it sits on an Initial hub socket. */
+export function rootSocketSourceHandle(slot: InitialConnectSlot): string {
+  return `socket-${slot}`
+}
+
+export function rootSocketTargetHandle(slot: InitialConnectSlot): string {
+  return `socket-${slot}-target`
+}
+
+export function parseRootSocketHandle(
+  handleId: string | null | undefined,
+): InitialConnectSlot | null {
+  if (!handleId) return null
+  const match = /^socket-([0-2])(?:-target)?$/.exec(handleId)
+  if (!match) return null
+  return Number(match[1]) as InitialConnectSlot
+}
+
+/** Place a Connect node's top-left so it sits on a Root hub socket. */
 export function connectPositionForInitialHub(
   initialTopLeft: { x: number; y: number },
   slot: InitialConnectSlot,
@@ -26,14 +43,15 @@ export function connectPositionForInitialHub(
   }
 }
 
-/** Socket marker position (px from Initial node top-left) for CSS placement. */
-export function initialSocketOffset(slot: InitialConnectSlot): { left: string; top: string } {
+/** Socket handle position (px from Root node top-left). */
+export function initialSocketOffset(slot: InitialConnectSlot): { left: number; top: number } {
   const size = NODE_SIZE.initial
   const cx = size / 2
   const cy = size / 2
   const socketR = size / 2 - 2
   const rad = (initialConnectSlotAngle(slot) * Math.PI) / 180
-  const x = cx + socketR * Math.cos(rad)
-  const y = cy + socketR * Math.sin(rad)
-  return { left: `${x}px`, top: `${y}px` }
+  return {
+    left: cx + socketR * Math.cos(rad),
+    top: cy + socketR * Math.sin(rad),
+  }
 }

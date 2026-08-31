@@ -38,7 +38,7 @@ import {
   masteryNeonOuterRadius,
   outermostBandRadius,
 } from './TrainingBands'
-import { INITIAL_CONNECT_SLOT_COUNT, initialSocketOffset } from '../initialHub'
+import { INITIAL_CONNECT_SLOT_COUNT, initialSocketOffset, rootSocketSourceHandle, rootSocketTargetHandle } from '../initialHub'
 import { useVoidHighlight } from '../VoidHighlightContext'
 import './PassiveNode.css'
 
@@ -142,6 +142,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${connectGlowClass}`}
       style={
         {
+          '--node-size': `${nodeSize}px`,
           '--glow-blur': `${glowBlur}px`,
           '--glow-alpha': String(glowAlpha),
           '--halo-strength': String(haloStrength),
@@ -207,7 +208,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       {masteryNeonLit && <div className="passive-node__neon-rim" aria-hidden />}
       {showBands && <TrainingBands stages={stages} nodeSize={nodeSize} />}
 
-      {!isStealth && (
+      {!isStealth && !isInitialNode && (
         <>
           <Handle
             id="center"
@@ -226,23 +227,43 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         </>
       )}
 
+      {isInitialNode &&
+        Array.from({ length: INITIAL_CONNECT_SLOT_COUNT }, (_, slotIndex) => {
+          const slot = slotIndex as 0 | 1 | 2
+          const pos = initialSocketOffset(slot)
+          const handleStyle = {
+            left: `${pos.left}px`,
+            top: `${pos.top}px`,
+          } as CSSProperties
+          return (
+            <span key={slot}>
+              <Handle
+                id={rootSocketSourceHandle(slot)}
+                type="source"
+                position={Position.Top}
+                className="passive-node__handle passive-node__handle--root-socket"
+                style={handleStyle}
+                isConnectable
+              />
+              <Handle
+                id={rootSocketTargetHandle(slot)}
+                type="target"
+                position={Position.Top}
+                className="passive-node__handle passive-node__handle--root-socket"
+                style={handleStyle}
+                isConnectable
+              />
+              <span
+                className="passive-node__initial-socket"
+                style={{ left: pos.left, top: pos.top }}
+                aria-hidden
+              />
+            </span>
+          )
+        })}
+
       <div className="passive-node__ring" aria-hidden>
-        {isInitialNode && (
-          <>
-            <div className="passive-node__initial-arena" />
-            {Array.from({ length: INITIAL_CONNECT_SLOT_COUNT }, (_, slot) => {
-              const pos = initialSocketOffset(slot as 0 | 1 | 2)
-              return (
-                <span
-                  key={slot}
-                  className="passive-node__initial-socket"
-                  style={{ left: pos.left, top: pos.top }}
-                  aria-hidden
-                />
-              )
-            })}
-          </>
-        )}
+        {isInitialNode && <div className="passive-node__initial-arena" />}
         {!isStealth && !isConnectNode && !isInitialNode && (
           customSymbol ? (
             <CustomSymbolGlyph symbol={customSymbol} className="passive-node__glyph passive-node__glyph--symbol" />

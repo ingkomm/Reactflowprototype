@@ -170,8 +170,8 @@ export function Inspector({
 
       {isFixedInitial ? (
         <p className="inspector__empty">
-          Initial Node — 전원 소스. 생성·삭제·종류 변경 불가. Connect 노드에만 직선 링크로 전원을
-          공급합니다.
+          Root Node — 전원 소스. 생성·삭제·종류 변경 불가. 3개 소켓에서 Connect 노드에만
+          링크로 전원을 공급합니다.
         </p>
       ) : (
       <label className="field">
@@ -211,7 +211,7 @@ export function Inspector({
             </button>
           </div>
           <p className="field-hint">
-            On = 초록 광원(회로 닫힘) · Off = 빨간 광원(회로 차단) · Initial에서 전원 수신
+            On = 초록 광원(회로 닫힘) · Off = 빨간 광원(회로 차단) · Root에서 전원 수신
           </p>
         </div>
       )}
