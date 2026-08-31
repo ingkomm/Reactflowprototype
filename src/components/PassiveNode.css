@@ -61,8 +61,8 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(var(--node-size) + 14px);
-  height: calc(var(--node-size) + 14px);
+  width: calc(var(--node-size) + 8px);
+  height: calc(var(--node-size) + 8px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
@@ -97,9 +97,9 @@
     #000 calc(100% - 1px),
     transparent 100%
   );
-  filter: blur(0.6px) drop-shadow(0 0 5px color-mix(in srgb, var(--icon-color) 50%, transparent));
+  filter: blur(0.4px) drop-shadow(0 0 2px color-mix(in srgb, var(--icon-color) 35%, transparent));
   animation: mastery-neon-drift 22s linear infinite;
-  opacity: 0.9;
+  opacity: 0.72;
 }
 
 .passive-node--mastery.is-mastery-powered .passive-node__neon-rim::before {
@@ -138,8 +138,8 @@
   inset: 0;
   border-radius: 50%;
   box-shadow:
-    0 0 10px color-mix(in srgb, var(--icon-color) 26%, transparent),
-    0 0 22px color-mix(in srgb, var(--icon-color) 12%, transparent);
+    0 0 4px color-mix(in srgb, var(--icon-color) 18%, transparent),
+    0 0 10px color-mix(in srgb, var(--icon-color) 8%, transparent);
   animation: mastery-neon-breathe 8s ease-in-out infinite;
 }
 
@@ -251,9 +251,9 @@
 
 .passive-node--connect.is-connect-on .passive-node__ring {
   box-shadow:
-    0 0 10px rgba(66, 232, 144, 0.95),
-    0 0 22px rgba(66, 232, 144, 0.55),
-    inset 0 0 8px rgba(180, 255, 210, 0.45);
+    0 0 5px rgba(66, 232, 144, 0.7),
+    0 0 10px rgba(66, 232, 144, 0.32),
+    inset 0 0 4px rgba(180, 255, 210, 0.3);
   background: radial-gradient(
     circle,
     rgba(66, 232, 144, 0.55) 0%,
@@ -264,9 +264,9 @@
 
 .passive-node--connect.is-connect-off .passive-node__ring {
   box-shadow:
-    0 0 10px rgba(224, 62, 62, 0.9),
-    0 0 20px rgba(224, 62, 62, 0.45),
-    inset 0 0 6px rgba(255, 120, 120, 0.35);
+    0 0 5px rgba(224, 62, 62, 0.65),
+    0 0 10px rgba(224, 62, 62, 0.28),
+    inset 0 0 4px rgba(255, 120, 120, 0.25);
   background: radial-gradient(
     circle,
     rgba(224, 62, 62, 0.5) 0%,
@@ -513,8 +513,8 @@
   left: 50%;
   top: 50%;
   /* Anchor the glow to the outermost stage band, then bloom outward with progress. */
-  width: calc(var(--outer-band-r) * 2 + 18px + var(--band-level) * 14px);
-  height: calc(var(--outer-band-r) * 2 + 18px + var(--band-level) * 14px);
+  width: calc(var(--outer-band-r) * 2 + 8px + var(--band-level) * 6px);
+  height: calc(var(--outer-band-r) * 2 + 8px + var(--band-level) * 6px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
@@ -523,12 +523,12 @@
   background: radial-gradient(
     circle,
     transparent 0%,
-    transparent 38%,
-    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 70%), transparent) 48%,
-    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 45%), transparent) 62%,
-    transparent 78%
+    transparent 48%,
+    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent) 58%,
+    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 28%), transparent) 68%,
+    transparent 82%
   );
-  filter: blur(calc(5px + var(--band-level) * 3.5px));
+  filter: blur(calc(2.5px + var(--band-level) * 1.5px));
   transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease, filter 0.2s ease;
 }
 

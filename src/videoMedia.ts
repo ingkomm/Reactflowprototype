@@ -88,3 +88,30 @@ export function validateVideoMediaList(value: unknown): VideoMedia[] | null {
 export function youtubeEmbedUrl(videoId: string): string {
   return `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`
 }
+
+/** All videos on a node: node.media + stage log media (deduped by id). */
+export function collectNodeVideos(data: {
+  media?: VideoMedia[]
+  stages?: { logs?: { media?: VideoMedia[] }[] }[]
+}): VideoMedia[] {
+  const seen = new Set<string>()
+  const list: VideoMedia[] = []
+  const push = (items?: VideoMedia[]) => {
+    for (const item of items ?? []) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      list.push(item)
+    }
+  }
+  push(data.media)
+  for (const stage of data.stages ?? []) {
+    for (const log of stage.logs ?? []) {
+      push(log.media)
+    }
+  }
+  return list
+}
+
+export function canPinNodeVideos(kind: string): boolean {
+  return kind === 'mastery' || kind === 'notable' || kind === 'voidMastery'
+}

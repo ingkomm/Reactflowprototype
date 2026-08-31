@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyVideoUrl,
+  collectNodeVideos,
   createVideoMedia,
   extractYouTubeId,
   isSafeHttpUrl,
@@ -30,5 +31,24 @@ describe('videoMedia', () => {
     expect(media?.kind).toBe('youtube')
     expect(media?.provider).toBe('youtube')
     expect(validateVideoMedia({ ...media!, url: 'data:video/mp4;base64,abc' })).toBeNull()
+  })
+
+  it('collects node and stage-log videos without duplicates', () => {
+    const media = collectNodeVideos({
+      media: [{ id: 'a', url: 'https://youtu.be/aaaaaaaaaaa', kind: 'youtube', provider: 'youtube' }],
+      stages: [
+        {
+          logs: [
+            {
+              media: [
+                { id: 'a', url: 'https://youtu.be/aaaaaaaaaaa', kind: 'youtube', provider: 'youtube' },
+                { id: 'b', url: 'https://example.com/x', kind: 'external', provider: 'link' },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+    expect(media.map((m) => m.id)).toEqual(['a', 'b'])
   })
 })

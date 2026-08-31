@@ -31,6 +31,7 @@ import { canTransmitPower } from '../power'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { useCustomSymbols } from '../CustomSymbolContext'
+import { usePinnedVideoNodeId } from '../VideoPinContext'
 import {
   TrainingBands,
   labelBelowBandOffset,
@@ -49,6 +50,7 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { customSymbols, getCustomSymbol, resolveSymbolColor } = useCustomSymbols()
+  const pinnedVideoNodeId = usePinnedVideoNodeId()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const zoom = useStore((s) => s.transform[2])
   const voidHighlight = useVoidHighlight()
@@ -100,16 +102,16 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
     : labelBelowBandOffset(bandCount, nodeSize)
   const connectR = nodeInteractRadius(data)
 
-  const glowBlur = masteryNeonLit ? 24 : showBands ? 12 + bandLevel * 10 : 0
+  const glowBlur = masteryNeonLit ? 10 : showBands ? 5 + bandLevel * 4 : 0
   const glowAlpha = masteryNeonLit
-    ? 0.48
+    ? 0.28
     : showBands
-      ? Math.min(0.95, 0.28 + bandLevel * 0.16)
+      ? Math.min(0.55, 0.16 + bandLevel * 0.1)
       : 0
   const haloStrength = masteryNeonLit
-    ? 0.62
+    ? 0.32
     : showBands
-      ? Math.min(0.92, 0.28 + bandLevel * 0.18)
+      ? Math.min(0.5, 0.14 + bandLevel * 0.1)
       : 0
 
   const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
@@ -140,7 +142,9 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         masteryNeonLit ? ' is-mastery-powered' : ''
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
-      }${customSymbol ? ' has-custom-symbol' : ''}${connectGlowClass}`}
+      }${customSymbol ? ' has-custom-symbol' : ''}${
+        pinnedVideoNodeId === id ? ' is-video-pinned' : ''
+      }${connectGlowClass}`}
       style={
         {
           '--node-size': `${nodeSize}px`,

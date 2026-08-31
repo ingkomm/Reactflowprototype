@@ -5,36 +5,36 @@
 .powered-link__beam-wide {
   fill: none;
   stroke-linecap: round;
-  stroke-width: 16;
-  opacity: 0.2;
-  filter: blur(3px);
+  stroke-width: 9;
+  opacity: 0.12;
+  filter: blur(2px);
 }
 
 .powered-link__beam-mid {
   fill: none;
   stroke-linecap: round;
-  stroke-width: 8;
-  opacity: 0.32;
-  filter: blur(1.5px);
+  stroke-width: 5;
+  opacity: 0.22;
+  filter: blur(1px);
 }
 
 .powered-link__beam-core {
   fill: none;
   stroke-linecap: round;
-  stroke-width: 3;
-  opacity: 0.55;
+  stroke-width: 2;
+  opacity: 0.45;
 }
 
 .powered-link--selected .powered-link__beam-wide {
-  opacity: 0.28;
+  opacity: 0.18;
 }
 
 .powered-link--selected .powered-link__beam-mid {
-  opacity: 0.42;
+  opacity: 0.3;
 }
 
 .powered-link--selected .powered-link__beam-core {
-  opacity: 0.68;
+  opacity: 0.58;
 }
 
 .powered-link__flare {
@@ -42,16 +42,16 @@
 }
 
 .powered-link__flare--outer {
-  filter: blur(3px);
-  opacity: 0.14;
+  filter: blur(2px);
+  opacity: 0.08;
 }
 
 .powered-link__flare--mid {
-  filter: blur(1.5px);
-  opacity: 0.18;
+  filter: blur(1px);
+  opacity: 0.12;
 }
 
 .powered-link__flare--inner {
-  filter: blur(0.5px);
-  opacity: 0.12;
+  filter: blur(0.4px);
+  opacity: 0.1;
 }

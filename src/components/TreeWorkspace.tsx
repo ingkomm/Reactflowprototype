@@ -38,6 +38,8 @@ import type { NodeTemplatePayload } from '../nodeTemplate'
 import { decodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
 import { NODE_SIZE } from '../orbit'
 import type { PowerFlowMeta } from '../power'
+import { PinnedVideoPopup } from './PinnedVideoPopup'
+import { VideoPinProvider } from '../VideoPinContext'
 
 const nodeTypes = { passive: PassiveNode }
 const edgeTypes = { center: CenterEdge, orbit: OrbitEdge, notable: NotableEdge }
@@ -79,6 +81,9 @@ export type TreeWorkspaceProps = {
   onSelectionChange: OnSelectionChangeFunc
   onPaneClick: () => void
   onNodeClick: NodeMouseHandler
+  onNodeContextMenu?: NodeMouseHandler
+  pinnedVideoNodeId: string | null
+  onClosePinnedVideo: () => void
   onNodeDragStart: OnNodeDrag<PassiveFlowNode>
   onNodeDrag: OnNodeDrag<PassiveFlowNode>
   onNodeDragStop: OnNodeDrag<PassiveFlowNode>
@@ -130,6 +135,9 @@ export function TreeWorkspace({
   onSelectionChange,
   onPaneClick,
   onNodeClick,
+  onNodeContextMenu,
+  pinnedVideoNodeId,
+  onClosePinnedVideo,
   onNodeDragStart,
   onNodeDrag,
   onNodeDragStop,
@@ -222,6 +230,7 @@ export function TreeWorkspace({
       <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
         <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
           <VoidHighlightProvider enabled={voidHighlightEnabled}>
+            <VideoPinProvider pinnedNodeId={pinnedVideoNodeId}>
             <ReactFlow
               nodes={flowNodes}
               edges={edges}
@@ -234,6 +243,7 @@ export function TreeWorkspace({
               onSelectionChange={onSelectionChange}
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
+              onNodeContextMenu={onNodeContextMenu}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
@@ -248,7 +258,7 @@ export function TreeWorkspace({
               connectionLineType={ConnectionLineType.Straight}
               connectionLineStyle={connectionLineStyle}
               fitView
-              elevateNodesOnSelect
+              elevateNodesOnSelect={false}
               deleteKeyCode={['Backspace', 'Delete']}
               defaultEdgeOptions={defaultEdgeOptions}
               proOptions={{ hideAttribution: true }}
@@ -271,6 +281,12 @@ export function TreeWorkspace({
                 maskColor="rgba(8, 12, 16, 0.7)"
               />
             </ReactFlow>
+            <PinnedVideoPopup
+              pinnedNodeId={pinnedVideoNodeId}
+              containerRef={canvasWrapperRef}
+              onClose={onClosePinnedVideo}
+            />
+            </VideoPinProvider>
           </VoidHighlightProvider>
         </PowerProvider>
 

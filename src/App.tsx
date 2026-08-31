@@ -26,7 +26,7 @@ import {
   downloadGraphDocument,
   parseGraphDocumentJson,
 } from './graphDocument'
-import { createVideoMediaId } from './videoMedia'
+import { createVideoMediaId, canPinNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
 import { stagesForKind, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
@@ -232,6 +232,7 @@ export default function App() {
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [pinnedVideoNodeId, setPinnedVideoNodeId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
   const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
@@ -1101,6 +1102,14 @@ export default function App() {
     )
   }, [])
 
+  const handleCustomSymbolRename = useCallback((symbolId: string, name: string) => {
+    setCustomSymbols((prev) =>
+      prev.map((symbol) =>
+        symbol.id === symbolId ? { ...symbol, name: name.length > 0 ? name : 'Symbol' } : symbol,
+      ),
+    )
+  }, [])
+
   const createFromTemplate = useCallback(
     (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
       const kind = template.kind
@@ -1172,6 +1181,7 @@ export default function App() {
     (nodeId: string) => {
       if (nodeId === INITIAL_NODE_ID) return
       commit()
+      setPinnedVideoNodeId((cur) => (cur === nodeId ? null : cur))
       setNodes((nds) =>
         removeNodesAndRelayout(nds, [nodeId], selectedIdRef.current),
       )
@@ -1193,6 +1203,18 @@ export default function App() {
 
   const onNodeClick = useCallback((_: ReactMouseEvent, node: Node) => {
     setSelectedId(node.id)
+  }, [])
+
+  const onNodeContextMenu = useCallback((event: ReactMouseEvent, node: Node) => {
+    event.preventDefault()
+    const data = node.data as PassiveNodeData
+    if (!canPinNodeVideos(data.kind)) return
+    setPinnedVideoNodeId((cur) => (cur === node.id ? null : node.id))
+    setSelectedId(node.id)
+  }, [])
+
+  const onClosePinnedVideo = useCallback(() => {
+    setPinnedVideoNodeId(null)
   }, [])
 
   const onNodeDragStart = useCallback(
@@ -1472,6 +1494,9 @@ export default function App() {
               onSelectionChange={onSelectionChange}
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
+              onNodeContextMenu={onNodeContextMenu}
+              pinnedVideoNodeId={pinnedVideoNodeId}
+              onClosePinnedVideo={onClosePinnedVideo}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
@@ -1514,6 +1539,7 @@ export default function App() {
               onDefaultColorChange={handleDefaultSymbolColor}
               onCustomSymbolColorChange={handleCustomSymbolColor}
               onCustomSymbolScaleChange={handleCustomSymbolScale}
+              onCustomSymbolRename={handleCustomSymbolRename}
             />
           </div>
         </ReactFlowProvider>

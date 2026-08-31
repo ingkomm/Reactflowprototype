@@ -1366,12 +1366,15 @@ export function withMasteryDragFlags(
   return nodes.map((node) => {
     const data = node.data as PassiveNodeData
     // Mastery orbits are large; keep them under satellite titles/links visually.
-    const baseZ = isMasteryKind(data.kind) ? 1 : 6
+    // Selected mastery must NOT jump above satellites — orbits are children of the mastery node.
+    const isMastery = isMasteryKind(data.kind)
+    const baseZ = isMastery ? 1 : 6
+    const selectedZ = isMastery ? 2 : 40
     return {
       ...node,
       dragHandle: '.node-drag-handle',
       draggable: true,
-      zIndex: node.id === selectedId ? 40 : baseZ,
+      zIndex: node.id === selectedId ? selectedZ : baseZ,
     }
   })
 }

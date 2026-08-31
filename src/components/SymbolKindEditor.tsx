@@ -24,6 +24,7 @@ type Props = {
   onDefaultColorChange: (kind: SymbolEditorKind, color: string) => void
   onCustomSymbolColorChange: (symbolId: string, color: string) => void
   onCustomSymbolScaleChange: (symbolId: string, scale: number) => void
+  onCustomSymbolRename: (symbolId: string, name: string) => void
 }
 
 export function SymbolKindEditor({
@@ -38,6 +39,7 @@ export function SymbolKindEditor({
   onDefaultColorChange,
   onCustomSymbolColorChange,
   onCustomSymbolScaleChange,
+  onCustomSymbolRename,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const kindSymbols = customSymbols.filter((s) => !s.kind || s.kind === kind)
@@ -93,7 +95,12 @@ export function SymbolKindEditor({
                   <CustomSymbolGlyph symbol={symbol} color={symbolColor} />
                 </span>
                 <div className="symbol-kind-editor__meta">
-                  <span className="symbol-kind-editor__name">{symbol.name}</span>
+                  <input
+                    className="symbol-kind-editor__name-input"
+                    value={symbol.name}
+                    aria-label="심볼 이름"
+                    onChange={(e) => onCustomSymbolRename(symbol.id, e.target.value)}
+                  />
                   <SymbolColorPicker
                     value={symbolColor}
                     onChange={(color) => onCustomSymbolColorChange(symbol.id, color)}
