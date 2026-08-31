@@ -53,11 +53,17 @@
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 10px;
-  align-items: center;
+  align-items: start;
   padding: 8px 10px;
   border-radius: 10px;
   background: #121820;
   border: 1px solid color-mix(in srgb, #8fa0b0 16%, transparent);
+}
+
+.symbol-kind-editor__meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .symbol-kind-editor__preview {

@@ -106,7 +106,7 @@ export function Inspector({
   onAddLink,
   onDeleteNode,
 }: Props) {
-  const { customSymbols } = useCustomSymbols()
+  const { customSymbols, resolveSymbolColor } = useCustomSymbols()
   const [addPeerId, setAddPeerId] = useState('')
 
   if (!nodeId || !data) {
@@ -230,7 +230,11 @@ export function Inspector({
                 onClick={() => onChangeSymbolId(nodeId, DEFAULT_SYMBOL_ID)}
               >
                 <span className="class-pick__icon class-pick__icon--default">
-                  <DefaultNodeShape kind={data.kind} size={28} />
+                  <DefaultNodeShape
+                    kind={data.kind}
+                    size={28}
+                    color={resolveSymbolColor(DEFAULT_SYMBOL_ID, data.kind)}
+                  />
                 </span>
                 <span className="class-pick__label">Default</span>
               </button>
@@ -247,14 +251,17 @@ export function Inspector({
                     onClick={() => onChangeSymbolId(nodeId, symbol.id)}
                   >
                     <span className="class-pick__icon class-pick__icon--custom">
-                      <CustomSymbolGlyph symbol={symbol} />
+                      <CustomSymbolGlyph
+                        symbol={symbol}
+                        color={resolveSymbolColor(symbol.id, data.kind)}
+                      />
                     </span>
                     <span className="class-pick__label">{symbol.name}</span>
                   </button>
                 )
               })}
             </div>
-            <p className="field-hint">왼쪽 Nodes의 ⚙ 버튼에서 SVG 심볼을 추가할 수 있습니다.</p>
+            <p className="field-hint">왼쪽 Nodes의 ⚙ 버튼에서 색상·SVG 심볼을 설정할 수 있습니다.</p>
           </>
         ) : (
           <p className="inspector__empty">이 종류는 심볼을 선택할 수 없습니다.</p>

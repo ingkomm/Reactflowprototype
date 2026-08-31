@@ -9,6 +9,7 @@ import {
   type SymbolEditorKind,
 } from '../librarySymbols'
 import { NODE_SIZE } from '../orbit'
+import { useCustomSymbols } from '../CustomSymbolContext'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import './NodeLibrary.css'
 
@@ -38,6 +39,8 @@ function hasSymbolEditor(kind: LibraryKind): kind is SymbolEditorKind {
 }
 
 export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
+  const { resolveSymbolColor } = useCustomSymbols()
+
   return (
     <aside className="node-library" aria-label="Node library">
       <h2 className="node-library__heading">Nodes</h2>
@@ -49,12 +52,11 @@ export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
             kind,
           }
           const previewSize = Math.min(NODE_SIZE[kind], 34)
-          const previewClass =
-            kind === 'notable'
-              ? ' node-library__preview--hex'
-              : kind === 'connect'
-                ? ' node-library__preview--connect'
-                : ''
+          const previewClass = kind === 'connect' ? ' node-library__preview--connect' : ''
+          const previewColor =
+            kind === 'mastery' || kind === 'notable' || kind === 'small'
+              ? resolveSymbolColor(DEFAULT_SYMBOL_ID, kind)
+              : undefined
           return (
             <li key={kind} className="node-library__row">
               <button
@@ -66,7 +68,7 @@ export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
                 title={`${LIBRARY_KIND_LABEL[kind]} Default — 클릭: 중앙 추가 · 드래그: 위치 지정`}
               >
                 <span className={`node-library__preview${previewClass}`}>
-                  <DefaultNodeShape kind={kind} size={previewSize} />
+                  <DefaultNodeShape kind={kind} size={previewSize} color={previewColor} />
                 </span>
                 <span className="node-library__label">{LIBRARY_KIND_LABEL[kind]}</span>
               </button>

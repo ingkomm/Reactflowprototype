@@ -245,11 +245,30 @@ function normalizeSerializedEdge(value: unknown): SerializedEdge | null {
   return edge
 }
 
+function parseSymbolColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed
+  return undefined
+}
+
+function normalizeDefaultSymbolColors(value: unknown): GraphDocumentSettings['defaultSymbolColors'] {
+  if (!isRecord(value)) return undefined
+  const next: NonNullable<GraphDocumentSettings['defaultSymbolColors']> = {}
+  for (const kind of ['mastery', 'notable', 'small'] as const) {
+    const color = parseSymbolColor(value[kind])
+    if (color) next[kind] = color
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
 function normalizeSettings(value: unknown): GraphDocumentSettings {
   if (!isRecord(value)) return {}
   const settings: GraphDocumentSettings = {}
   if (typeof value.gridSnapEnabled === 'boolean') settings.gridSnapEnabled = value.gridSnapEnabled
   if (typeof value.voidHighlightEnabled === 'boolean') settings.voidHighlightEnabled = value.voidHighlightEnabled
+  const defaultSymbolColors = normalizeDefaultSymbolColors(value.defaultSymbolColors)
+  if (defaultSymbolColors) settings.defaultSymbolColors = defaultSymbolColors
   return settings
 }
 

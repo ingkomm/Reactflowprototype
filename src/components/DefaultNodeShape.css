@@ -2,20 +2,10 @@
   display: block;
   width: 100%;
   height: 100%;
-  opacity: 0.72;
-  filter: saturate(0.75);
-}
-
-.passive-node.is-unpowered .default-node-shape {
-  opacity: 0.48;
-  filter: saturate(0.55);
 }
 
 .default-node-shape--mastery,
+.default-node-shape--notable,
 .default-node-shape--small {
   border-radius: 50%;
-}
-
-.default-node-shape--notable {
-  overflow: visible;
 }

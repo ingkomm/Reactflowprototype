@@ -226,6 +226,9 @@ export default function App() {
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
+  const [defaultSymbolColors, setDefaultSymbolColors] = useState<
+    Partial<Record<SymbolEditorKind, string>>
+  >({})
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
@@ -1089,6 +1092,16 @@ export default function App() {
     [commit, setNodes, stack],
   )
 
+  const handleDefaultSymbolColor = useCallback((kind: SymbolEditorKind, color: string) => {
+    setDefaultSymbolColors((prev) => ({ ...prev, [kind]: color }))
+  }, [])
+
+  const handleCustomSymbolColor = useCallback((symbolId: string, color: string) => {
+    setCustomSymbols((prev) =>
+      prev.map((symbol) => (symbol.id === symbolId ? { ...symbol, color } : symbol)),
+    )
+  }, [])
+
   const createFromTemplate = useCallback(
     (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
       const kind = template.kind
@@ -1118,11 +1131,11 @@ export default function App() {
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
-      settings: { gridSnapEnabled, voidHighlightEnabled },
+      settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
     })
     downloadGraphDocument(document)
     setImportError(null)
-  }, [customSymbols, gridSnapEnabled, voidHighlightEnabled])
+  }, [customSymbols, defaultSymbolColors, gridSnapEnabled, voidHighlightEnabled])
 
   const handleImportJson = useCallback(
     async (file: File) => {
@@ -1141,6 +1154,7 @@ export default function App() {
       const imported = documentToFlowState(parsed.document)
       resetHistory()
       setCustomSymbols(imported.customSymbols)
+      setDefaultSymbolColors(imported.settings.defaultSymbolColors ?? {})
       setNodes(stack(imported.nodes))
       setEdges(sanitizeEdges(imported.nodes, imported.edges))
       if (imported.settings.gridSnapEnabled != null) {
@@ -1369,7 +1383,7 @@ export default function App() {
   )
 
   return (
-    <CustomSymbolProvider customSymbols={customSymbols}>
+    <CustomSymbolProvider customSymbols={customSymbols} defaultSymbolColors={defaultSymbolColors}>
       <ReactFlowProvider>
         <div className="app-shell">
             <header className="topbar">
@@ -1490,6 +1504,7 @@ export default function App() {
               kind={symbolEditorKind ?? 'mastery'}
               open={symbolEditorKind != null}
               customSymbols={customSymbols}
+              defaultSymbolColors={defaultSymbolColors}
               importError={symbolImportError}
               onClose={() => {
                 setSymbolEditorKind(null)
@@ -1497,6 +1512,8 @@ export default function App() {
               }}
               onImportSvg={(file, kind) => void handleImportSvg(file, kind)}
               onDeleteSymbol={handleDeleteSymbol}
+              onDefaultColorChange={handleDefaultSymbolColor}
+              onCustomSymbolColorChange={handleCustomSymbolColor}
             />
           </div>
         </ReactFlowProvider>

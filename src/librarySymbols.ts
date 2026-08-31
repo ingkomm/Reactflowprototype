@@ -1,4 +1,5 @@
 import type { CustomSymbol, PassiveKind } from './types'
+import { DEFAULT_ICON_BY_KIND } from './types'
 
 export const DEFAULT_SYMBOL_ID = 'default'
 
@@ -94,6 +95,23 @@ export function resolveSymbolLabel(
 ): string {
   if (isDefaultSymbolId(symbolId)) return 'Default'
   return customSymbols.find((s) => s.id === symbolId)?.name ?? 'Default'
+}
+
+export function resolveSymbolColor(
+  symbolId: string | undefined | null,
+  kind: PassiveKind,
+  customSymbols: CustomSymbol[],
+  defaultSymbolColors: Partial<Record<'mastery' | 'notable' | 'small', string>> = {},
+): string {
+  if (!isDefaultSymbolId(symbolId)) {
+    const custom = customSymbols.find((s) => s.id === symbolId)
+    if (custom?.color) return custom.color
+  }
+  const resolved = kind === 'voidMastery' ? 'mastery' : kind
+  if (resolved === 'mastery' || resolved === 'notable' || resolved === 'small') {
+    return defaultSymbolColors[resolved] ?? DEFAULT_ICON_BY_KIND[resolved]
+  }
+  return DEFAULT_ICON_BY_KIND[kind]
 }
 
 export function migrateLegacyClassId(classId: string | undefined | null, _kind: PassiveKind): string {

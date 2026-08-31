@@ -1,7 +1,7 @@
 import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react'
 import { useMemo, type CSSProperties } from 'react'
 import type { PassiveNodeData } from '../types'
-import { DEFAULT_ICON_BY_KIND, PASSIVE_KIND_LABEL } from '../types'
+import { PASSIVE_KIND_LABEL } from '../types'
 import {
   kindUsesTrainingBands,
   notableBandFills,
@@ -48,7 +48,7 @@ const UNPOWERED_ICON = '#4a5560'
 const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
-  const { customSymbols, getCustomSymbol } = useCustomSymbols()
+  const { customSymbols, getCustomSymbol, resolveSymbolColor } = useCustomSymbols()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const zoom = useStore((s) => s.transform[2])
   const voidHighlight = useVoidHighlight()
@@ -70,6 +70,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
   const symbolLabel = resolveSymbolLabel(data.symbolId, customSymbols)
+  const symbolColor = resolveSymbolColor(data.symbolId, data.kind)
   const useDefaultShape = isDefaultSymbolId(data.symbolId)
   const customSymbol = !useDefaultShape ? getCustomSymbol(data.symbolId) : null
   const stages = data.stages ?? []
@@ -88,7 +89,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const orbitRingsForced = isMastery && Boolean(data.orbitLocked) && voidHighlight
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
-  const iconColor = powered ? DEFAULT_ICON_BY_KIND[data.kind] : UNPOWERED_ICON
+  const iconColor = powered ? symbolColor : UNPOWERED_ICON
   /** Powered mastery: thin rotating neon rim + Notable-like halo (no training bands). */
   const masteryNeonLit = isMastery && powered
   const outerBandR = masteryNeonLit
@@ -268,7 +269,12 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           customSymbol ? (
             <CustomSymbolGlyph symbol={customSymbol} className="passive-node__glyph passive-node__glyph--symbol" />
           ) : (
-            <DefaultNodeShape kind={data.kind} powered={powered} className="passive-node__glyph passive-node__glyph--default" />
+            <DefaultNodeShape
+              kind={data.kind}
+              powered={powered}
+              color={symbolColor}
+              className="passive-node__glyph passive-node__glyph--default"
+            />
           )
         )}
       </div>

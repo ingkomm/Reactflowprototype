@@ -48,6 +48,8 @@ export type CustomSymbol = {
   markup: string
   /** Which library branch this symbol belongs to. */
   kind?: 'mastery' | 'notable' | 'small'
+  /** Optional tint for ring + default-style previews. */
+  color?: string
 }
 
 export const GRAPH_SCHEMA_VERSION = '0.1' as const
@@ -56,6 +58,8 @@ export type GraphSchemaVersion = typeof GRAPH_SCHEMA_VERSION
 export type GraphDocumentSettings = {
   gridSnapEnabled?: boolean
   voidHighlightEnabled?: boolean
+  /** Default symbol color per library branch (built-in Default shape). */
+  defaultSymbolColors?: Partial<Record<'mastery' | 'notable' | 'small', string>>
 }
 
 /** A progression stage with its own band, goal, and training log. */

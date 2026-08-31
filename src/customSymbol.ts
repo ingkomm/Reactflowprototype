@@ -98,7 +98,16 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   if (raw.kind === 'mastery' || raw.kind === 'notable' || raw.kind === 'small') {
     symbol.kind = raw.kind
   }
+  const color = parseSymbolColor(raw.color)
+  if (color) symbol.color = color
   return symbol
+}
+
+function parseSymbolColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed
+  return undefined
 }
 
 export function validateCustomSymbols(value: unknown): CustomSymbol[] | null {

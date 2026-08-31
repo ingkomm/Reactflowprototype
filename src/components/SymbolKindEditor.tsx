@@ -1,31 +1,44 @@
 import { useRef } from 'react'
 import type { CustomSymbol } from '../types'
-import { DEFAULT_SYMBOL_ID, LIBRARY_KIND_LABEL, type SymbolEditorKind } from '../librarySymbols'
+import {
+  DEFAULT_SYMBOL_ID,
+  LIBRARY_KIND_LABEL,
+  resolveSymbolColor,
+  type SymbolEditorKind,
+} from '../librarySymbols'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
+import { SymbolColorPicker } from './SymbolColorPicker'
 import './SymbolKindEditor.css'
 
 type Props = {
   kind: SymbolEditorKind
   open: boolean
   customSymbols: CustomSymbol[]
+  defaultSymbolColors: Partial<Record<SymbolEditorKind, string>>
   importError: string | null
   onClose: () => void
   onImportSvg: (file: File, kind: SymbolEditorKind) => void
   onDeleteSymbol: (symbolId: string) => void
+  onDefaultColorChange: (kind: SymbolEditorKind, color: string) => void
+  onCustomSymbolColorChange: (symbolId: string, color: string) => void
 }
 
 export function SymbolKindEditor({
   kind,
   open,
   customSymbols,
+  defaultSymbolColors,
   importError,
   onClose,
   onImportSvg,
   onDeleteSymbol,
+  onDefaultColorChange,
+  onCustomSymbolColorChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const kindSymbols = customSymbols.filter((s) => !s.kind || s.kind === kind)
+  const defaultColor = resolveSymbolColor(DEFAULT_SYMBOL_ID, kind, customSymbols, defaultSymbolColors)
 
   if (!open) return null
 
@@ -46,34 +59,54 @@ export function SymbolKindEditor({
         </header>
 
         <p className="symbol-kind-editor__hint">
-          Default는 기본 도형입니다. Import SVG로 {LIBRARY_KIND_LABEL[kind]} 전용 심볼을 추가할 수
-          있습니다.
+          Default는 원형 기본 도형입니다. 색상을 고르거나 Import SVG로 {LIBRARY_KIND_LABEL[kind]}{' '}
+          전용 심볼을 추가할 수 있습니다.
         </p>
 
         <ul className="symbol-kind-editor__list">
           <li className="symbol-kind-editor__row">
             <span className="symbol-kind-editor__preview">
-              <DefaultNodeShape kind={kind} size={36} />
+              <DefaultNodeShape kind={kind} size={36} color={defaultColor} />
             </span>
-            <span className="symbol-kind-editor__name">Default</span>
+            <div className="symbol-kind-editor__meta">
+              <span className="symbol-kind-editor__name">Default</span>
+              <SymbolColorPicker
+                value={defaultColor}
+                onChange={(color) => onDefaultColorChange(kind, color)}
+              />
+            </div>
             <span className="symbol-kind-editor__badge">built-in</span>
           </li>
-          {kindSymbols.map((symbol) => (
-            <li key={symbol.id} className="symbol-kind-editor__row">
-              <span className="symbol-kind-editor__preview symbol-kind-editor__preview--custom">
-                <CustomSymbolGlyph symbol={symbol} />
-              </span>
-              <span className="symbol-kind-editor__name">{symbol.name}</span>
-              <button
-                type="button"
-                className="btn btn--icon symbol-kind-editor__delete"
-                aria-label={`${symbol.name} 삭제`}
-                onClick={() => onDeleteSymbol(symbol.id)}
-              >
-                ×
-              </button>
-            </li>
-          ))}
+          {kindSymbols.map((symbol) => {
+            const symbolColor = resolveSymbolColor(
+              symbol.id,
+              kind,
+              customSymbols,
+              defaultSymbolColors,
+            )
+            return (
+              <li key={symbol.id} className="symbol-kind-editor__row">
+                <span className="symbol-kind-editor__preview symbol-kind-editor__preview--custom">
+                  <CustomSymbolGlyph symbol={symbol} color={symbolColor} />
+                </span>
+                <div className="symbol-kind-editor__meta">
+                  <span className="symbol-kind-editor__name">{symbol.name}</span>
+                  <SymbolColorPicker
+                    value={symbolColor}
+                    onChange={(color) => onCustomSymbolColorChange(symbol.id, color)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--icon symbol-kind-editor__delete"
+                  aria-label={`${symbol.name} 삭제`}
+                  onClick={() => onDeleteSymbol(symbol.id)}
+                >
+                  ×
+                </button>
+              </li>
+            )
+          })}
         </ul>
 
         {importError && (
