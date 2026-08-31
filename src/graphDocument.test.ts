@@ -7,7 +7,6 @@ import {
   validateGraphDocument,
 } from './graphDocument'
 import { sanitizeSvgFile } from './customSymbol'
-import { buildSeedClasses } from './passiveClass'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import { createVideoMediaId } from './videoMedia'
 
@@ -16,7 +15,6 @@ describe('graphDocument', () => {
     const doc = buildGraphDocument({
       nodes: SEED_NODES,
       edges: SEED_EDGES,
-      classes: buildSeedClasses(),
       customSymbols: [],
       settings: { gridSnapEnabled: true, voidHighlightEnabled: false },
     })
@@ -27,32 +25,37 @@ describe('graphDocument', () => {
   })
 
   it('rejects unsupported schema versions without mutating parse state', () => {
-    const bad = { schemaVersion: '9.9', nodes: [], edges: [], classes: [], customSymbols: [] }
+    const bad = { schemaVersion: '9.9', nodes: [], edges: [], customSymbols: [] }
     const result = validateGraphDocument(bad)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.message).toContain('schemaVersion')
   })
 
-  it('ignores legacy customIcons and customIconId references', () => {
+  it('ignores legacy classes/customIcons and migrates classId to symbolId', () => {
     const legacy = {
       schemaVersion: '0.1',
       nodes: SEED_NODES.map((n) => ({
         id: n.id,
         type: 'passive',
         position: n.position,
-        data: { ...n.data, customIconId: 'ci-old' },
+        data: {
+          ...n.data,
+          classId: 'm-dance',
+          customIconId: 'ci-old',
+        },
       })),
       edges: SEED_EDGES,
-      classes: buildSeedClasses(),
+      classes: [{ id: 'm-dance', kind: 'mastery', label: 'Legacy', iconId: 'da-disco', iconColor: '#AD1A72' }],
       customIcons: [{ id: 'ci-old', name: 'Legacy', width: 16, height: 16, pixels: [] }],
     }
     const result = validateGraphDocument(legacy)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.document.customSymbols).toEqual([])
-    const node = result.document.nodes[0]
-    expect(node?.data.customIconId).toBeUndefined()
+    const node = result.document.nodes.find((n) => n.id === 'mastery-dance')
+    expect(node?.data.symbolId).toBe('m-2')
+    expect(node?.data.classId).toBeUndefined()
   })
 
   it('preserves custom symbols and media references', () => {
@@ -81,7 +84,6 @@ describe('graphDocument', () => {
     const doc = buildGraphDocument({
       nodes,
       edges: SEED_EDGES,
-      classes: buildSeedClasses(),
       customSymbols,
     })
     const parsed = parseGraphDocumentJson(serializeGraphDocument(doc))

@@ -31,8 +31,8 @@ import { VoidHighlightProvider } from '../VoidHighlightContext'
 import { OrbitRotateController } from './OrbitRotateController'
 import { MiniMapCircleNode } from './MiniMapCircleNode'
 import { ZoomKeyboardController } from './ZoomKeyboardController'
-import { resolvePassiveClass, type PassiveClass } from '../passiveClass'
-import type { CustomSymbol, PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, VideoMedia } from '../types'
+import { resolveLibrarySymbol } from '../librarySymbols'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, VideoMedia } from '../types'
 import type { NodeTemplatePayload } from '../nodeTemplate'
 import { decodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
 import { NODE_SIZE } from '../orbit'
@@ -57,9 +57,6 @@ const defaultEdgeOptions = {
 
 export type TreeWorkspaceProps = {
   inspectorWidth: number
-  customSymbols: CustomSymbol[]
-  symbolImportError: string | null
-  classes: PassiveClass[]
   flowNodes: PassiveFlowNode[]
   edges: Edge[]
   poweredIds: Set<string>
@@ -72,8 +69,6 @@ export type TreeWorkspaceProps = {
   orbitMembers: OrbitMember[]
   selectedLinks: SelectedLink[]
   linkCandidates: LinkCandidate[]
-  onImportSvg: (file: File) => void
-  onDeleteSymbol: (symbolId: string) => void
   onCreateFromTemplate: (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => void
   onNodesChange: OnNodesChange<PassiveFlowNode>
   onEdgesChange: OnEdgesChange
@@ -94,7 +89,7 @@ export type TreeWorkspaceProps = {
   restoreFlowSelection: (id: string) => void
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
-  onChangeClassId: (nodeId: string, classId: string) => void
+  onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
@@ -112,9 +107,6 @@ export type TreeWorkspaceProps = {
 /** Stable shell for canvas + library + inspector (must not be nested inside App). */
 export function TreeWorkspace({
   inspectorWidth,
-  customSymbols,
-  symbolImportError,
-  classes,
   flowNodes,
   edges,
   poweredIds,
@@ -127,8 +119,6 @@ export function TreeWorkspace({
   orbitMembers,
   selectedLinks,
   linkCandidates,
-  onImportSvg,
-  onDeleteSymbol,
   onCreateFromTemplate,
   onNodesChange,
   onEdgesChange,
@@ -149,7 +139,7 @@ export function TreeWorkspace({
   restoreFlowSelection,
   onRename,
   onChangeKind,
-  onChangeClassId,
+  onChangeSymbolId,
   onChangeNodeMedia,
   onChangeStages,
   onChangeConnectEnabled,
@@ -179,7 +169,7 @@ export function TreeWorkspace({
     (template: NodeTemplatePayload) => {
       const bounds = canvasWrapperRef.current?.getBoundingClientRect()
       if (!bounds) return
-      const kind = template.source === 'system' ? template.kind : 'small'
+      const kind = template.kind
       onCreateFromTemplate(
         template,
         flowPositionForKind(
@@ -201,7 +191,7 @@ export function TreeWorkspace({
       event.preventDefault()
       const template = decodePalettePayload(event.dataTransfer.getData(PALETTE_MIME))
       if (!template) return
-      const kind = template.source === 'system' ? template.kind : 'small'
+      const kind = template.kind
       onCreateFromTemplate(
         template,
         flowPositionForKind({ x: event.clientX, y: event.clientY }, kind),
@@ -214,9 +204,9 @@ export function TreeWorkspace({
     (node: Node) => {
       const d = node.data as PassiveNodeData | undefined
       if (!d?.kind) return '#9B9A97'
-      return resolvePassiveClass(classes, d.classId, d.kind).iconColor
+      return resolveLibrarySymbol(d.symbolId, d.kind).iconColor
     },
-    [classes],
+    [],
   )
 
   return (
@@ -224,13 +214,7 @@ export function TreeWorkspace({
       className="workspace"
       style={{ gridTemplateColumns: `168px minmax(0, 1fr) ${inspectorWidth}px` }}
     >
-      <NodeLibrary
-        customSymbols={customSymbols}
-        symbolImportError={symbolImportError}
-        onPlaceTemplate={placeTemplateAtCenter}
-        onImportSvg={onImportSvg}
-        onDeleteSymbol={onDeleteSymbol}
-      />
+      <NodeLibrary onPlaceTemplate={placeTemplateAtCenter} />
 
       <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
         <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
@@ -308,7 +292,7 @@ export function TreeWorkspace({
           linkCandidates={linkCandidates}
           onRename={onRename}
           onChangeKind={onChangeKind}
-          onChangeClassId={onChangeClassId}
+          onChangeSymbolId={onChangeSymbolId}
           onChangeNodeMedia={onChangeNodeMedia}
           onChangeStages={onChangeStages}
           onChangeConnectEnabled={onChangeConnectEnabled}

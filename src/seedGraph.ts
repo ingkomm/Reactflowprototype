@@ -46,7 +46,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: { x: 20, y: 300 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('initial', 'Initial', { stages: [], classId: 'i-default' }),
+      data: createPassiveData('initial', 'Initial', { stages: [], symbolId: 'i-1' }),
     },
     {
       id: CONNECT_DANCE_ID,
@@ -55,7 +55,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       dragHandle: '.node-drag-handle',
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
-        classId: 'c-default',
+        symbolId: 'c-1',
       }),
     },
     {
@@ -65,7 +65,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       dragHandle: '.node-drag-handle',
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
-        classId: 'c-default',
+        symbolId: 'c-1',
       }),
     },
     {
@@ -81,7 +81,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         orbitOrderByTier: danceOrbitOrderByTier,
         orbitCapacityByTier: { 1: 6, 2: 6 },
         orbitTierCount: 2,
-        classId: 'm-dance',
+        symbolId: 'm-2',
       }),
     },
     {
@@ -94,7 +94,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 0,
-        classId: 'n-hiphop',
+        symbolId: 'n-b',
       }),
     },
     {
@@ -107,7 +107,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 2,
-        classId: 'n-kpop',
+        symbolId: 'n-c',
       }),
     },
     {
@@ -120,7 +120,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 4,
-        classId: 's-basic',
+        symbolId: 's-a',
       }),
     },
     {
@@ -133,7 +133,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
         orbitSlot: 0,
-        classId: 's-footwork',
+        symbolId: 's-b',
       }),
     },
     {
@@ -146,7 +146,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
         orbitSlot: 3,
-        classId: 's-stretch',
+        symbolId: 's-c',
       }),
     },
     {
@@ -160,7 +160,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         orbitOrder: gymOrbitOrder,
         orbitCapacityByTier: { 1: 8 },
         orbitTierCount: 1,
-        classId: 'm-gym',
+        symbolId: 'm-3',
       }),
     },
     {
@@ -172,7 +172,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: notableStagesFromTotal(12),
         masteryId: GYM_MASTERY_ID,
         orbitSlot: 0,
-        classId: 'n-strength',
+        symbolId: 'n-d',
       }),
     },
     {
@@ -184,7 +184,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: notableStagesFromTotal(7),
         masteryId: GYM_MASTERY_ID,
         orbitSlot: 2,
-        classId: 'n-cardio',
+        symbolId: 'n-d',
       }),
     },
     {
@@ -196,7 +196,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: GYM_MASTERY_ID,
         orbitSlot: 4,
-        classId: 's-legs',
+        symbolId: 's-d',
       }),
     },
     {
@@ -208,7 +208,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: GYM_MASTERY_ID,
         orbitSlot: 5,
-        classId: 's-back',
+        symbolId: 's-d',
       }),
     },
     {
@@ -220,7 +220,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: GYM_MASTERY_ID,
         orbitSlot: 6,
-        classId: 's-run',
+        symbolId: 's-d',
       }),
     },
     {
@@ -232,7 +232,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
         stages: [],
         masteryId: GYM_MASTERY_ID,
         orbitSlot: 7,
-        classId: 's-core',
+        symbolId: 's-d',
       }),
     },
   ]

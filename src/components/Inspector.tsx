@@ -22,8 +22,7 @@ import {
   normalizeOrbitTierCount,
   orbitAngleOptions,
 } from '../orbit'
-import { classesForKind } from '../passiveClass'
-import { usePassiveClasses } from '../PassiveClassContext'
+import { resolveLibrarySymbol, symbolsForKind } from '../librarySymbols'
 import { IconGlyph } from './IconGlyph'
 import { VideoMediaPanel } from './VideoMediaPanel'
 import './Inspector.css'
@@ -62,7 +61,7 @@ type Props = {
   linkCandidates?: LinkCandidate[]
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
-  onChangeClassId: (nodeId: string, classId: string) => void
+  onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
@@ -87,7 +86,7 @@ export function Inspector({
   linkCandidates = [],
   onRename,
   onChangeKind,
-  onChangeClassId,
+  onChangeSymbolId,
   onChangeNodeMedia,
   onChangeStages,
   onChangeConnectEnabled,
@@ -101,7 +100,6 @@ export function Inspector({
   onAddLink,
   onDeleteNode,
 }: Props) {
-  const { classes, resolve } = usePassiveClasses()
   const [addPeerId, setAddPeerId] = useState('')
 
   if (!nodeId || !data) {
@@ -109,7 +107,7 @@ export function Inspector({
       <aside className="inspector">
         <h2 className="inspector__title">Node Inspector</h2>
         <p className="inspector__empty">
-          노드를 선택하면 클래스·단계별 띠와 트레이닝 로그를 편집할 수 있습니다.
+          노드를 선택하면 심볼·단계별 띠와 트레이닝 로그를 편집할 수 있습니다.
         </p>
       </aside>
     )
@@ -118,8 +116,8 @@ export function Inspector({
   const angleOptions = orbitAngleOptions()
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const stages = sortedStages(data.stages ?? [])
-  const kindClasses = classesForKind(classes, data.kind)
-  const currentClass = resolve(data.classId, data.kind)
+  const kindSymbols = symbolsForKind(data.kind)
+  const currentSymbol = resolveLibrarySymbol(data.symbolId, data.kind)
   const notableLogs = ensureNotableStages(stages)[0]?.logs ?? []
   const isFixedInitial = nodeId === INITIAL_NODE_ID
 
@@ -209,34 +207,34 @@ export function Inspector({
       )}
 
       <div className="field">
-        <span>클래스</span>
-        {data.kind !== 'initial' && data.kind !== 'connect' && !isStealthPassiveKind(data.kind) ? (
+        <span>Symbol</span>
+        {data.kind !== 'initial' && data.kind !== 'void' && !isStealthPassiveKind(data.kind) ? (
           <>
-            <div className="class-pick-grid" role="listbox" aria-label="패시브 클래스">
-              {kindClasses.map((cls) => {
-                const selected = currentClass.id === cls.id
+            <div className="class-pick-grid" role="listbox" aria-label="Library symbol">
+              {kindSymbols.map((symbol) => {
+                const selected = currentSymbol.id === symbol.id
                 return (
                   <button
-                    key={cls.id}
+                    key={symbol.id}
                     type="button"
                     role="option"
                     aria-selected={selected}
                     className={`class-pick${selected ? ' is-selected' : ''}`}
-                    title={cls.label}
-                    onClick={() => onChangeClassId(nodeId, cls.id)}
+                    title={symbol.label}
+                    onClick={() => onChangeSymbolId(nodeId, symbol.id)}
                   >
-                    <span className="class-pick__icon" style={{ color: cls.iconColor }}>
-                      <IconGlyph iconId={cls.iconId} />
+                    <span className="class-pick__icon" style={{ color: symbol.iconColor }}>
+                      <IconGlyph iconId={symbol.iconId} />
                     </span>
-                    <span className="class-pick__label">{cls.label}</span>
+                    <span className="class-pick__label">{symbol.label}</span>
                   </button>
                 )
               })}
             </div>
-            <p className="field-hint">아이콘·색상은 우측 상단 클래스 관리에서 편집합니다.</p>
+            <p className="field-hint">왼쪽 Nodes 트리와 동일한 심볼 목록입니다.</p>
           </>
         ) : (
-          <p className="inspector__empty">이 종류는 클래스를 사용하지 않습니다.</p>
+          <p className="inspector__empty">이 종류는 심볼을 선택할 수 없습니다.</p>
         )}
       </div>
 

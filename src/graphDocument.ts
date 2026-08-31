@@ -2,11 +2,7 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { validateCustomSymbols } from './customSymbol'
 import { layoutMasteryOrbit, isMasteryKind } from './orbit'
-import {
-  buildSeedClasses,
-  resolvePassiveClass,
-  type PassiveClass,
-} from './passiveClass'
+import { migrateLegacyClassId, resolveLibrarySymbol } from './librarySymbols'
 import { ensureNotableStages, stagesForKind } from './stage'
 import type {
   CustomSymbol,
@@ -41,7 +37,6 @@ export type GraphDocumentV01 = {
   schemaVersion: typeof GRAPH_SCHEMA_VERSION
   nodes: SerializedFlowNode[]
   edges: SerializedEdge[]
-  classes: PassiveClass[]
   customSymbols: CustomSymbol[]
   settings?: GraphDocumentSettings
 }
@@ -49,7 +44,6 @@ export type GraphDocumentV01 = {
 export type GraphExportInput = {
   nodes: PassiveFlowNode[]
   edges: Edge[]
-  classes: PassiveClass[]
   customSymbols: CustomSymbol[]
   settings?: GraphDocumentSettings
 }
@@ -57,7 +51,6 @@ export type GraphExportInput = {
 export type GraphImportResult = {
   nodes: PassiveFlowNode[]
   edges: Edge[]
-  classes: PassiveClass[]
   customSymbols: CustomSymbol[]
   settings: GraphDocumentSettings
 }
@@ -144,9 +137,16 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   const kind = (typeof kindRaw === 'string' && PASSIVE_KINDS.has(kindRaw as PassiveKind)
     ? kindRaw
     : kindFallback) as PassiveKind
+  const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
 
   const label = typeof value.label === 'string' ? value.label : 'Node'
-  const classId = typeof value.classId === 'string' ? value.classId : undefined
+
+  const symbolIdRaw =
+    typeof value.symbolId === 'string'
+      ? value.symbolId
+      : typeof value.classId === 'string'
+        ? value.classId
+        : undefined
 
   let stages: StageData[] = []
   if (Array.isArray(value.stages)) {
@@ -166,9 +166,9 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
 
   const data: PassiveNodeData = {
     label,
-    kind: kind === 'voidMastery' ? 'mastery' : kind,
+    kind: resolvedKind,
     stages,
-    classId: classId ?? resolvePassiveClass(buildSeedClasses(), null, kind === 'voidMastery' ? 'mastery' : kind).id,
+    symbolId: migrateLegacyClassId(symbolIdRaw, resolvedKind),
   }
 
   const optionalNumber = (key: string) => {
@@ -195,9 +195,9 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   if (optionalBool('voidPassing') != null) data.voidPassing = optionalBool('voidPassing')
   if (optionalBool('connectEnabled') != null) data.connectEnabled = optionalBool('connectEnabled')
   if (value.customIconId === null || typeof value.customIconId === 'string') {
-    // Legacy dot icon — ignored (fallback to class icon).
-    delete (data as { customIconId?: string | null }).customIconId
+    // Legacy dot icon — ignored.
   }
+  delete (data as { classId?: string }).classId
   if (value.customSymbolId === null || typeof value.customSymbolId === 'string') {
     data.customSymbolId = value.customSymbolId as string | null
   }
@@ -238,37 +238,6 @@ function normalizeSerializedEdge(value: unknown): SerializedEdge | null {
   if (isRecord(value.data)) edge.data = value.data
   if (typeof value.zIndex === 'number') edge.zIndex = value.zIndex
   return edge
-}
-
-function normalizePassiveClass(value: unknown): PassiveClass | null {
-  if (!isRecord(value)) return null
-  if (typeof value.id !== 'string' || !value.id.trim()) return null
-  if (typeof value.label !== 'string') return null
-  if (typeof value.iconId !== 'string' || !value.iconId.trim()) return null
-  if (typeof value.iconColor !== 'string' || !value.iconColor.trim()) return null
-  const kind = value.kind
-  if (typeof kind !== 'string' || !PASSIVE_KINDS.has(kind as PassiveKind)) return null
-  return {
-    id: value.id.trim(),
-    kind: kind as PassiveKind,
-    label: value.label,
-    iconId: value.iconId.trim(),
-    iconColor: value.iconColor as PassiveClass['iconColor'],
-  }
-}
-
-function normalizeClasses(value: unknown): PassiveClass[] | null {
-  if (!Array.isArray(value)) return null
-  const classes: PassiveClass[] = []
-  const seen = new Set<string>()
-  for (const item of value) {
-    const cls = normalizePassiveClass(item)
-    if (!cls) return null
-    if (seen.has(cls.id)) return null
-    seen.add(cls.id)
-    classes.push(cls)
-  }
-  return classes
 }
 
 function normalizeSettings(value: unknown): GraphDocumentSettings {
@@ -322,11 +291,10 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
     edges.push(edge)
   }
 
-  const classes = normalizeClasses(value.classes)
-  if (!classes) return { ok: false, message: 'classes 배열 형식이 올바르지 않습니다.' }
-
   const customSymbols = validateCustomSymbols(value.customSymbols)
   if (customSymbols === null) return { ok: false, message: 'customSymbols 배열 형식이 올바르지 않습니다.' }
+
+  // Legacy `classes` array is ignored — symbolId on each node is authoritative.
 
   const symbolIds = new Set(customSymbols.map((s) => s.id))
   for (const node of nodes) {
@@ -334,7 +302,8 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
     if (customSymbolId && !symbolIds.has(customSymbolId)) {
       node.data.customSymbolId = null
     }
-    delete node.data.customIconId
+    delete node.data.classId
+    node.data.symbolId = resolveLibrarySymbol(node.data.symbolId, node.data.kind).id
     if (node.data.kind === 'notable' && node.data.stages) {
       node.data.stages = ensureNotableStages(node.data.stages)
     }
@@ -344,7 +313,6 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
     schemaVersion: GRAPH_SCHEMA_VERSION,
     nodes,
     edges,
-    classes,
     customSymbols,
     settings: normalizeSettings(value.settings),
   }
@@ -371,7 +339,6 @@ export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
       data: edge.data ? structuredClone(edge.data as Record<string, unknown>) : undefined,
       zIndex: edge.zIndex,
     })),
-    classes: structuredClone(input.classes),
     customSymbols: structuredClone(input.customSymbols),
     settings: input.settings ? structuredClone(input.settings) : undefined,
   }
@@ -411,7 +378,6 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
   return {
     nodes,
     edges,
-    classes: structuredClone(document.classes),
     customSymbols: structuredClone(document.customSymbols),
     settings: document.settings ?? {},
   }

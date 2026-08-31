@@ -104,11 +104,8 @@ export type PassiveNodeData = {
   kind: PassiveKind
   /** Ordered stages; Notable only uses cumulative 3/5/7 bands. Master/Small have none. */
   stages: StageData[]
-  /**
-   * Passive class id for this node's kind.
-   * Icon + color come from the class catalog (not stored per-node).
-   */
-  classId: string
+  /** Library symbol id — icon + color come from the built-in catalog. */
+  symbolId: string
   /** Mastery: radius of the circular orbit for attached passives. */
   orbitRadius?: number
   /** Mastery: number of concentric orbit tiers (1–3). */
@@ -142,8 +139,10 @@ export type PassiveNodeData = {
   voidPassing?: boolean
   /** Connect only: circuit breaker — when false, blocks power from Initial. */
   connectEnabled?: boolean
-  /** Optional user SVG symbol id (overrides class icon when set). */
+  /** Optional user SVG symbol id (overrides library icon when set). */
   customSymbolId?: string | null
+  /** @deprecated Migrated to symbolId on import. */
+  classId?: string
   /** @deprecated Ignored — legacy dot icon reference. */
   customIconId?: string | null
   /** Optional external videos attached to this node. */
@@ -160,7 +159,7 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   void: 'Void spacer',
 }
 
-/** Kinds the user can add from the Library palette. */
-export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = ['small', 'notable', 'mastery']
+/** Kinds the user can add from the Library tree. */
+export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = ['small', 'notable', 'mastery', 'connect']
 
 export const DEFAULT_STAGE_GOAL = 3

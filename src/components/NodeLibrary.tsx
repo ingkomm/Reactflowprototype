@@ -1,21 +1,13 @@
-import { useRef } from 'react'
-import type { CustomSymbol } from '../types'
+import { useState } from 'react'
 import type { NodeTemplatePayload } from '../nodeTemplate'
-import { encodePalettePayload, LIBRARY_NODE_KINDS, PALETTE_MIME } from '../nodeTemplate'
-import { PASSIVE_KIND_LABEL, type PassiveKind } from '../types'
-import { DEFAULT_ICON_ID_BY_KIND } from '../icons'
-import { DEFAULT_ICON_BY_KIND } from '../types'
+import { encodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
+import { LIBRARY_BRANCHES, type LibrarySymbol } from '../librarySymbols'
 import { NODE_SIZE } from '../orbit'
 import { IconGlyph } from './IconGlyph'
-import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import './NodeLibrary.css'
 
 type Props = {
-  customSymbols: CustomSymbol[]
-  symbolImportError: string | null
   onPlaceTemplate: (template: NodeTemplatePayload) => void
-  onImportSvg: (file: File) => void
-  onDeleteSymbol: (symbolId: string) => void
 }
 
 function beginPaletteDrag(event: React.DragEvent, template: NodeTemplatePayload) {
@@ -23,112 +15,110 @@ function beginPaletteDrag(event: React.DragEvent, template: NodeTemplatePayload)
   event.dataTransfer.effectAllowed = 'copy'
 }
 
-function SystemPreview({ kind }: { kind: PassiveKind }) {
-  const size = NODE_SIZE[kind]
-  const color = DEFAULT_ICON_BY_KIND[kind]
+function SymbolPreview({ symbol }: { symbol: LibrarySymbol }) {
+  const size = Math.min(NODE_SIZE[symbol.kind], 32)
   return (
     <span
-      className="node-library__preview node-library__preview--system"
-      style={{ width: Math.min(size, 40), height: Math.min(size, 40), color }}
+      className="node-library__preview"
+      style={{ width: size, height: size, color: symbol.iconColor }}
     >
-      <IconGlyph iconId={DEFAULT_ICON_ID_BY_KIND[kind]} />
+      <IconGlyph iconId={symbol.iconId} />
     </span>
   )
 }
 
-export function NodeLibrary({
-  customSymbols,
-  symbolImportError,
+function SymbolLeaf({
+  symbol,
   onPlaceTemplate,
-  onImportSvg,
-  onDeleteSymbol,
-}: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+}: {
+  symbol: LibrarySymbol
+  onPlaceTemplate: (template: NodeTemplatePayload) => void
+}) {
+  const template: NodeTemplatePayload = {
+    source: 'symbol',
+    symbolId: symbol.id,
+    kind: symbol.kind,
+  }
+  return (
+    <li className="node-library__tree-leaf">
+      <button
+        type="button"
+        className="node-library__tree-item"
+        draggable
+        onDragStart={(event) => beginPaletteDrag(event, template)}
+        onClick={() => onPlaceTemplate(template)}
+        title={`${symbol.label} — 클릭: 중앙 추가 · 드래그: 위치 지정`}
+      >
+        <SymbolPreview symbol={symbol} />
+        <span className="node-library__tree-label">{symbol.label}</span>
+      </button>
+    </li>
+  )
+}
+
+export function NodeLibrary({ onPlaceTemplate }: Props) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(LIBRARY_BRANCHES.filter((b) => b.expandable).map((b) => [b.kind, true])),
+  )
+
+  const toggleBranch = (kind: string) => {
+    setExpanded((prev) => ({ ...prev, [kind]: !prev[kind] }))
+  }
 
   return (
     <aside className="node-library" aria-label="Node library">
-      <section className="node-library__section">
-        <h2 className="node-library__heading">NODES</h2>
-        <ul className="node-library__list">
-          {LIBRARY_NODE_KINDS.map((kind) => (
-            <li key={kind}>
-              <button
-                type="button"
-                className="node-library__item node-library__item--system"
-                draggable
-                onDragStart={(event) => beginPaletteDrag(event, { source: 'system', kind })}
-                onClick={() => onPlaceTemplate({ source: 'system', kind })}
-                title={`${PASSIVE_KIND_LABEL[kind]} — 클릭: 중앙 추가 · 드래그: 위치 지정`}
-              >
-                <SystemPreview kind={kind} />
-                <span className="node-library__label">{PASSIVE_KIND_LABEL[kind]}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="node-library__section node-library__section--custom">
-        <div className="node-library__section-head">
-          <h2 className="node-library__heading">CUSTOM SYMBOLS</h2>
-          <button
-            type="button"
-            className="btn btn--ghost node-library__import"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Import SVG
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/svg+xml,.svg"
-            hidden
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (file) onImportSvg(file)
-            }}
-          />
-        </div>
-        {symbolImportError && (
-          <p className="node-library__error" role="alert">
-            {symbolImportError}
-          </p>
-        )}
-        {customSymbols.length === 0 ? (
-          <p className="node-library__empty">가져온 SVG가 없습니다.</p>
-        ) : (
-          <ul className="node-library__list">
-            {customSymbols.map((symbol) => (
-              <li key={symbol.id} className="node-library__symbol-row">
+      <h2 className="node-library__heading">Nodes</h2>
+      <ul className="node-library__tree">
+        {LIBRARY_BRANCHES.map((branch) => {
+          if (!branch.expandable) {
+            const symbol = branch.symbols[0]!
+            const template: NodeTemplatePayload = {
+              source: 'symbol',
+              symbolId: symbol.id,
+              kind: symbol.kind,
+            }
+            return (
+              <li key={branch.kind} className="node-library__tree-branch">
                 <button
                   type="button"
-                  className="node-library__item node-library__item--custom"
+                  className="node-library__tree-item node-library__tree-item--branch"
                   draggable
-                  onDragStart={(event) =>
-                    beginPaletteDrag(event, { source: 'custom', symbolId: symbol.id })
-                  }
-                  onClick={() => onPlaceTemplate({ source: 'custom', symbolId: symbol.id })}
-                  title={`${symbol.name} — Small 노드로 추가`}
+                  onDragStart={(event) => beginPaletteDrag(event, template)}
+                  onClick={() => onPlaceTemplate(template)}
+                  title={`${branch.label} — 클릭: 중앙 추가 · 드래그: 위치 지정`}
                 >
-                  <span className="node-library__preview node-library__preview--custom">
-                    <CustomSymbolGlyph symbol={symbol} />
-                  </span>
-                  <span className="node-library__label">{symbol.name}</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--icon node-library__delete"
-                  aria-label={`${symbol.name} 삭제`}
-                  onClick={() => onDeleteSymbol(symbol.id)}
-                >
-                  ×
+                  <SymbolPreview symbol={symbol} />
+                  <span className="node-library__tree-label">{branch.label}</span>
                 </button>
               </li>
-            ))}
-          </ul>
-        )}
-      </section>
+            )
+          }
+
+          const isOpen = expanded[branch.kind] ?? true
+          return (
+            <li key={branch.kind} className="node-library__tree-branch">
+              <button
+                type="button"
+                className="node-library__tree-toggle"
+                aria-expanded={isOpen}
+                onClick={() => toggleBranch(branch.kind)}
+              >
+                <span className="node-library__tree-caret" aria-hidden>
+                  {isOpen ? '▾' : '▸'}
+                </span>
+                <span className="node-library__tree-branch-label">{branch.label}</span>
+              </button>
+              {isOpen && (
+                <ul className="node-library__tree-children">
+                  {branch.symbols.map((symbol) => (
+                    <SymbolLeaf key={symbol.id} symbol={symbol} onPlaceTemplate={onPlaceTemplate} />
+                  ))}
+                </ul>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </aside>
   )
 }

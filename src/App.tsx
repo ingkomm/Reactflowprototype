@@ -16,15 +16,8 @@ import { TreeWorkspace } from './components/TreeWorkspace'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
-import {
-  buildSeedClasses,
-  resolvePassiveClass,
-  type PassiveClass,
-} from './passiveClass'
-import { PassiveClassProvider } from './PassiveClassContext'
-import { ClassManager } from './components/ClassManager'
+import { resolveLibrarySymbol } from './librarySymbols'
 import { CustomSymbolProvider } from './CustomSymbolContext'
-import { sanitizeSvgFile } from './customSymbol'
 import {
   buildGraphDocument,
   documentToFlowState,
@@ -126,7 +119,7 @@ function buildPastedNode(
     label,
     kind,
     stages,
-    classId: source.classId,
+    symbolId: source.symbolId,
     customSymbolId: source.customSymbolId ?? null,
     media: cloneMediaList(source.media),
     ...(isMasteryKind(kind)
@@ -211,10 +204,7 @@ export default function App() {
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
   const [inspectorWidth, setInspectorWidth] = useState(360)
-  const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
   const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
-  const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
-  const [classManagerOpen, setClassManagerOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
@@ -875,7 +865,7 @@ export default function App() {
               label: data.label,
               kind: resolvedKind,
               stages: stagesForKind(resolvedKind, data.stages),
-              classId: resolvePassiveClass(classes, data.classId, resolvedKind).id,
+              symbolId: resolveLibrarySymbol(data.symbolId, resolvedKind).id,
               ...(isMasteryKind(resolvedKind)
                 ? {
                     orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
@@ -991,79 +981,19 @@ export default function App() {
         }),
       )
     },
-    [commit, nodes, setEdges, setNodes, classes, stack],
+    [commit, nodes, setEdges, setNodes, stack],
   )
-
-  const handleClassesChange = useCallback(
-    (next: PassiveClass[]) => {
-      const removedIds = new Set(
-        classes.filter((c) => !next.some((n) => n.id === c.id)).map((c) => c.id),
-      )
-      setClasses(next)
-      if (removedIds.size === 0) return
-      setNodes((nds) =>
-        stack(
-          nds.map((node) => {
-            const data = node.data as PassiveNodeData
-            if (!removedIds.has(data.classId)) return node
-            const fallback = resolvePassiveClass(next, null, data.kind)
-            return { ...node, data: { ...data, classId: fallback.id } }
-          }),
-        ),
-      )
-    },
-    [classes, setNodes, stack],
-  )
-
-  const handleCustomSymbolsChange = useCallback(
-    (next: CustomSymbol[]) => {
-      const removedIds = new Set(
-        customSymbols.filter((s) => !next.some((n) => n.id === s.id)).map((s) => s.id),
-      )
-      setCustomSymbols(next)
-      if (removedIds.size === 0) return
-      commit()
-      setNodes((nds) =>
-        stack(
-          nds.map((node) => {
-            const data = node.data as PassiveNodeData
-            if (!data.customSymbolId || !removedIds.has(data.customSymbolId)) return node
-            return { ...node, data: { ...data, customSymbolId: null } }
-          }),
-        ),
-      )
-    },
-    [commit, customSymbols, setNodes, stack],
-  )
-
-  const handleImportSvg = useCallback(async (file: File) => {
-    let text: string
-    try {
-      text = await file.text()
-    } catch {
-      setSymbolImportError('SVG 파일을 읽을 수 없습니다.')
-      return
-    }
-    const result = sanitizeSvgFile(text, file.name.replace(/\.svg$/i, ''))
-    if (!result.ok) {
-      setSymbolImportError(result.message)
-      return
-    }
-    setSymbolImportError(null)
-    setCustomSymbols((prev) => [...prev, result.symbol])
-  }, [])
 
   const createFromTemplate = useCallback(
     (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
-      const kind: PassiveKind = template.source === 'system' ? template.kind : 'small'
+      const kind = template.kind
       let position = flowPosition
       if (gridSnapEnabled) position = snapNodeTopLeft(position)
       commit()
       const id = uid(kind)
-      const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`)
-      if (template.source === 'custom') {
-        data.customSymbolId = template.symbolId
-      }
+      const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`, {
+        symbolId: template.symbolId,
+      })
       const newNode: PassiveFlowNode = {
         id,
         type: 'passive',
@@ -1082,13 +1012,12 @@ export default function App() {
     const document = buildGraphDocument({
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
-      classes,
       customSymbols,
       settings: { gridSnapEnabled, voidHighlightEnabled },
     })
     downloadGraphDocument(document)
     setImportError(null)
-  }, [classes, customSymbols, gridSnapEnabled, voidHighlightEnabled])
+  }, [customSymbols, gridSnapEnabled, voidHighlightEnabled])
 
   const handleImportJson = useCallback(
     async (file: File) => {
@@ -1106,7 +1035,6 @@ export default function App() {
       }
       const imported = documentToFlowState(parsed.document)
       resetHistory()
-      setClasses(imported.classes)
       setCustomSymbols(imported.customSymbols)
       setNodes(stack(imported.nodes))
       setEdges(sanitizeEdges(imported.nodes, imported.edges))
@@ -1312,13 +1240,6 @@ export default function App() {
     [gridSnapEnabled, setNodes, stack],
   )
 
-  const handleDeleteSymbol = useCallback(
-    (symbolId: string) => {
-      handleCustomSymbolsChange(customSymbols.filter((s) => s.id !== symbolId))
-    },
-    [customSymbols, handleCustomSymbolsChange],
-  )
-
   const onRenameNode = useCallback(
     (nodeId: string, label: string) => {
       if (nodeId === INITIAL_NODE_ID) return
@@ -1327,8 +1248,8 @@ export default function App() {
     [updateNodeData],
   )
 
-  const onChangeClassId = useCallback(
-    (nodeId: string, classId: string) => updateNodeData(nodeId, (d) => ({ ...d, classId })),
+  const onChangeSymbolId = useCallback(
+    (nodeId: string, symbolId: string) => updateNodeData(nodeId, (d) => ({ ...d, symbolId })),
     [updateNodeData],
   )
 
@@ -1343,10 +1264,9 @@ export default function App() {
   )
 
   return (
-    <PassiveClassProvider classes={classes}>
-      <CustomSymbolProvider customSymbols={customSymbols}>
-        <ReactFlowProvider>
-          <div className="app-shell">
+    <CustomSymbolProvider customSymbols={customSymbols}>
+      <ReactFlowProvider>
+        <div className="app-shell">
             <header className="topbar">
               <div className="topbar__brand">
                 <span className="topbar__mark" aria-hidden />
@@ -1402,13 +1322,6 @@ export default function App() {
                     if (file) void handleImportJson(file)
                   }}
                 />
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setClassManagerOpen(true)}
-                >
-                  클래스
-                </button>
               </div>
             </header>
 
@@ -1420,9 +1333,6 @@ export default function App() {
 
             <TreeWorkspace
               inspectorWidth={inspectorWidth}
-              customSymbols={customSymbols}
-              symbolImportError={symbolImportError}
-              classes={classes}
               flowNodes={flowNodes}
               edges={edges}
               poweredIds={poweredIds}
@@ -1435,8 +1345,6 @@ export default function App() {
               orbitMembers={orbitMembers}
               selectedLinks={selectedLinks}
               linkCandidates={linkCandidates}
-              onImportSvg={(file) => void handleImportSvg(file)}
-              onDeleteSymbol={handleDeleteSymbol}
               onCreateFromTemplate={createFromTemplate}
               onNodesChange={handleNodesChange}
               onEdgesChange={handleEdgesChange}
@@ -1457,7 +1365,7 @@ export default function App() {
               restoreFlowSelection={restoreFlowSelection}
               onRename={onRenameNode}
               onChangeKind={changeKind}
-              onChangeClassId={onChangeClassId}
+              onChangeSymbolId={onChangeSymbolId}
               onChangeNodeMedia={onChangeNodeMedia}
               onChangeStages={onChangeStages}
               onChangeConnectEnabled={changeConnectEnabled}
@@ -1471,16 +1379,8 @@ export default function App() {
               onAddLink={addLink}
               onDeleteNode={deleteNode}
             />
-
-            <ClassManager
-              open={classManagerOpen}
-              classes={classes}
-              onClose={() => setClassManagerOpen(false)}
-              onChange={handleClassesChange}
-            />
           </div>
         </ReactFlowProvider>
       </CustomSymbolProvider>
-    </PassiveClassProvider>
   )
 }

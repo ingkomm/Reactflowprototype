@@ -25,7 +25,7 @@ import {
   orbitTierRadius,
 } from '../orbit'
 import type { OrbitTier } from '../types'
-import { usePassiveClasses } from '../PassiveClassContext'
+import { resolveLibrarySymbol } from '../librarySymbols'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
 import { IconGlyph } from './IconGlyph'
@@ -47,7 +47,6 @@ const UNPOWERED_ICON = '#4a5560'
 const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
-  const { resolve } = usePassiveClasses()
   const { getCustomSymbol } = useCustomSymbols()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const voidHighlight = useVoidHighlight()
@@ -68,7 +67,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const powered = !isStealth && (nodePowered || isInitialNode)
   const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
   const canRelay = powered && canTransmitPower(data)
-  const passiveClass = resolve(data.classId, data.kind)
+  const librarySymbol = resolveLibrarySymbol(data.symbolId, data.kind)
   const stages = data.stages ?? []
   const totalLogged = totalRawLoggedAcrossStages(stages)
   const visibleBandCount =
@@ -85,8 +84,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const orbitRingsForced = isMastery && Boolean(data.orbitLocked) && voidHighlight
   const outerOrbitR = orbitTierRadius(orbitTierCount, orbitTierCount)
   const nodeSize = NODE_SIZE[data.kind]
-  const iconColor = powered ? passiveClass.iconColor : UNPOWERED_ICON
-  const iconId = passiveClass.iconId
+  const iconColor = powered ? librarySymbol.iconColor : UNPOWERED_ICON
+  const iconId = librarySymbol.iconId
   const customSymbol = data.customSymbolId ? getCustomSymbol(data.customSymbolId) : null
   /** Powered mastery: thin rotating neon rim + Notable-like halo (no training bands). */
   const masteryNeonLit = isMastery && powered
@@ -252,7 +251,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
             <p className="passive-node__tooltip-meta">1밴드(3) 미완료 — 파워 전달 불가</p>
           )}
           {!isInitialNode && !isConnectNode && (
-            <p className="passive-node__tooltip-meta">클래스 · {passiveClass.label}</p>
+            <p className="passive-node__tooltip-meta">Symbol · {librarySymbol.label}</p>
           )}
           {showBands && (
             <p className="passive-node__tooltip-meta">

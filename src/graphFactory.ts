@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveKind, PassiveNodeData } from './types'
-import { DEFAULT_CLASS_ID_BY_KIND } from './passiveClass'
+import { DEFAULT_SYMBOL_ID_BY_KIND } from './librarySymbols'
 import { stagesForKind } from './stage'
 import {
   DEFAULT_ORBIT_START_ANGLE,
@@ -27,7 +27,7 @@ export function createPassiveData(
       | 'orbitSlot'
       | 'voidPassing'
       | 'connectEnabled'
-      | 'classId'
+      | 'symbolId'
       | 'stages'
     >
   > = {},
@@ -37,7 +37,7 @@ export function createPassiveData(
     label,
     kind: resolvedKind,
     stages: extras.stages ?? stagesForKind(resolvedKind),
-    classId: extras.classId ?? DEFAULT_CLASS_ID_BY_KIND[resolvedKind],
+    symbolId: extras.symbolId ?? DEFAULT_SYMBOL_ID_BY_KIND[resolvedKind],
     ...(isMasteryKind(resolvedKind)
       ? {
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
