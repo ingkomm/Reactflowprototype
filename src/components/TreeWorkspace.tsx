@@ -291,7 +291,7 @@ export function TreeWorkspace({
         </PowerProvider>
 
         <p className="canvas-hint">
-          Root 미연결 링크 자동 삭제 · 오르빗 최대 3단 · 인접 단(1↔2, 2↔3) 호 링크 · 단별 독립 회전
+          Root 미연결 링크 자동 삭제 · Mastery/Notable 우클릭 동영상 핀 · 오르빗 최대 3단
         </p>
       </section>
 
