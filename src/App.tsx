@@ -1095,6 +1095,12 @@ export default function App() {
     )
   }, [])
 
+  const handleCustomSymbolScale = useCallback((symbolId: string, scale: number) => {
+    setCustomSymbols((prev) =>
+      prev.map((symbol) => (symbol.id === symbolId ? { ...symbol, scale } : symbol)),
+    )
+  }, [])
+
   const createFromTemplate = useCallback(
     (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
       const kind = template.kind
@@ -1507,6 +1513,7 @@ export default function App() {
               onDeleteSymbol={handleDeleteSymbol}
               onDefaultColorChange={handleDefaultSymbolColor}
               onCustomSymbolColorChange={handleCustomSymbolColor}
+              onCustomSymbolScaleChange={handleCustomSymbolScale}
             />
           </div>
         </ReactFlowProvider>

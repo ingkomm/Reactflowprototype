@@ -9,6 +9,7 @@ import {
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { SymbolColorPicker } from './SymbolColorPicker'
+import { SymbolScaleSlider } from './SymbolScaleSlider'
 import './SymbolKindEditor.css'
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
   onDeleteSymbol: (symbolId: string) => void
   onDefaultColorChange: (kind: SymbolEditorKind, color: string) => void
   onCustomSymbolColorChange: (symbolId: string, color: string) => void
+  onCustomSymbolScaleChange: (symbolId: string, scale: number) => void
 }
 
 export function SymbolKindEditor({
@@ -35,6 +37,7 @@ export function SymbolKindEditor({
   onDeleteSymbol,
   onDefaultColorChange,
   onCustomSymbolColorChange,
+  onCustomSymbolScaleChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const kindSymbols = customSymbols.filter((s) => !s.kind || s.kind === kind)
@@ -59,8 +62,8 @@ export function SymbolKindEditor({
         </header>
 
         <p className="symbol-kind-editor__hint">
-          Default는 꽉 채운 원형입니다. SVG·PNG를 가져오면 단색 마스크로 변환되어 선택한 색상이
-          적용됩니다.
+          Default는 꽉 채운 원형입니다. SVG·PNG를 가져오면 단색 마스크로 변환되어 색상·확대를
+          조절할 수 있습니다.
         </p>
 
         <ul className="symbol-kind-editor__list">
@@ -94,6 +97,10 @@ export function SymbolKindEditor({
                   <SymbolColorPicker
                     value={symbolColor}
                     onChange={(color) => onCustomSymbolColorChange(symbol.id, color)}
+                  />
+                  <SymbolScaleSlider
+                    value={symbol.scale}
+                    onChange={(scale) => onCustomSymbolScaleChange(symbol.id, scale)}
                   />
                 </div>
                 <button

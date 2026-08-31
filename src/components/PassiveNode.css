@@ -555,6 +555,7 @@
 /* Custom SVG: dark filled disc + monochrome icon tinted by selected color */
 .passive-node.has-custom-symbol .passive-node__ring {
   background: color-mix(in srgb, var(--icon-color) 22%, #0d1218);
+  overflow: visible;
 }
 
 .passive-node__glyph {
@@ -576,6 +577,7 @@
   fill: currentColor;
   color: var(--icon-color);
   object-fit: contain;
+  overflow: visible;
 }
 
 .passive-node.is-selected .passive-node__ring {

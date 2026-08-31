@@ -1,6 +1,6 @@
 import { useId, type CSSProperties } from 'react'
 import type { CustomSymbol } from '../types'
-import { SYMBOL_MASK_ID } from '../customSymbol'
+import { normalizeSymbolScale, SYMBOL_MASK_ID } from '../customSymbol'
 
 type Props = {
   symbol: CustomSymbol
@@ -17,11 +17,18 @@ export function CustomSymbolGlyph({ symbol, color, className, style, title }: Pr
   const markup = symbol.markup.includes(SYMBOL_MASK_ID)
     ? symbol.markup.split(SYMBOL_MASK_ID).join(`mask-${reactId}`)
     : symbol.markup
+  const scale = normalizeSymbolScale(symbol.scale)
 
   return (
     <svg
       className={className}
-      style={{ color: color ?? 'currentColor', fill: 'currentColor', ...style }}
+      style={{
+        color: color ?? 'currentColor',
+        fill: 'currentColor',
+        transform: scale === 1 ? undefined : `scale(${scale})`,
+        transformOrigin: 'center',
+        ...style,
+      }}
       viewBox={symbol.viewBox}
       xmlns="http://www.w3.org/2000/svg"
       preserveAspectRatio="xMidYMid meet"

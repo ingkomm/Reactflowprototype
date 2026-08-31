@@ -50,6 +50,8 @@ export type CustomSymbol = {
   kind?: 'mastery' | 'notable' | 'small'
   /** Optional tint for ring + default-style previews. */
   color?: string
+  /** Vector/raster glyph zoom relative to node face (1 = 100%). */
+  scale?: number
 }
 
 export const GRAPH_SCHEMA_VERSION = '0.1' as const

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildMaskedImageMarkup,
+  normalizeSymbolScale,
   sanitizeSvgFile,
   SYMBOL_MASK_ID,
   validateCustomSymbol,
@@ -76,9 +77,19 @@ describe('customSymbol', () => {
     expect(markup).toContain('data:image/png;base64,xx')
   })
 
+  it('normalizes symbol scale into 50%–200%', () => {
+    expect(normalizeSymbolScale(undefined)).toBe(1)
+    expect(normalizeSymbolScale(0.1)).toBe(0.5)
+    expect(normalizeSymbolScale(3)).toBe(2)
+    expect(normalizeSymbolScale(1.23)).toBe(1.25)
+  })
+
   it('validates stored symbols', () => {
     const imported = sanitizeSvgFile(SAMPLE, 'Circle')
     if (!imported.ok) throw new Error('import failed')
     expect(validateCustomSymbol(imported.symbol)?.id).toBe(imported.symbol.id)
+    expect(
+      validateCustomSymbol({ ...imported.symbol, scale: 1.5 })?.scale,
+    ).toBe(1.5)
   })
 })

@@ -80,11 +80,13 @@
 .symbol-kind-editor__preview--custom {
   border-radius: 8px;
   color: #e8eef3;
+  overflow: visible;
 }
 
 .symbol-kind-editor__preview--custom svg {
   width: 72%;
   height: 72%;
+  overflow: visible;
 }
 
 .symbol-kind-editor__name {

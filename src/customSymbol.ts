@@ -8,6 +8,17 @@ const MAX_RASTER_EDGE = 256
 /** Placeholder replaced per render so mask ids never collide across nodes. */
 export const SYMBOL_MASK_ID = '__SYMBOL_MASK__'
 
+export const DEFAULT_SYMBOL_SCALE = 1
+export const MIN_SYMBOL_SCALE = 0.5
+export const MAX_SYMBOL_SCALE = 2
+export const SYMBOL_SCALE_STEP = 0.05
+
+export function normalizeSymbolScale(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_SYMBOL_SCALE
+  const clamped = Math.min(MAX_SYMBOL_SCALE, Math.max(MIN_SYMBOL_SCALE, value))
+  return Number((Math.round(clamped / SYMBOL_SCALE_STEP) * SYMBOL_SCALE_STEP).toFixed(2))
+}
+
 export function createCustomSymbolId() {
   return `cs-${crypto.randomUUID().slice(0, 8)}`
 }
@@ -395,6 +406,10 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   }
   const color = parseSymbolColor(raw.color)
   if (color) symbol.color = color
+  if (raw.scale != null) {
+    const scale = normalizeSymbolScale(raw.scale)
+    if (scale !== DEFAULT_SYMBOL_SCALE) symbol.scale = scale
+  }
   return symbol
 }
 
