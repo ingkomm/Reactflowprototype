@@ -82,8 +82,8 @@ export type TreeWorkspaceProps = {
   onPaneClick: () => void
   onNodeClick: NodeMouseHandler
   onNodeContextMenu?: NodeMouseHandler
-  pinnedVideoNodeId: string | null
-  onClosePinnedVideo: () => void
+  pinnedVideoNodeIds: string[]
+  onClosePinnedVideo: (nodeId: string) => void
   onNodeDragStart: OnNodeDrag<PassiveFlowNode>
   onNodeDrag: OnNodeDrag<PassiveFlowNode>
   onNodeDragStop: OnNodeDrag<PassiveFlowNode>
@@ -136,7 +136,7 @@ export function TreeWorkspace({
   onPaneClick,
   onNodeClick,
   onNodeContextMenu,
-  pinnedVideoNodeId,
+  pinnedVideoNodeIds,
   onClosePinnedVideo,
   onNodeDragStart,
   onNodeDrag,
@@ -230,7 +230,7 @@ export function TreeWorkspace({
       <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
         <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
           <VoidHighlightProvider enabled={voidHighlightEnabled}>
-            <VideoPinProvider pinnedNodeId={pinnedVideoNodeId}>
+            <VideoPinProvider pinnedNodeIds={pinnedVideoNodeIds}>
             <ReactFlow
               nodes={flowNodes}
               edges={edges}
@@ -281,11 +281,15 @@ export function TreeWorkspace({
                 maskColor="rgba(8, 12, 16, 0.7)"
               />
             </ReactFlow>
-            <PinnedVideoPopup
-              pinnedNodeId={pinnedVideoNodeId}
-              containerRef={canvasWrapperRef}
-              onClose={onClosePinnedVideo}
-            />
+            {pinnedVideoNodeIds.map((nodeId, index) => (
+              <PinnedVideoPopup
+                key={nodeId}
+                pinnedNodeId={nodeId}
+                stackIndex={index}
+                containerRef={canvasWrapperRef}
+                onClose={onClosePinnedVideo}
+              />
+            ))}
             </VideoPinProvider>
           </VoidHighlightProvider>
         </PowerProvider>

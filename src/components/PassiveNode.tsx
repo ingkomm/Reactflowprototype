@@ -31,7 +31,7 @@ import { canTransmitPower } from '../power'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { useCustomSymbols } from '../CustomSymbolContext'
-import { usePinnedVideoNodeId } from '../VideoPinContext'
+import { useIsVideoPinned } from '../VideoPinContext'
 import {
   TrainingBands,
   labelBelowBandOffset,
@@ -50,7 +50,7 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { customSymbols, getCustomSymbol, resolveSymbolColor } = useCustomSymbols()
-  const pinnedVideoNodeId = usePinnedVideoNodeId()
+  const pinnedVideo = useIsVideoPinned(id)
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const zoom = useStore((s) => s.transform[2])
   const voidHighlight = useVoidHighlight()
@@ -143,7 +143,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }${customSymbol ? ' has-custom-symbol' : ''}${
-        pinnedVideoNodeId === id ? ' is-video-pinned' : ''
+        pinnedVideo ? ' is-video-pinned' : ''
       }${connectGlowClass}`}
       style={
         {

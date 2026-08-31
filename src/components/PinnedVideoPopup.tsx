@@ -17,9 +17,10 @@ import { VideoEmbed } from './VideoEmbed'
 import './PinnedVideoPopup.css'
 
 type Props = {
-  pinnedNodeId: string | null
+  pinnedNodeId: string
+  stackIndex: number
   containerRef: RefObject<HTMLElement | null>
-  onClose: () => void
+  onClose: (nodeId: string) => void
 }
 
 const DEFAULT_PLAYER_WIDTH = 320
@@ -29,12 +30,17 @@ const ASPECT = 16 / 9
 
 type DragMode = 'move' | 'resize' | null
 
-export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props) {
+export function PinnedVideoPopup({
+  pinnedNodeId,
+  stackIndex,
+  containerRef,
+  onClose,
+}: Props) {
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const transform = useStore((s) => s.transform)
   const { flowToScreenPosition } = useReactFlow()
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [offset, setOffset] = useState({ x: stackIndex * 28, y: stackIndex * 28 })
   const [playerWidth, setPlayerWidth] = useState(DEFAULT_PLAYER_WIDTH)
   const dragRef = useRef<{
     mode: DragMode
@@ -46,7 +52,7 @@ export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props)
   } | null>(null)
 
   const node = useMemo(
-    () => (pinnedNodeId ? nodes.find((n) => n.id === pinnedNodeId) ?? null : null),
+    () => nodes.find((n) => n.id === pinnedNodeId) ?? null,
     [nodes, pinnedNodeId],
   )
 
@@ -55,9 +61,9 @@ export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props)
 
   useEffect(() => {
     setActiveId(null)
-    setOffset({ x: 0, y: 0 })
+    setOffset({ x: stackIndex * 28, y: stackIndex * 28 })
     setPlayerWidth(DEFAULT_PLAYER_WIDTH)
-  }, [pinnedNodeId])
+  }, [pinnedNodeId, stackIndex])
 
   const active = useMemo(() => {
     if (!videos.length) return null
@@ -74,7 +80,6 @@ export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props)
       return
     }
     if (drag.mode === 'resize') {
-      // Keep 16:9 by sizing from width; vertical drag also contributes via average.
       const delta = Math.max(dx, dy * ASPECT)
       const next = Math.min(
         MAX_PLAYER_WIDTH,
@@ -110,7 +115,7 @@ export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props)
 
   useEffect(() => () => endDrag(), [endDrag])
 
-  if (!node || !data || !pinnedNodeId) return null
+  if (!node || !data) return null
 
   const size = NODE_SIZE[data.kind] ?? 52
   void transform
@@ -152,6 +157,7 @@ export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props)
             left: popupLeft,
             top: popupTop,
             width: playerWidth + 24,
+            zIndex: 40 + stackIndex,
             '--player-width': `${playerWidth}px`,
             '--player-height': `${playerHeight}px`,
           } as CSSProperties
@@ -170,7 +176,7 @@ export function PinnedVideoPopup({ pinnedNodeId, containerRef, onClose }: Props)
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={onClose}
+            onClick={() => onClose(pinnedNodeId)}
             onPointerDown={(event) => event.stopPropagation()}
             aria-label="핀 해제"
           >

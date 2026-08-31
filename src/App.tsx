@@ -232,7 +232,7 @@ export default function App() {
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
-  const [pinnedVideoNodeId, setPinnedVideoNodeId] = useState<string | null>(null)
+  const [pinnedVideoNodeIds, setPinnedVideoNodeIds] = useState<string[]>([])
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
   const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
@@ -1181,7 +1181,7 @@ export default function App() {
     (nodeId: string) => {
       if (nodeId === INITIAL_NODE_ID) return
       commit()
-      setPinnedVideoNodeId((cur) => (cur === nodeId ? null : cur))
+      setPinnedVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
       setNodes((nds) =>
         removeNodesAndRelayout(nds, [nodeId], selectedIdRef.current),
       )
@@ -1209,12 +1209,14 @@ export default function App() {
     event.preventDefault()
     const data = node.data as PassiveNodeData
     if (!canPinNodeVideos(data.kind)) return
-    setPinnedVideoNodeId((cur) => (cur === node.id ? null : node.id))
+    setPinnedVideoNodeIds((cur) =>
+      cur.includes(node.id) ? cur.filter((id) => id !== node.id) : [...cur, node.id],
+    )
     setSelectedId(node.id)
   }, [])
 
-  const onClosePinnedVideo = useCallback(() => {
-    setPinnedVideoNodeId(null)
+  const onClosePinnedVideo = useCallback((nodeId: string) => {
+    setPinnedVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
   }, [])
 
   const onNodeDragStart = useCallback(
@@ -1495,7 +1497,7 @@ export default function App() {
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
               onNodeContextMenu={onNodeContextMenu}
-              pinnedVideoNodeId={pinnedVideoNodeId}
+              pinnedVideoNodeIds={pinnedVideoNodeIds}
               onClosePinnedVideo={onClosePinnedVideo}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}

@@ -6,6 +6,10 @@
   overflow: hidden;
 }
 
+.pinned-video-popup {
+  z-index: 1;
+}
+
 .pinned-video-layer__links {
   position: absolute;
   inset: 0;
