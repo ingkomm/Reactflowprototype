@@ -197,6 +197,8 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   if (optionalNumber('orbitSlot') != null) data.orbitSlot = optionalNumber('orbitSlot')
   if (optionalBool('voidPassing') != null) data.voidPassing = optionalBool('voidPassing')
   if (optionalBool('connectEnabled') != null) data.connectEnabled = optionalBool('connectEnabled')
+  const slot = optionalNumber('initialSlot')
+  if (slot != null && slot >= 0 && slot <= 2) data.initialSlot = Math.floor(slot) as 0 | 1 | 2
   if (value.customIconId === null || typeof value.customIconId === 'string') {
     // Legacy dot icon — ignored.
   }

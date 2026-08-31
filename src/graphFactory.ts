@@ -26,6 +26,7 @@ export function createPassiveData(
       | 'orbitTier'
       | 'orbitSlot'
       | 'voidPassing'
+      | 'initialSlot'
       | 'connectEnabled'
       | 'symbolId'
       | 'stages'
@@ -59,7 +60,10 @@ export function createPassiveData(
         : resolvedKind === 'initial'
           ? {}
           : resolvedKind === 'connect'
-            ? { connectEnabled: extras.connectEnabled ?? true }
+            ? {
+                connectEnabled: extras.connectEnabled ?? true,
+                initialSlot: extras.initialSlot,
+              }
             : {
                 masteryId: extras.masteryId ?? null,
                 orbitTier: extras.orbitTier ?? 1,

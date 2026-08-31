@@ -1,3 +1,5 @@
+export type InitialConnectSlot = 0 | 1 | 2
+
 export type PassiveKind =
   | 'initial'
   | 'connect'
@@ -139,6 +141,8 @@ export type PassiveNodeData = {
   orbitSlot?: number
   /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
   voidPassing?: boolean
+  /** Connect only: socket index on the Initial hub (0=top, 1=bottom-right, 2=bottom-left). */
+  initialSlot?: InitialConnectSlot
   /** Connect only: circuit breaker — when false, blocks power from Initial. */
   connectEnabled?: boolean
   /** Optional user SVG symbol id (overrides library icon when set). */

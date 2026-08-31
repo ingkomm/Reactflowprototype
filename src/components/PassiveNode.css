@@ -175,21 +175,57 @@
 }
 
 .passive-node--initial {
-  --node-size: 56px;
+  --node-size: 120px;
   --ring: #ffe066;
-  --core: #2a2418;
+  --core: #1a1510;
   --accent: #ffe066;
   --glow: rgba(255, 224, 102, 0.45);
 }
 
 .passive-node--initial .passive-node__ring {
+  border: 2px solid color-mix(in srgb, #ffe066 75%, white);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.06), transparent 48%),
+    radial-gradient(circle at 50% 50%, #0a0e12 0%, #121820 72%, #1a2030 100%);
   box-shadow:
-    0 0 20px color-mix(in srgb, #ffe066 55%, transparent),
-    0 0 40px color-mix(in srgb, #ffe066 25%, transparent);
+    inset 0 0 40px rgba(0, 0, 0, 0.55),
+    0 0 24px color-mix(in srgb, #ffe066 45%, transparent),
+    0 0 48px color-mix(in srgb, #ffe066 18%, transparent);
+}
+
+.passive-node__initial-arena {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, #ffe066 22%, transparent);
+  background: radial-gradient(circle at 50% 45%, rgba(255, 224, 102, 0.04), transparent 70%);
+  pointer-events: none;
+}
+
+.passive-node__initial-socket {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #ffe066 55%, transparent);
+  background: color-mix(in srgb, #0a0e12 80%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, #ffe066 35%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.passive-node__title--initial {
+  bottom: 8px;
+  top: auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 .passive-node--connect {
-  --node-size: 28px;
+  --node-size: 22px;
   --ring: transparent;
   --core: transparent;
 }

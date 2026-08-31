@@ -38,6 +38,7 @@ import {
   masteryNeonOuterRadius,
   outermostBandRadius,
 } from './TrainingBands'
+import { INITIAL_CONNECT_SLOT_COUNT, initialSocketOffset } from '../initialHub'
 import { useVoidHighlight } from '../VoidHighlightContext'
 import './PassiveNode.css'
 
@@ -226,7 +227,23 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       )}
 
       <div className="passive-node__ring" aria-hidden>
-        {!isStealth && !isConnectNode && (
+        {isInitialNode && (
+          <>
+            <div className="passive-node__initial-arena" />
+            {Array.from({ length: INITIAL_CONNECT_SLOT_COUNT }, (_, slot) => {
+              const pos = initialSocketOffset(slot as 0 | 1 | 2)
+              return (
+                <span
+                  key={slot}
+                  className="passive-node__initial-socket"
+                  style={{ left: pos.left, top: pos.top }}
+                  aria-hidden
+                />
+              )
+            })}
+          </>
+        )}
+        {!isStealth && !isConnectNode && !isInitialNode && (
           customSymbol ? (
             <CustomSymbolGlyph symbol={customSymbol} className="passive-node__glyph passive-node__glyph--symbol" />
           ) : (
@@ -237,7 +254,8 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       <div className="passive-node__hit node-drag-handle" />
 
-      <p className="passive-node__title">{data.label}</p>
+      {!isInitialNode && <p className="passive-node__title">{data.label}</p>}
+      {isInitialNode && <p className="passive-node__title passive-node__title--initial">{data.label}</p>}
 
       {!isStealth && (
         <div className="passive-node__tooltip" role="tooltip">

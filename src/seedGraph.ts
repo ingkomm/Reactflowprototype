@@ -2,6 +2,7 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { OrbitTier } from './types'
 import { INITIAL_NODE_ID } from './types'
+import { connectPositionForInitialHub } from './initialHub'
 import { notableStagesFromTotal } from './stage'
 import {
   layoutMasteryOrbit,
@@ -18,8 +19,12 @@ export { INITIAL_NODE_ID }
 
 export const DANCE_MASTERY_ID = 'mastery-dance'
 export const GYM_MASTERY_ID = 'mastery-gym'
-export const CONNECT_DANCE_ID = 'connect-dance'
-export const CONNECT_GYM_ID = 'connect-gym'
+/** Initial hub sockets: top → dance, bottom-right → gym, bottom-left spare. */
+export const CONNECT_TOP_ID = 'connect-top'
+export const CONNECT_BR_ID = 'connect-br'
+export const CONNECT_BL_ID = 'connect-bl'
+
+const INITIAL_POSITION = { x: 24, y: 240 }
 
 const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
   1: ['notable-hiphop', 'notable-kpop', 'small-basic'],
@@ -44,34 +49,48 @@ function buildSeedNodes(): PassiveFlowNode[] {
     {
       id: INITIAL_NODE_ID,
       type: 'passive',
-      position: { x: 20, y: 300 },
+      position: INITIAL_POSITION,
       dragHandle: '.node-drag-handle',
+      draggable: true,
       data: createPassiveData('initial', 'Initial', { stages: [], symbolId: 'default' }),
     },
     {
-      id: CONNECT_DANCE_ID,
+      id: CONNECT_TOP_ID,
       type: 'passive',
-      position: { x: 120, y: 280 },
+      position: connectPositionForInitialHub(INITIAL_POSITION, 0),
       dragHandle: '.node-drag-handle',
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
+        initialSlot: 0,
         symbolId: 'default',
       }),
     },
     {
-      id: CONNECT_GYM_ID,
+      id: CONNECT_BR_ID,
       type: 'passive',
-      position: { x: 120, y: 360 },
+      position: connectPositionForInitialHub(INITIAL_POSITION, 1),
       dragHandle: '.node-drag-handle',
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
+        initialSlot: 1,
+        symbolId: 'default',
+      }),
+    },
+    {
+      id: CONNECT_BL_ID,
+      type: 'passive',
+      position: connectPositionForInitialHub(INITIAL_POSITION, 2),
+      dragHandle: '.node-drag-handle',
+      data: createPassiveData('connect', 'Connect', {
+        connectEnabled: true,
+        initialSlot: 2,
         symbolId: 'default',
       }),
     },
     {
       id: DANCE_MASTERY_ID,
       type: 'passive',
-      position: { x: 260, y: 300 },
+      position: { x: 280, y: 240 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('mastery', '댄스', {
         stages: [],
@@ -152,7 +171,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
     {
       id: GYM_MASTERY_ID,
       type: 'passive',
-      position: { x: 760, y: 300 },
+      position: { x: 780, y: 240 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('mastery', '운동', {
         stages: [],
@@ -244,16 +263,16 @@ function buildSeedNodes(): PassiveFlowNode[] {
 
 export const SEED_NODES = buildSeedNodes()
 
-/** Initial → Connect → Small; orbit ring links among spaced satellites. */
+/** Initial hub → 3 Connect sockets; trees branch from top & bottom-right Connect. */
 export const SEED_EDGES: Edge[] = [
-  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_DANCE_ID),
-  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_GYM_ID),
-  passiveLinkEdge(CONNECT_DANCE_ID, 'small-basic'),
-  passiveLinkEdge(CONNECT_GYM_ID, 'small-legs'),
+  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_TOP_ID),
+  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID),
+  passiveLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID),
+  passiveLinkEdge(CONNECT_TOP_ID, 'small-basic'),
+  passiveLinkEdge(CONNECT_BR_ID, 'small-legs'),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(gymOrbitOrder, GYM_MASTERY_ID),
 ]
 
-/** Default node selected on first load. */
 export const DEFAULT_SELECTED_NODE_ID = DANCE_MASTERY_ID

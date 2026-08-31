@@ -12,7 +12,7 @@ export function encodePalettePayload(payload: NodeTemplatePayload): string {
   return JSON.stringify(payload)
 }
 
-export const PALETTE_KINDS = new Set<PassiveKind>(['small', 'notable', 'mastery'])
+export const PALETTE_KINDS = new Set<PassiveKind>(['small', 'notable', 'mastery', 'connect'])
 
 export function decodePalettePayload(raw: string): NodeTemplatePayload | null {
   try {
@@ -27,4 +27,4 @@ export function decodePalettePayload(raw: string): NodeTemplatePayload | null {
 }
 
 /** Kinds with expandable symbol lists in the left Library tree. */
-export const LIBRARY_NODE_KINDS = ['mastery', 'notable', 'small'] as const satisfies PassiveKind[]
+export const LIBRARY_NODE_KINDS = ['mastery', 'notable', 'small', 'connect'] as const satisfies PassiveKind[]

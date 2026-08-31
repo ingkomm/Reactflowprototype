@@ -4,7 +4,7 @@ import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
 import { kindUsesTrainingBands } from './stage'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
-  initial: 44,
+  initial: 120,
   connect: 22,
   small: 36,
   notable: 52,

@@ -234,6 +234,16 @@
   height: 70%;
 }
 
+.class-pick__icon--default {
+  background: #0a0e14;
+  border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+}
+
+.class-pick__icon--custom {
+  border-radius: 8px;
+  color: #e8eef3;
+}
+
 .class-pick__label {
   font-size: 0.72rem;
   line-height: 1.2;

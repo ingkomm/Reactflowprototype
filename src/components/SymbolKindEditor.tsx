@@ -1,17 +1,17 @@
 import { useRef } from 'react'
 import type { CustomSymbol } from '../types'
-import { DEFAULT_SYMBOL_ID, LIBRARY_KIND_LABEL, type LibraryKind } from '../librarySymbols'
+import { DEFAULT_SYMBOL_ID, LIBRARY_KIND_LABEL, type SymbolEditorKind } from '../librarySymbols'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import './SymbolKindEditor.css'
 
 type Props = {
-  kind: LibraryKind
+  kind: SymbolEditorKind
   open: boolean
   customSymbols: CustomSymbol[]
   importError: string | null
   onClose: () => void
-  onImportSvg: (file: File, kind: LibraryKind) => void
+  onImportSvg: (file: File, kind: SymbolEditorKind) => void
   onDeleteSymbol: (symbolId: string) => void
 }
 

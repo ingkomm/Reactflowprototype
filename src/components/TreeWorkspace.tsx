@@ -31,7 +31,7 @@ import { VoidHighlightProvider } from '../VoidHighlightContext'
 import { OrbitRotateController } from './OrbitRotateController'
 import { MiniMapCircleNode } from './MiniMapCircleNode'
 import { ZoomKeyboardController } from './ZoomKeyboardController'
-import type { LibraryKind } from '../librarySymbols'
+import type { SymbolEditorKind } from '../librarySymbols'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, VideoMedia } from '../types'
 import { DEFAULT_ICON_BY_KIND } from '../types'
 import type { NodeTemplatePayload } from '../nodeTemplate'
@@ -70,7 +70,7 @@ export type TreeWorkspaceProps = {
   orbitMembers: OrbitMember[]
   selectedLinks: SelectedLink[]
   linkCandidates: LinkCandidate[]
-  onOpenSymbolEditor: (kind: LibraryKind) => void
+  onOpenSymbolEditor: (kind: SymbolEditorKind) => void
   onCreateFromTemplate: (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => void
   onNodesChange: OnNodesChange<PassiveFlowNode>
   onEdgesChange: OnEdgesChange

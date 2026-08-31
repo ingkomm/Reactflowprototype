@@ -2,14 +2,19 @@ import type { CustomSymbol, PassiveKind } from './types'
 
 export const DEFAULT_SYMBOL_ID = 'default'
 
-export const LIBRARY_KINDS = ['mastery', 'notable', 'small'] as const satisfies PassiveKind[]
+export const LIBRARY_KINDS = ['mastery', 'notable', 'small', 'connect'] as const satisfies PassiveKind[]
+
+/** Kinds that support Import SVG symbol editor (Connect uses default socket only). */
+export const SYMBOL_EDITOR_KINDS = ['mastery', 'notable', 'small'] as const satisfies PassiveKind[]
 
 export type LibraryKind = (typeof LIBRARY_KINDS)[number]
+export type SymbolEditorKind = (typeof SYMBOL_EDITOR_KINDS)[number]
 
 export const LIBRARY_KIND_LABEL: Record<LibraryKind, string> = {
   mastery: 'Mastery',
   notable: 'Notable',
   small: 'Small',
+  connect: 'Connect',
 }
 
 export const DEFAULT_SYMBOL_ID_BY_KIND: Record<PassiveKind, string> = {

@@ -16,7 +16,7 @@ import { TreeWorkspace } from './components/TreeWorkspace'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
-import { normalizeSymbolId, type LibraryKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
+import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { CustomSymbolProvider } from './CustomSymbolContext'
 import { sanitizeSvgFile } from './customSymbol'
 import { SymbolKindEditor } from './components/SymbolKindEditor'
@@ -207,7 +207,7 @@ export default function App() {
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
-  const [symbolEditorKind, setSymbolEditorKind] = useState<LibraryKind | null>(null)
+  const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -912,6 +912,7 @@ export default function App() {
                     ? {
                         connectEnabled:
                           prev.kind === 'connect' ? (data.connectEnabled ?? true) : true,
+                        initialSlot: prev.kind === 'connect' ? data.initialSlot : undefined,
                       }
                     : {
                       masteryId:
@@ -988,7 +989,7 @@ export default function App() {
     [commit, nodes, setEdges, setNodes, customSymbols, stack],
   )
 
-  const handleImportSvg = useCallback(async (file: File, kind: LibraryKind) => {
+  const handleImportSvg = useCallback(async (file: File, kind: SymbolEditorKind) => {
     let text: string
     try {
       text = await file.text()

@@ -48,6 +48,20 @@ export function DefaultNodeShape({ kind, powered = true, className, style, size 
     )
   }
 
+  if (resolved === 'connect') {
+    return (
+      <svg
+        className={`default-node-shape default-node-shape--connect${className ? ` ${className}` : ''}`}
+        style={dimStyle}
+        viewBox="0 0 100 100"
+        aria-hidden
+      >
+        <circle cx="50" cy="50" r="28" fill={powered ? '#42e890' : '#6a7580'} opacity={powered ? 0.95 : 0.7} />
+        <circle cx="50" cy="50" r="18" fill={powered ? '#b4ffd2' : '#4a5560'} opacity={0.85} />
+      </svg>
+    )
+  }
+
   if (resolved === 'small') {
     return (
       <svg

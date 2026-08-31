@@ -4,7 +4,9 @@ import {
   DEFAULT_SYMBOL_ID,
   LIBRARY_KINDS,
   LIBRARY_KIND_LABEL,
+  SYMBOL_EDITOR_KINDS,
   type LibraryKind,
+  type SymbolEditorKind,
 } from '../librarySymbols'
 import { NODE_SIZE } from '../orbit'
 import { DefaultNodeShape } from './DefaultNodeShape'
@@ -12,7 +14,7 @@ import './NodeLibrary.css'
 
 type Props = {
   onPlaceTemplate: (template: NodeTemplatePayload) => void
-  onOpenSymbolEditor: (kind: LibraryKind) => void
+  onOpenSymbolEditor: (kind: SymbolEditorKind) => void
 }
 
 function beginPaletteDrag(event: React.DragEvent, template: NodeTemplatePayload) {
@@ -31,6 +33,10 @@ function SpannerIcon() {
   )
 }
 
+function hasSymbolEditor(kind: LibraryKind): kind is SymbolEditorKind {
+  return (SYMBOL_EDITOR_KINDS as readonly LibraryKind[]).includes(kind)
+}
+
 export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
   return (
     <aside className="node-library" aria-label="Node library">
@@ -43,6 +49,12 @@ export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
             kind,
           }
           const previewSize = Math.min(NODE_SIZE[kind], 34)
+          const previewClass =
+            kind === 'notable'
+              ? ' node-library__preview--hex'
+              : kind === 'connect'
+                ? ' node-library__preview--connect'
+                : ''
           return (
             <li key={kind} className="node-library__row">
               <button
@@ -53,22 +65,24 @@ export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
                 onClick={() => onPlaceTemplate(template)}
                 title={`${LIBRARY_KIND_LABEL[kind]} Default — 클릭: 중앙 추가 · 드래그: 위치 지정`}
               >
-                <span
-                  className={`node-library__preview${kind === 'notable' ? ' node-library__preview--hex' : ''}`}
-                >
+                <span className={`node-library__preview${previewClass}`}>
                   <DefaultNodeShape kind={kind} size={previewSize} />
                 </span>
                 <span className="node-library__label">{LIBRARY_KIND_LABEL[kind]}</span>
               </button>
-              <button
-                type="button"
-                className="node-library__settings btn btn--icon"
-                aria-label={`${LIBRARY_KIND_LABEL[kind]} 심볼 설정`}
-                title="심볼 커스터마이징"
-                onClick={() => onOpenSymbolEditor(kind)}
-              >
-                <SpannerIcon />
-              </button>
+              {hasSymbolEditor(kind) ? (
+                <button
+                  type="button"
+                  className="node-library__settings btn btn--icon"
+                  aria-label={`${LIBRARY_KIND_LABEL[kind]} 심볼 설정`}
+                  title="심볼 커스터마이징"
+                  onClick={() => onOpenSymbolEditor(kind)}
+                >
+                  <SpannerIcon />
+                </button>
+              ) : (
+                <span className="node-library__settings-spacer" aria-hidden />
+              )}
             </li>
           )
         })}
