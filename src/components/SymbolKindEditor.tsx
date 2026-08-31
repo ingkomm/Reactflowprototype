@@ -59,8 +59,7 @@ export function SymbolKindEditor({
         </header>
 
         <p className="symbol-kind-editor__hint">
-          Default는 원형 기본 도형입니다. 색상을 고르거나 Import SVG로 {LIBRARY_KIND_LABEL[kind]}{' '}
-          전용 심볼을 추가할 수 있습니다.
+          Default는 꽉 채운 원형입니다. Import SVG는 단색으로 변환되어 선택한 색상이 적용됩니다.
         </p>
 
         <ul className="symbol-kind-editor__list">

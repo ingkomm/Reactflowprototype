@@ -403,9 +403,7 @@
 
 .passive-node.is-unpowered .passive-node__ring {
   box-shadow: none;
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.04), transparent 42%),
-    #151a20;
+  background: color-mix(in srgb, var(--icon-color) 45%, #151a20);
 }
 
 .passive-node.is-unpowered .passive-node__glyph {
@@ -539,35 +537,13 @@
     color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
 }
 
-.passive-node--notable .passive-node__ring {
-  border-radius: 0;
-  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
-}
-
-.passive-node--notable .passive-node__hit {
-  border-radius: 0;
-  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
-}
-
-.passive-node__glyph--default {
-  width: 100%;
-  height: 100%;
-}
-
-.passive-node--small .passive-node__glyph--default {
-  width: 78%;
-  height: 78%;
-}
-
 .passive-node__ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   border: none;
   box-shadow: 0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.1), transparent 42%),
-    color-mix(in srgb, var(--icon-color) 28%, #0d1218);
+  background: var(--icon-color);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -576,13 +552,29 @@
   color: var(--icon-color);
 }
 
+/* Custom SVG: dark filled disc + monochrome icon tinted by selected color */
+.passive-node.has-custom-symbol .passive-node__ring {
+  background: color-mix(in srgb, var(--icon-color) 22%, #0d1218);
+}
+
 .passive-node__glyph {
-  width: 78%;
-  height: 78%;
+  width: 68%;
+  height: 68%;
   display: block;
+  color: inherit;
+  fill: currentColor;
+}
+
+.passive-node__glyph--default {
+  /* Default = solid face circle; ring already provides the filled disc. */
+  display: none;
 }
 
 .passive-node__glyph--symbol {
+  width: 62%;
+  height: 62%;
+  fill: currentColor;
+  color: var(--icon-color);
   object-fit: contain;
 }
 

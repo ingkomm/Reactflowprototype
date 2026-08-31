@@ -140,7 +140,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         masteryNeonLit ? ' is-mastery-powered' : ''
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
-      }${connectGlowClass}`}
+      }${customSymbol ? ' has-custom-symbol' : ''}${connectGlowClass}`}
       style={
         {
           '--node-size': `${nodeSize}px`,
@@ -267,7 +267,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         {isInitialNode && <div className="passive-node__initial-arena" />}
         {!isStealth && !isConnectNode && !isInitialNode && (
           customSymbol ? (
-            <CustomSymbolGlyph symbol={customSymbol} className="passive-node__glyph passive-node__glyph--symbol" />
+            <CustomSymbolGlyph
+              symbol={customSymbol}
+              className="passive-node__glyph passive-node__glyph--symbol"
+            />
           ) : (
             <DefaultNodeShape
               kind={data.kind}

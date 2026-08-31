@@ -4,8 +4,6 @@
   height: 100%;
 }
 
-.default-node-shape--mastery,
-.default-node-shape--notable,
-.default-node-shape--small {
+.default-node-shape--circle {
   border-radius: 50%;
 }

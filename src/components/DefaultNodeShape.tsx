@@ -6,7 +6,7 @@ import './DefaultNodeShape.css'
 type Props = {
   kind: PassiveKind
   powered?: boolean
-  /** Symbol tint for default circle glyphs. */
+  /** Symbol tint for filled circle glyphs. */
   color?: string
   className?: string
   style?: CSSProperties
@@ -16,7 +16,7 @@ type Props = {
 
 const UNPOWERED_FILL = '#6a7580'
 
-/** Built-in default glyphs: mastery / notable / small = filled circles (Connect = socket). */
+/** Built-in defaults: mastery / notable / small = solid filled circles. Connect = socket. */
 export function DefaultNodeShape({
   kind,
   powered = true,
@@ -50,17 +50,14 @@ export function DefaultNodeShape({
     )
   }
 
-  const radius =
-    resolved === 'mastery' ? 46 : resolved === 'notable' ? 46 : resolved === 'small' ? 32 : 36
-
   return (
     <svg
-      className={`default-node-shape default-node-shape--${resolved}${className ? ` ${className}` : ''}`}
+      className={`default-node-shape default-node-shape--circle${className ? ` ${className}` : ''}`}
       style={dimStyle}
       viewBox="0 0 100 100"
       aria-hidden
     >
-      <circle cx="50" cy="50" r={radius} fill={fill} />
+      <circle cx="50" cy="50" r="50" fill={fill} />
     </svg>
   )
 }

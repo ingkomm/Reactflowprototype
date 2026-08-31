@@ -4,12 +4,14 @@ import { sanitizeSvgFile, validateCustomSymbol } from './customSymbol'
 const SAMPLE = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#D9730D"/></svg>`
 
 describe('customSymbol', () => {
-  it('imports svg with viewBox', () => {
+  it('imports svg with viewBox and converts paints to currentColor', () => {
     const result = sanitizeSvgFile(SAMPLE, 'Circle')
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.symbol.viewBox).toBe('0 0 24 24')
     expect(result.symbol.markup).toContain('circle')
+    expect(result.symbol.markup).toContain('currentColor')
+    expect(result.symbol.markup.toLowerCase()).not.toContain('#d9730d')
   })
 
   it('rejects svg without viewBox', () => {
@@ -25,6 +27,18 @@ describe('customSymbol', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.symbol.markup.toLowerCase()).not.toContain('script')
+  })
+
+  it('keeps none fills while mono-converting other paints', () => {
+    const result = sanitizeSvgFile(
+      `<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2l4 8H8l4-8z" fill="#ff0000" stroke="#00ff00"/></svg>`,
+      'Star',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.symbol.markup).toContain('fill="none"')
+    expect(result.symbol.markup).toContain('fill="currentColor"')
+    expect(result.symbol.markup).toContain('stroke="currentColor"')
   })
 
   it('validates stored symbols', () => {

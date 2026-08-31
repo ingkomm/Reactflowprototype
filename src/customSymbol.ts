@@ -4,6 +4,8 @@ const BLOCKED_TAG = /<\/?(script|foreignObject|iframe|object|embed|use)\b[^>]*>/
 const EVENT_ATTR = /\s(on[a-z]+|formaction|xlink:href|href)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi
 const EXTERNAL_REF = /\s(xlink:)?href\s*=\s*("|')?(https?:|javascript:|data:)/gi
 
+const KEEP_PAINT = /^(none|transparent|currentcolor|inherit|url\()/i
+
 export function createCustomSymbolId() {
   return `cs-${crypto.randomUUID().slice(0, 8)}`
 }
@@ -34,6 +36,66 @@ function sanitizeInnerMarkup(markup: string): string {
   return next.trim()
 }
 
+function unwrapAttrValue(raw: string): string {
+  const trimmed = raw.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim()
+  }
+  return trimmed
+}
+
+function shouldKeepPaint(value: string): boolean {
+  return KEEP_PAINT.test(value.trim())
+}
+
+function rewriteStylePaint(styleValue: string): string {
+  return styleValue
+    .split(';')
+    .map((decl) => decl.trim())
+    .filter(Boolean)
+    .map((decl) => {
+      const colon = decl.indexOf(':')
+      if (colon < 0) return decl
+      const prop = decl.slice(0, colon).trim().toLowerCase()
+      const value = decl.slice(colon + 1).trim()
+      if (prop === 'fill' || prop === 'stroke' || prop === 'stop-color' || prop === 'flood-color') {
+        if (shouldKeepPaint(value)) return `${prop}: ${value}`
+        return `${prop}: currentColor`
+      }
+      if (prop === 'color') return 'color: currentColor'
+      return decl
+    })
+    .join('; ')
+}
+
+/**
+ * Replace hardcoded paints with currentColor so symbol tinting works.
+ * Preserves none / transparent / url(...) paints.
+ */
+export function toMonochromeMarkup(markup: string): string {
+  let next = markup
+
+  next = next.replace(/\s(fill|stroke|stop-color|flood-color)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (match, attr, raw) => {
+    const value = unwrapAttrValue(String(raw))
+    if (shouldKeepPaint(value)) return match
+    return ` ${attr}="currentColor"`
+  })
+
+  next = next.replace(/\sstyle\s*=\s*("([^"]*)"|'([^']*)')/gi, (_match, _full, doubleQuoted, singleQuoted) => {
+    const styleValue = doubleQuoted ?? singleQuoted ?? ''
+    const rewritten = rewriteStylePaint(styleValue)
+    return ` style="${rewritten}"`
+  })
+
+  next = next.replace(/\sfill-opacity\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, ' fill-opacity="1"')
+  next = next.replace(/\sstroke-opacity\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, ' stroke-opacity="1"')
+
+  return next.trim()
+}
+
 export function sanitizeSvgFile(svgText: string, name: string): SanitizeSvgResult {
   const trimmed = svgText.trim()
   if (!/<svg\b/i.test(trimmed)) {
@@ -55,7 +117,7 @@ export function sanitizeSvgFile(svgText: string, name: string): SanitizeSvgResul
     return { ok: false, message: 'SVG 내용을 읽을 수 없습니다.' }
   }
 
-  const markup = sanitizeInnerMarkup(inner)
+  const markup = toMonochromeMarkup(sanitizeInnerMarkup(inner))
   if (!markup) {
     return { ok: false, message: '표시 가능한 SVG 요소가 없습니다.' }
   }
@@ -84,7 +146,7 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   const view = parseViewBox(raw.viewBox)
   if (!view) return null
 
-  const markup = sanitizeInnerMarkup(raw.markup)
+  const markup = toMonochromeMarkup(sanitizeInnerMarkup(raw.markup))
   if (!markup) return null
 
   const symbol: CustomSymbol = {
