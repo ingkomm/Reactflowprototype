@@ -19,6 +19,38 @@ export type TrainingLog = {
   label: string
   count: number
   note?: string
+  /** Optional external video links for this practice session. */
+  media?: VideoMedia[]
+}
+
+/** External video reference (URL only — no binary upload). */
+export type VideoMedia = {
+  id: string
+  url: string
+  title?: string
+  note?: string
+  /** Parsed provider hint (e.g. youtube). */
+  provider?: 'youtube' | 'link'
+  /** Alias for provider-style classification. */
+  kind?: 'youtube' | 'external'
+}
+
+/** User-authored 16×16 dot icon (stored once, referenced by id on nodes). */
+export type CustomIcon = {
+  id: string
+  name: string
+  width: number
+  height: number
+  /** Row-major pixel colors; null = transparent. */
+  pixels: (string | null)[]
+}
+
+export const GRAPH_SCHEMA_VERSION = '0.1' as const
+export type GraphSchemaVersion = typeof GRAPH_SCHEMA_VERSION
+
+export type GraphDocumentSettings = {
+  gridSnapEnabled?: boolean
+  voidHighlightEnabled?: boolean
 }
 
 /** A progression stage with its own band, goal, and training log. */
@@ -109,6 +141,10 @@ export type PassiveNodeData = {
   voidPassing?: boolean
   /** Connect only: circuit breaker — when false, blocks power from Initial. */
   connectEnabled?: boolean
+  /** Optional user dot icon id (overrides class icon when set). */
+  customIconId?: string | null
+  /** Optional external videos attached to this node. */
+  media?: VideoMedia[]
 }
 
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {

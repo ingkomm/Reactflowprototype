@@ -398,6 +398,10 @@
   border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
 }
 
+.training-item__videos {
+  grid-column: 1 / -1;
+}
+
 .training-item__label {
   grid-area: label;
 }

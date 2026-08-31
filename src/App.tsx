@@ -24,7 +24,7 @@ import { OrbitEdge } from './components/OrbitEdge'
 import { Inspector } from './components/Inspector'
 import { PowerProvider } from './PowerContext'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial } from './power'
-import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from './types'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomIcon, VideoMedia } from './types'
 import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import {
   buildSeedClasses,
@@ -33,6 +33,15 @@ import {
 } from './passiveClass'
 import { PassiveClassProvider } from './PassiveClassContext'
 import { ClassManager } from './components/ClassManager'
+import { CustomIconManager } from './components/CustomIconManager'
+import { CustomIconProvider } from './CustomIconContext'
+import {
+  buildGraphDocument,
+  documentToFlowState,
+  downloadGraphDocument,
+  parseGraphDocumentJson,
+} from './graphDocument'
+import { createVideoMediaId } from './videoMedia'
 import { stagesForKind, uid as stageUid } from './stage'
 import { snapNodeTopLeft } from './grid'
 import { createPassiveData, passiveLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
@@ -91,11 +100,20 @@ type NodeClipboard = {
   position: { x: number; y: number }
 }
 
+function cloneMediaList(media?: VideoMedia[]): VideoMedia[] | undefined {
+  if (!media?.length) return undefined
+  return media.map((item) => ({ ...item, id: createVideoMediaId() }))
+}
+
 function cloneStagesWithNewIds(stages: StageData[]): StageData[] {
   return stages.map((stage) => ({
     ...stage,
     id: uid('stage'),
-    logs: stage.logs.map((log) => ({ ...log, id: uid('log') })),
+    logs: stage.logs.map((log) => ({
+      ...log,
+      id: uid('log'),
+      media: cloneMediaList(log.media),
+    })),
   }))
 }
 
@@ -124,6 +142,8 @@ function buildPastedNode(
     kind,
     stages,
     classId: source.classId,
+    customIconId: source.customIconId ?? null,
+    media: cloneMediaList(source.media),
     ...(isMasteryKind(kind)
       ? {
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
@@ -208,7 +228,11 @@ export default function App() {
   const [addKind, setAddKind] = useState<PassiveKind>('connect')
   const [inspectorWidth, setInspectorWidth] = useState(360)
   const [classes, setClasses] = useState<PassiveClass[]>(() => buildSeedClasses())
+  const [customIcons, setCustomIcons] = useState<CustomIcon[]>([])
   const [classManagerOpen, setClassManagerOpen] = useState(false)
+  const [customIconManagerOpen, setCustomIconManagerOpen] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
   const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
   const resizingInspector = useRef(false)
@@ -264,7 +288,7 @@ export default function App() {
     [],
   )
 
-  const { commit } = useGraphHistory({
+  const { commit, reset: resetHistory } = useGraphHistory({
     getState: () => stateRef.current,
     setState: (snap) => {
       setNodes(stack(snap.nodes))
@@ -1007,6 +1031,71 @@ export default function App() {
     [classes, setNodes, stack],
   )
 
+  const handleCustomIconsChange = useCallback(
+    (next: CustomIcon[]) => {
+      const removedIds = new Set(
+        customIcons.filter((icon) => !next.some((n) => n.id === icon.id)).map((icon) => icon.id),
+      )
+      setCustomIcons(next)
+      if (removedIds.size === 0) return
+      commit()
+      setNodes((nds) =>
+        stack(
+          nds.map((node) => {
+            const data = node.data as PassiveNodeData
+            if (!data.customIconId || !removedIds.has(data.customIconId)) return node
+            return { ...node, data: { ...data, customIconId: null } }
+          }),
+        ),
+      )
+    },
+    [commit, customIcons, setNodes, stack],
+  )
+
+  const handleExportJson = useCallback(() => {
+    const document = buildGraphDocument({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      classes,
+      customIcons,
+      settings: { gridSnapEnabled, voidHighlightEnabled },
+    })
+    downloadGraphDocument(document)
+    setImportError(null)
+  }, [classes, customIcons, gridSnapEnabled, voidHighlightEnabled])
+
+  const handleImportJson = useCallback(
+    async (file: File) => {
+      let text: string
+      try {
+        text = await file.text()
+      } catch {
+        setImportError('파일을 읽을 수 없습니다.')
+        return
+      }
+      const parsed = parseGraphDocumentJson(text)
+      if (!parsed.ok) {
+        setImportError(parsed.message)
+        return
+      }
+      const imported = documentToFlowState(parsed.document)
+      resetHistory()
+      setClasses(imported.classes)
+      setCustomIcons(imported.customIcons)
+      setNodes(stack(imported.nodes))
+      setEdges(sanitizeEdges(imported.nodes, imported.edges))
+      if (imported.settings.gridSnapEnabled != null) {
+        setGridSnapEnabled(imported.settings.gridSnapEnabled)
+      }
+      if (imported.settings.voidHighlightEnabled != null) {
+        setVoidHighlightEnabled(imported.settings.voidHighlightEnabled)
+      }
+      setSelectedId(imported.nodes[0]?.id ?? null)
+      setImportError(null)
+    },
+    [resetHistory, setEdges, setNodes, stack],
+  )
+
   const addNode = useCallback(() => {
     const id = uid(addKind)
     const offset = nodes.length * 18
@@ -1217,6 +1306,7 @@ export default function App() {
 
   return (
     <PassiveClassProvider classes={classes}>
+    <CustomIconProvider customIcons={customIcons}>
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar__brand">
@@ -1271,12 +1361,46 @@ export default function App() {
           <button
             type="button"
             className="btn"
+            onClick={() => setCustomIconManagerOpen(true)}
+          >
+            아이콘
+          </button>
+          <button type="button" className="btn" onClick={handleExportJson}>
+            JSON보내기
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => importInputRef.current?.click()}
+          >
+            JSON 불러오기
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void handleImportJson(file)
+            }}
+          />
+          <button
+            type="button"
+            className="btn"
             onClick={() => setClassManagerOpen(true)}
           >
             클래스
           </button>
         </div>
       </header>
+
+      {importError && (
+        <p className="import-error" role="alert">
+          {importError}
+        </p>
+      )}
 
       <main
         className="workspace"
@@ -1376,6 +1500,12 @@ export default function App() {
             onChangeClassId={(nodeId, classId) =>
               updateNodeData(nodeId, (d) => ({ ...d, classId }))
             }
+            onChangeCustomIconId={(nodeId, customIconId) =>
+              updateNodeData(nodeId, (d) => ({ ...d, customIconId }))
+            }
+            onChangeNodeMedia={(nodeId, media) =>
+              updateNodeData(nodeId, (d) => ({ ...d, media }))
+            }
             onChangeStages={(nodeId, stages) =>
               updateNodeData(nodeId, (d) => ({ ...d, stages }))
             }
@@ -1399,7 +1529,14 @@ export default function App() {
         onClose={() => setClassManagerOpen(false)}
         onChange={handleClassesChange}
       />
+      <CustomIconManager
+        open={customIconManagerOpen}
+        customIcons={customIcons}
+        onClose={() => setCustomIconManagerOpen(false)}
+        onChange={handleCustomIconsChange}
+      />
     </div>
+    </CustomIconProvider>
     </PassiveClassProvider>
   )
 }

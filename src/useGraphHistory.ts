@@ -63,6 +63,11 @@ export function useGraphHistory({ getState, setState }: Options) {
     })
   }, [getState, setState])
 
+  const reset = useCallback(() => {
+    pastRef.current = []
+    futureRef.current = []
+  }, [])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -88,5 +93,5 @@ export function useGraphHistory({ getState, setState }: Options) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [redo, undo])
 
-  return { commit, undo, redo, applyingRef }
+  return { commit, undo, redo, reset, applyingRef }
 }

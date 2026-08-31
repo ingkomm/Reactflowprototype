@@ -1,0 +1,124 @@
+.dot-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 8, 12, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.dot-editor {
+  width: min(520px, 100%);
+  max-height: min(92vh, 720px);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, #8fa0b0 28%, transparent);
+  border-radius: 14px;
+  background: #0b1118;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.dot-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dot-editor__head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.dot-editor__head p {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.dot-editor__close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dot-editor__tools {
+  display: grid;
+  gap: 10px;
+}
+
+.dot-editor__tool-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dot-editor__palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dot-editor__canvas-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.dot-editor__canvas {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, #8fa0b0 24%, transparent);
+  border-radius: 10px;
+  background:
+    linear-gradient(45deg, #141a22 25%, transparent 25%),
+    linear-gradient(-45deg, #141a22 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #141a22 75%),
+    linear-gradient(-45deg, transparent 75%, #141a22 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.dot-editor__preview {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.dot-editor__preview-glyph {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, #8fa0b0 30%, transparent);
+  background: #121820;
+  display: grid;
+  place-items: center;
+  color: #e8eef3;
+}
+
+.dot-editor__preview-glyph svg {
+  width: 70%;
+  height: 70%;
+}
+
+.dot-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

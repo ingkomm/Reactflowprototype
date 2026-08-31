@@ -28,7 +28,7 @@ import type { OrbitTier } from '../types'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { useNodePowered } from '../PowerContext'
 import { canTransmitPower } from '../power'
-import { IconGlyph } from './IconGlyph'
+import { NodeIconDisplay } from './NodeIconDisplay'
 import {
   TrainingBands,
   labelBelowBandOffset,
@@ -222,7 +222,11 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       <div className="passive-node__ring" aria-hidden>
         {!isStealth && !isConnectNode && (
-          <IconGlyph iconId={iconId} className="passive-node__glyph" />
+          <NodeIconDisplay
+            iconId={iconId}
+            customIconId={data.customIconId}
+            className="passive-node__glyph"
+          />
         )}
       </div>
 

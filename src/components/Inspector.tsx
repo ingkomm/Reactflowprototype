@@ -5,6 +5,7 @@ import type {
   OrbitTier,
   OrbitTierCount,
   StageData,
+  VideoMedia,
 } from '../types'
 import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from '../types'
 import {
@@ -22,8 +23,11 @@ import {
   orbitAngleOptions,
 } from '../orbit'
 import { classesForKind } from '../passiveClass'
+import { nodeSupportsCustomIcon, useCustomIcons } from '../CustomIconContext'
 import { usePassiveClasses } from '../PassiveClassContext'
 import { IconGlyph } from './IconGlyph'
+import { CustomIconGlyph } from './CustomIconGlyph'
+import { VideoMediaPanel } from './VideoMediaPanel'
 import './Inspector.css'
 
 export type OrbitMember = {
@@ -61,6 +65,8 @@ type Props = {
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeClassId: (nodeId: string, classId: string) => void
+  onChangeCustomIconId: (nodeId: string, customIconId: string | null) => void
+  onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
@@ -85,6 +91,8 @@ export function Inspector({
   onRename,
   onChangeKind,
   onChangeClassId,
+  onChangeCustomIconId,
+  onChangeNodeMedia,
   onChangeStages,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
@@ -98,6 +106,7 @@ export function Inspector({
   onDeleteNode,
 }: Props) {
   const { classes, resolve } = usePassiveClasses()
+  const { customIcons } = useCustomIcons()
   const [addPeerId, setAddPeerId] = useState('')
 
   if (!nodeId || !data) {
@@ -235,6 +244,57 @@ export function Inspector({
           <p className="inspector__empty">이 종류는 클래스를 사용하지 않습니다.</p>
         )}
       </div>
+
+      {nodeSupportsCustomIcon(data.kind) && (
+        <div className="field">
+          <span>사용자 아이콘</span>
+          <div className="class-pick-grid" role="listbox" aria-label="사용자 아이콘">
+            <button
+              type="button"
+              role="option"
+              aria-selected={!data.customIconId}
+              className={`class-pick${!data.customIconId ? ' is-selected' : ''}`}
+              title="클래스 아이콘 사용"
+              onClick={() => onChangeCustomIconId(nodeId, null)}
+            >
+              <span className="class-pick__icon" style={{ color: currentClass.iconColor }}>
+                <IconGlyph iconId={currentClass.iconId} />
+              </span>
+              <span className="class-pick__label">클래스</span>
+            </button>
+            {customIcons.map((icon) => {
+              const selected = data.customIconId === icon.id
+              return (
+                <button
+                  key={icon.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`class-pick${selected ? ' is-selected' : ''}`}
+                  title={icon.name}
+                  onClick={() => onChangeCustomIconId(nodeId, icon.id)}
+                >
+                  <span className="class-pick__icon" style={{ color: currentClass.iconColor }}>
+                    <CustomIconGlyph icon={icon} />
+                  </span>
+                  <span className="class-pick__label">{icon.name}</span>
+                </button>
+              )
+            })}
+          </div>
+          <p className="field-hint">상단 메뉴의 「아이콘」에서 도트 아이콘을 만들 수 있습니다.</p>
+        </div>
+      )}
+
+      {(data.kind === 'notable' || data.kind === 'mastery') && (
+        <div className="inspector__section">
+          <VideoMediaPanel
+            title="노드 동영상"
+            media={data.media ?? []}
+            onChange={(media) => onChangeNodeMedia(nodeId, media)}
+          />
+        </div>
+      )}
 
       {isMasteryKind(data.kind) && (
         <>
@@ -556,6 +616,28 @@ export function Inspector({
                   >
                     ×
                   </button>
+                  <div className="training-item__videos">
+                    <VideoMediaPanel
+                      title={`${log.label || '로그'} 동영상`}
+                      media={log.media ?? []}
+                      onChange={(media) => {
+                        const next = ensureNotableStages(stages)
+                        const pool = next[0]!
+                        patchStages(
+                          next.map((s, i) =>
+                            i === 0
+                              ? {
+                                  ...pool,
+                                  logs: pool.logs.map((l) =>
+                                    l.id === log.id ? { ...l, media } : l,
+                                  ),
+                                }
+                              : s,
+                          ),
+                        )
+                      }}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

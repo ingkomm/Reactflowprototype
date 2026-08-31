@@ -88,6 +88,15 @@
   accent-color: #9fe8dd;
 }
 
+.import-error {
+  margin: 0;
+  padding: 8px 18px;
+  font-size: 0.82rem;
+  color: #ffb4b4;
+  background: color-mix(in srgb, #e03e3e 12%, #05080d);
+  border-bottom: 1px solid color-mix(in srgb, #e03e3e 28%, transparent);
+}
+
 .btn {
   border: none;
   border-radius: 8px;
