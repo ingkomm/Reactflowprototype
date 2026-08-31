@@ -15,7 +15,7 @@ const HEX_POINTS = '50,4 96,27 96,73 50,96 4,73 4,27'
 
 /** Built-in default glyphs: mastery = full circle, notable = hexagon, small = medium circle. */
 export function DefaultNodeShape({ kind, powered = true, className, style, size }: Props) {
-  const fill = powered ? '#ffffff' : '#6a7580'
+  const fill = powered ? 'rgba(255, 255, 255, 0.42)' : 'rgba(106, 117, 128, 0.38)'
   const resolved = kind === 'voidMastery' ? 'mastery' : kind
 
   const dimStyle: CSSProperties | undefined = size
@@ -56,8 +56,8 @@ export function DefaultNodeShape({ kind, powered = true, className, style, size 
         viewBox="0 0 100 100"
         aria-hidden
       >
-        <circle cx="50" cy="50" r="28" fill={powered ? '#42e890' : '#6a7580'} opacity={powered ? 0.95 : 0.7} />
-        <circle cx="50" cy="50" r="18" fill={powered ? '#b4ffd2' : '#4a5560'} opacity={0.85} />
+        <circle cx="50" cy="50" r="28" fill={powered ? 'rgba(66, 232, 144, 0.55)' : 'rgba(106, 117, 128, 0.38)'} />
+        <circle cx="50" cy="50" r="18" fill={powered ? 'rgba(180, 255, 210, 0.45)' : 'rgba(74, 85, 96, 0.35)'} />
       </svg>
     )
   }

@@ -26,19 +26,15 @@ function nodeCenter(node: NonNullable<ReturnType<typeof useInternalNode>>) {
   }
 }
 
+/** Root uses rim sockets; every other node keeps center-to-center links. */
 function endpointForNode(
   node: NonNullable<ReturnType<typeof useInternalNode>>,
   data: PassiveNodeData,
   handleId: string | null | undefined,
-  rfX: number | undefined,
-  rfY: number | undefined,
 ) {
   if (data.kind === 'initial') {
     const socket = rootSocketFlowPosition(node.internals.positionAbsolute, handleId)
     if (socket) return socket
-  }
-  if (typeof rfX === 'number' && typeof rfY === 'number') {
-    return { x: rfX, y: rfY }
   }
   return nodeCenter(node)
 }
@@ -49,10 +45,6 @@ export function CenterEdge({
   target,
   sourceHandleId,
   targetHandleId,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
   interactionWidth = 28,
   selected,
 }: EdgeProps) {
@@ -68,19 +60,17 @@ export function CenterEdge({
   const sd = sourceNode.data as PassiveNodeData
   const td = targetNode.data as PassiveNodeData
 
-  const sourcePt = endpointForNode(sourceNode, sd, sourceHandleId, sourceX, sourceY)
-  const targetPt = endpointForNode(targetNode, td, targetHandleId, targetX, targetY)
+  const sourcePt = endpointForNode(sourceNode, sd, sourceHandleId)
+  const targetPt = endpointForNode(targetNode, td, targetHandleId)
 
   const sourceLit = powered.has(source)
   const targetLit = powered.has(target)
   const lit = sourceLit && targetLit
 
-  const sourcePad =
-    sd.kind === 'initial' ? 2 : linkEndpointPad(sd, sourceLit)
-  const targetPad =
-    td.kind === 'initial' ? 2 : linkEndpointPad(td, targetLit)
+  const sourcePad = sd.kind === 'initial' ? 2 : linkEndpointPad(sd, sourceLit)
+  const targetPad = td.kind === 'initial' ? 2 : linkEndpointPad(td, targetLit)
 
-  const { sourceX: sx, sourceY: sy, targetX: tx, targetY: ty } = trimStraightEndpoints(
+  const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
     sourcePt.x,
     sourcePt.y,
     targetPt.x,
@@ -95,12 +85,12 @@ export function CenterEdge({
     targetX: targetPt.x,
     targetY: targetPt.y,
   })[0]
-  const [path] = getStraightPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty })
+  const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
   const beam = orientPowerLinkVisual(
     source,
     target,
-    { x: sx, y: sy },
-    { x: tx, y: ty },
+    { x: sourceX, y: sourceY },
+    { x: targetX, y: targetY },
     sd,
     td,
     flowMeta,
