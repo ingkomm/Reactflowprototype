@@ -161,3 +161,19 @@ export function upsertDailyLog(
 export function removeDailyLog(logs: TrainingLog[], logId: string): TrainingLog[] {
   return logs.filter((log) => log.id !== logId)
 }
+
+export function recentPracticeLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
+  return sortedDailyLogs(logs).slice(0, limit)
+}
+
+export function recentMemoLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
+  return sortedDailyLogs(logs)
+    .filter((log) => Boolean(log.note?.trim()))
+    .slice(0, limit)
+}
+
+export function memoPreview(note: string, maxLength = 72): string {
+  const trimmed = note.trim()
+  if (trimmed.length <= maxLength) return trimmed
+  return `${trimmed.slice(0, maxLength - 1)}…`
+}

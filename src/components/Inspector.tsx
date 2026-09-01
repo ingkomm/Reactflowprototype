@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type {
   PassiveKind,
   PassiveNodeData,
@@ -43,29 +42,14 @@ export type OrbitMember = {
   tierSize: number
 }
 
-export type LinkCandidate = {
-  id: string
-  label: string
-  kind: PassiveKind
-  linkKind: 'notable'
-}
-
-export type SelectedLink = {
-  edgeId: string
-  peerId: string
-  peerLabel: string
-  peerKind: PassiveKind
-  linkKind: 'notable'
-}
-
 type Props = {
   nodeId: string | null
   data: PassiveNodeData | null
   masteryLabel?: string | null
   masteryTierCount?: OrbitTierCount | null
   orbitMembers?: OrbitMember[]
-  selectedLinks?: SelectedLink[]
-  linkCandidates?: LinkCandidate[]
+  focusLogId?: string | null
+  onFocusLogConsumed?: () => void
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
@@ -79,7 +63,6 @@ type Props = {
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onChangeOrbitCapacity: (masteryId: string, tier: OrbitTier, capacity: number) => void
   onDetachFromMastery: (nodeId: string) => void
-  onAddLink: (peerId: string) => void
   onDeleteNode: (nodeId: string) => void
 }
 
@@ -89,8 +72,8 @@ export function Inspector({
   masteryLabel,
   masteryTierCount = null,
   orbitMembers = [],
-  selectedLinks = [],
-  linkCandidates = [],
+  focusLogId,
+  onFocusLogConsumed,
   onRename,
   onChangeKind,
   onChangeSymbolId,
@@ -104,11 +87,9 @@ export function Inspector({
   onChangeOrbitLocked,
   onChangeOrbitCapacity,
   onDetachFromMastery,
-  onAddLink,
   onDeleteNode,
 }: Props) {
   const { customSymbols, resolveSymbolColor } = useCustomSymbols()
-  const [addPeerId, setAddPeerId] = useState('')
 
   if (!nodeId || !data) {
     return (
@@ -456,56 +437,6 @@ export function Inspector({
         </>
       )}
 
-      {data.kind === 'notable' && (
-        <div className="inspector__section">
-          <div className="inspector__section-head">
-            <h3>Notable links</h3>
-          </div>
-          <p className="inspector__empty">
-            다른 Notable 노드와만 연결 가능 · 매우 연한 직선 affinity 링크 (파워 경로와 무관)
-          </p>
-
-          {selectedLinks.length > 0 && (
-            <ul className="orbit-list">
-              {selectedLinks.map((link) => (
-                <li key={link.edgeId} className="orbit-item">
-                  <span className="orbit-item__label">{link.peerLabel}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="link-add">
-            <select
-              value={addPeerId}
-              onChange={(e) => setAddPeerId(e.target.value)}
-              disabled={linkCandidates.length === 0}
-            >
-              <option value="">
-                {linkCandidates.length === 0 ? '연결 가능한 Notable 없음' : 'Notable 선택…'}
-              </option>
-              {linkCandidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              disabled={!addPeerId}
-              onClick={() => {
-                if (!addPeerId) return
-                onAddLink(addPeerId)
-                setAddPeerId('')
-              }}
-            >
-              + Link
-            </button>
-          </div>
-        </div>
-      )}
-
       {(data.kind === 'small' || data.kind === 'notable') && (
         <>
           <div className="inspector__section">
@@ -548,7 +479,12 @@ export function Inspector({
       )}
 
       {kindUsesPracticeLogs(data.kind) && (
-        <DailyLogPanel logs={practiceLogs} onChangeLogs={handleLogsChange} />
+        <DailyLogPanel
+          logs={practiceLogs}
+          onChangeLogs={handleLogsChange}
+          focusLogId={focusLogId}
+          onFocusLogConsumed={onFocusLogConsumed}
+        />
       )}
     </aside>
   )

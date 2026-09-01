@@ -98,6 +98,7 @@
 
 .field input,
 .field select,
+.field textarea,
 .training-item input {
   appearance: none;
   border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
@@ -113,6 +114,7 @@
 
 .field input:focus,
 .field select:focus,
+.field textarea:focus,
 .training-item input:focus {
   outline: 2px solid color-mix(in srgb, #d4a24c 55%, transparent);
   outline-offset: 1px;

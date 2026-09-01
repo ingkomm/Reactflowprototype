@@ -81,7 +81,8 @@
   flex-shrink: 0;
 }
 
-.daily-log-card textarea {
+.daily-log-card textarea,
+.daily-log-panel__memo {
   resize: vertical;
   min-height: 56px;
 }

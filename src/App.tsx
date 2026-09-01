@@ -14,7 +14,7 @@ import '@xyflow/react/dist/style.css'
 import { type PassiveFlowNode } from './components/PassiveNode'
 import { TreeWorkspace } from './components/TreeWorkspace'
 import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot } from './power'
-import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot } from './types'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot, TrainingLog } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { CustomSymbolProvider } from './CustomSymbolContext'
@@ -67,6 +67,7 @@ import {
 import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { useGraphHistory } from './useGraphHistory'
 import { FirstRunDialog } from './components/FirstRunDialog'
+import { NodeContextPopup } from './components/NodeContextPopup'
 import {
   commitBootstrapChoice,
   hasBackupDocument,
@@ -79,7 +80,15 @@ import {
   type SaveStatus,
 } from './useGraphApp'
 import { clampOrbitTierCapacity } from './limits'
+import { ensureNotableStages, ensureSmallPracticeStages, kindUsesPracticeLogs } from './stage'
 import './App.css'
+
+function practiceLogsForNode(data: PassiveNodeData): TrainingLog[] {
+  if (!kindUsesPracticeLogs(data.kind)) return []
+  const stages = data.stages ?? []
+  if (data.kind === 'small') return ensureSmallPracticeStages(stages)[0]?.logs ?? []
+  return ensureNotableStages(stages)[0]?.logs ?? []
+}
 
 function uid(prefix: string) {
   return stageUid(prefix)
@@ -239,6 +248,8 @@ export default function App() {
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [pinnedVideoNodeIds, setPinnedVideoNodeIds] = useState<string[]>([])
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const [focusLogId, setFocusLogId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
   const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
@@ -501,46 +512,6 @@ export default function App() {
     }
     return members
   }, [nodes, selectedData, selectedNode])
-
-  const selectedLinks = useMemo(() => {
-    if (!selectedNode || !selectedData || selectedData.kind !== 'notable') return []
-    return edges
-      .filter((e) => e.source === selectedNode.id || e.target === selectedNode.id)
-      .filter((e) => e.type === 'notable')
-      .map((e) => {
-        const peerId = e.source === selectedNode.id ? e.target : e.source
-        const peer = nodes.find((n) => n.id === peerId)
-        const peerData = peer?.data as PassiveNodeData | undefined
-        return {
-          edgeId: e.id,
-          peerId,
-          peerLabel: peerData?.label ?? peerId,
-          peerKind: peerData?.kind ?? 'notable',
-          linkKind: 'notable' as const,
-        }
-      })
-  }, [edges, nodes, selectedData, selectedNode])
-
-  const linkCandidates = useMemo(() => {
-    if (!selectedNode || !selectedData || selectedData.kind !== 'notable') return []
-    const linked = new Set(selectedLinks.map((l) => l.peerId))
-    return nodes
-      .filter((n) => {
-        if (n.id === selectedNode.id || linked.has(n.id)) return false
-        const d = n.data as PassiveNodeData
-        if (d.kind !== 'notable') return false
-        return classifyLink(selectedNode, n, nodes) === 'notable'
-      })
-      .map((n) => {
-        const d = n.data as PassiveNodeData
-        return {
-          id: n.id,
-          label: d.label,
-          kind: d.kind,
-          linkKind: 'notable' as const,
-        }
-      })
-  }, [nodes, selectedData, selectedLinks, selectedNode])
 
   const isValidConnection = useCallback<IsValidConnection>(
     (connection) => {
@@ -855,23 +826,6 @@ export default function App() {
       })
     },
     [commit, nodes, setNodes, stack],
-  )
-
-  const addLink = useCallback(
-    (peerId: string) => {
-      if (!selectedId) return
-      const source = nodes.find((n) => n.id === selectedId)
-      const target = nodes.find((n) => n.id === peerId)
-      if (!source || !target) return
-      const linkKind = classifyLink(source, target, nodes)
-      if (linkKind !== 'notable') return
-      commit()
-      setEdges((eds) => {
-        if (findLinkEdge(eds, source.id, target.id, 'notable')) return eds
-        return sanitizeEdges(nodes, [...eds, notableLinkEdge(source.id, target.id)])
-      })
-    },
-    [commit, nodes, selectedId, setEdges],
   )
 
   const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
@@ -1271,22 +1225,39 @@ export default function App() {
 
   const onPaneClick = useCallback(() => {
     if (shouldSuppressOrbitSelectionClear()) return
+    setContextMenu(null)
     setSelectedId(null)
   }, [])
 
   const onNodeClick = useCallback((_: ReactMouseEvent, node: Node) => {
+    setContextMenu(null)
     setSelectedId(node.id)
   }, [])
 
   const onNodeContextMenu = useCallback((event: ReactMouseEvent, node: Node) => {
     event.preventDefault()
-    const data = node.data as PassiveNodeData
-    if (!canPinNodeVideos(data.kind)) return
-    setPinnedVideoNodeIds((cur) =>
-      cur.includes(node.id) ? cur.filter((id) => id !== node.id) : [...cur, node.id],
-    )
     setSelectedId(node.id)
+    setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
   }, [])
+
+  const contextMenuNode = useMemo(() => {
+    if (!contextMenu) return null
+    return nodes.find((n) => n.id === contextMenu.nodeId) ?? null
+  }, [contextMenu, nodes])
+
+  const handleContextLogSelect = useCallback((logId: string) => {
+    setFocusLogId(logId)
+    setContextMenu(null)
+  }, [])
+
+  const handleToggleContextVideoPin = useCallback(() => {
+    if (!contextMenu) return
+    const nodeId = contextMenu.nodeId
+    setPinnedVideoNodeIds((cur) =>
+      cur.includes(nodeId) ? cur.filter((id) => id !== nodeId) : [...cur, nodeId],
+    )
+    setContextMenu(null)
+  }, [contextMenu])
 
   const onClosePinnedVideo = useCallback((nodeId: string) => {
     setPinnedVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
@@ -1592,8 +1563,8 @@ export default function App() {
               masteryLabel={selectedMasteryLabel}
               masteryTierCount={selectedMasteryTierCount}
               orbitMembers={orbitMembers}
-              selectedLinks={selectedLinks}
-              linkCandidates={linkCandidates}
+              focusLogId={focusLogId}
+              onFocusLogConsumed={() => setFocusLogId(null)}
               onCreateFromTemplate={createFromTemplate}
               onNodesChange={handleNodesChange}
               onEdgesChange={handleEdgesChange}
@@ -1628,9 +1599,23 @@ export default function App() {
               onChangeOrbitLocked={changeOrbitLocked}
               onChangeOrbitCapacity={changeOrbitCapacity}
               onDetachFromMastery={detachFromMastery}
-              onAddLink={addLink}
               onDeleteNode={deleteNode}
             />
+
+            {contextMenu && contextMenuNode ? (
+              <NodeContextPopup
+                open
+                x={contextMenu.x}
+                y={contextMenu.y}
+                nodeLabel={(contextMenuNode.data as PassiveNodeData).label}
+                logs={practiceLogsForNode(contextMenuNode.data as PassiveNodeData)}
+                canPinVideos={canPinNodeVideos((contextMenuNode.data as PassiveNodeData).kind)}
+                isVideoPinned={pinnedVideoNodeIds.includes(contextMenu.nodeId)}
+                onClose={() => setContextMenu(null)}
+                onSelectLog={handleContextLogSelect}
+                onToggleVideoPin={handleToggleContextVideoPin}
+              />
+            ) : null}
 
             <SymbolKindEditor
               kind={symbolEditorKind ?? 'mastery'}

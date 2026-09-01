@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   createDailyLog,
   hasDateConflict,
+  memoPreview,
   mergeLogsByDate,
   migrateLegacyTrainingLogs,
+  recentMemoLogs,
+  recentPracticeLogs,
   upsertDailyLog,
 } from './dailyLog'
 
@@ -36,5 +39,26 @@ describe('dailyLog', () => {
     expect(logs).toHaveLength(2)
     expect(logs.map((log) => log.date)).toEqual(['2025-03-09', '2025-03-10'])
     expect(logs[1]?.note).toBe('old')
+  })
+
+  it('returns recent practice logs and memos', () => {
+    const logs = [
+      createDailyLog('2025-01-01'),
+      createDailyLog('2025-01-03', 'memo a'),
+      createDailyLog('2025-01-02', 'memo b'),
+      createDailyLog('2025-01-04'),
+      createDailyLog('2025-01-05', 'memo c'),
+      createDailyLog('2025-01-06'),
+      createDailyLog('2025-01-07', 'memo d'),
+    ]
+    expect(recentPracticeLogs(logs, 5).map((log) => log.date)).toEqual([
+      '2025-01-07',
+      '2025-01-06',
+      '2025-01-05',
+      '2025-01-04',
+      '2025-01-03',
+    ])
+    expect(recentMemoLogs(logs, 5)).toHaveLength(4)
+    expect(memoPreview('x'.repeat(80), 10)).toContain('…')
   })
 })

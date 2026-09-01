@@ -24,7 +24,7 @@ import { PassiveNode, type PassiveFlowNode } from './PassiveNode'
 import { CenterEdge } from './CenterEdge'
 import { NotableEdge } from './NotableEdge'
 import { OrbitEdge } from './OrbitEdge'
-import { Inspector, type LinkCandidate, type OrbitMember, type SelectedLink } from './Inspector'
+import { Inspector, type OrbitMember } from './Inspector'
 import { NodeLibrary } from './NodeLibrary'
 import { PowerProvider } from '../PowerContext'
 import { VoidHighlightProvider } from '../VoidHighlightContext'
@@ -70,8 +70,8 @@ export type TreeWorkspaceProps = {
   masteryLabel: string | null
   masteryTierCount: OrbitTierCount | null
   orbitMembers: OrbitMember[]
-  selectedLinks: SelectedLink[]
-  linkCandidates: LinkCandidate[]
+  focusLogId?: string | null
+  onFocusLogConsumed?: () => void
   onOpenSymbolEditor: (kind: SymbolEditorKind) => void
   onCreateFromTemplate: (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => void
   onNodesChange: OnNodesChange<PassiveFlowNode>
@@ -107,7 +107,6 @@ export type TreeWorkspaceProps = {
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onChangeOrbitCapacity: (masteryId: string, tier: OrbitTier, capacity: number) => void
   onDetachFromMastery: (nodeId: string) => void
-  onAddLink: (peerId: string) => void
   onDeleteNode: (nodeId: string) => void
 }
 
@@ -124,8 +123,8 @@ export function TreeWorkspace({
   masteryLabel,
   masteryTierCount,
   orbitMembers,
-  selectedLinks,
-  linkCandidates,
+  focusLogId,
+  onFocusLogConsumed,
   onOpenSymbolEditor,
   onCreateFromTemplate,
   onNodesChange,
@@ -161,7 +160,6 @@ export function TreeWorkspace({
   onChangeOrbitLocked,
   onChangeOrbitCapacity,
   onDetachFromMastery,
-  onAddLink,
   onDeleteNode,
 }: TreeWorkspaceProps) {
   const canvasWrapperRef = useRef<HTMLDivElement>(null)
@@ -313,8 +311,8 @@ export function TreeWorkspace({
           masteryLabel={masteryLabel}
           masteryTierCount={masteryTierCount}
           orbitMembers={orbitMembers}
-          selectedLinks={selectedLinks}
-          linkCandidates={linkCandidates}
+          focusLogId={focusLogId}
+          onFocusLogConsumed={onFocusLogConsumed}
           onRename={onRename}
           onChangeKind={onChangeKind}
           onChangeSymbolId={onChangeSymbolId}
@@ -328,7 +326,6 @@ export function TreeWorkspace({
           onChangeOrbitLocked={onChangeOrbitLocked}
           onChangeOrbitCapacity={onChangeOrbitCapacity}
           onDetachFromMastery={onDetachFromMastery}
-          onAddLink={onAddLink}
           onDeleteNode={onDeleteNode}
         />
       </div>
