@@ -13,7 +13,7 @@ import '@xyflow/react/dist/style.css'
 
 import { type PassiveFlowNode } from './components/PassiveNode'
 import { TreeWorkspace } from './components/TreeWorkspace'
-import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, pruneEdgesReachableFromInitial, resolveRootConnectSlot, isValidRootConnectHandles } from './power'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
@@ -22,9 +22,7 @@ import { importSymbolFile } from './customSymbol'
 import { SymbolKindEditor } from './components/SymbolKindEditor'
 import {
   buildGraphDocument,
-  documentToFlowState,
   downloadGraphDocument,
-  parseGraphDocumentJson,
 } from './graphDocument'
 import { createVideoMediaId, canPinNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
@@ -33,8 +31,6 @@ import { snapNodeTopLeft } from './grid'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
 import {
   DEFAULT_SELECTED_NODE_ID,
-  SEED_EDGES,
-  SEED_NODES,
 } from './seedGraph'
 import {
   assignSatelliteOrbitSlot,
@@ -68,8 +64,18 @@ import {
   type SatelliteDragOrigin,
   withMasteryDragFlags,
 } from './orbit'
-import { shouldSuppressOrbitSelectionClear } from './components/OrbitRotateController'
+import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { useGraphHistory } from './useGraphHistory'
+import { FirstRunDialog } from './components/FirstRunDialog'
+import {
+  commitBootstrapChoice,
+  importGraphJsonFile,
+  resolveInitialGraphState,
+  sanitizeFlowEdges,
+  useGraphAutosave,
+} from './useGraphApp'
+import { addPracticeSession, kindUsesPracticeLogs } from './stage'
+import { clampOrbitTierCapacity } from './limits'
 import './App.css'
 
 function uid(prefix: string) {
@@ -196,39 +202,32 @@ function isRootConnectSlotTaken(
   })
 }
 
-function pruneInvalidEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
-  return edges.filter((e) => {
-    const source = nodes.find((n) => n.id === e.source)
-    const target = nodes.find((n) => n.id === e.target)
-    if (!source || !target) return false
-    const linkKind = classifyLink(source, target, nodes)
-    if (e.type === 'orbit') return linkKind === 'orbit'
-    if (e.type === 'notable') return linkKind === 'notable'
-    if (linkKind !== 'center') return false
-    const sd = source.data as PassiveNodeData
-    const td = target.data as PassiveNodeData
-    if (sd.kind === 'initial' || td.kind === 'initial') {
-      return isValidRootConnectHandles(source, target, e.sourceHandle, e.targetHandle)
-    }
-    return true
-  })
+function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
+  return sanitizeFlowEdges(nodes, edges)
 }
 
-function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
-  return pruneEdgesReachableFromInitial(nodes, pruneInvalidEdges(nodes, edges))
-}
+const initialGraph = resolveInitialGraphState()
 
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(SEED_NODES)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(SEED_EDGES)
-  const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
-  const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
-  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
+  const [bootstrapPending, setBootstrapPending] = useState(initialGraph.needsBootstrap)
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.snapshot?.nodes ?? [])
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.snapshot?.edges ?? [])
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(
+    initialGraph.snapshot?.settings.gridSnapEnabled ?? false,
+  )
+  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(
+    initialGraph.snapshot?.settings.voidHighlightEnabled ?? false,
+  )
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialGraph.snapshot?.nodes[0]?.id ?? DEFAULT_SELECTED_NODE_ID,
+  )
   const [inspectorWidth, setInspectorWidth] = useState(360)
-  const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
+  const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>(
+    initialGraph.snapshot?.customSymbols ?? [],
+  )
   const [defaultSymbolColors, setDefaultSymbolColors] = useState<
     Partial<Record<SymbolEditorKind, string>>
-  >({})
+  >(initialGraph.snapshot?.settings.defaultSymbolColors ?? {})
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
@@ -251,11 +250,24 @@ export default function App() {
   } | null>(null)
 
   const stateRef = useRef({ nodes, edges })
-  stateRef.current = { nodes, edges }
   const selectedIdRef = useRef(selectedId)
-  selectedIdRef.current = selectedId
   const nodesRef = useRef(nodes)
-  nodesRef.current = nodes
+
+  useEffect(() => {
+    stateRef.current = { nodes, edges }
+    selectedIdRef.current = selectedId
+    nodesRef.current = nodes
+  })
+
+  useGraphAutosave(
+    {
+      nodes,
+      edges,
+      customSymbols,
+      settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
+    },
+    !bootstrapPending,
+  )
 
   useEffect(() => {
     const onMove = (event: MouseEvent) => {
@@ -296,6 +308,22 @@ export default function App() {
       setEdges(snap.edges)
     },
   })
+
+  const handleBootstrap = useCallback(
+    (choice: 'empty' | 'demo') => {
+      const snapshot = commitBootstrapChoice(choice)
+      resetHistory()
+      setCustomSymbols(snapshot.customSymbols)
+      setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+      setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+      setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+      setNodes(stack(snapshot.nodes))
+      setEdges(sanitizeFlowEdges(snapshot.nodes, snapshot.edges))
+      setSelectedId(snapshot.nodes[0]?.id ?? null)
+      setBootstrapPending(false)
+    },
+    [resetHistory, setEdges, setNodes, stack],
+  )
 
   const copySelectedNode = useCallback(() => {
     const currentId = selectedIdRef.current
@@ -461,7 +489,7 @@ export default function App() {
       })
     }
     return members
-  }, [nodes, selectedData?.kind, selectedData?.orbitTierCount, selectedNode])
+  }, [nodes, selectedData, selectedNode])
 
   const selectedLinks = useMemo(() => {
     if (!selectedNode || !selectedData || selectedData.kind !== 'notable') return []
@@ -862,6 +890,20 @@ export default function App() {
     [commit, setNodes],
   )
 
+  const addPractice = useCallback(
+    (nodeId: string) => {
+      const node = nodesRef.current.find((n) => n.id === nodeId)
+      if (!node) return
+      const data = node.data as PassiveNodeData
+      if (!kindUsesPracticeLogs(data.kind)) return
+      updateNodeData(nodeId, (d) => ({
+        ...d,
+        stages: addPracticeSession(d.stages ?? [], d.kind),
+      }))
+    },
+    [updateNodeData],
+  )
+
   const changeOrbitLocked = useCallback(
     (masteryId: string, locked: boolean) => {
       updateNodeData(masteryId, (d) => ({ ...d, orbitLocked: locked }))
@@ -871,7 +913,7 @@ export default function App() {
 
   const changeOrbitCapacity = useCallback(
     (masteryId: string, tier: OrbitTier, capacity: number) => {
-      const nextCapacity = Math.max(1, Math.floor(capacity))
+      const nextCapacity = clampOrbitTierCapacity(capacity)
       const members = countOrbitTierMembers(nodes, masteryId, tier)
       if (nextCapacity < members) {
         window.alert(
@@ -1147,24 +1189,22 @@ export default function App() {
 
   const handleImportJson = useCallback(
     async (file: File) => {
-      let text: string
-      try {
-        text = await file.text()
-      } catch {
-        setImportError('파일을 읽을 수 없습니다.')
+      const result = await importGraphJsonFile(file, {
+        nodes: stateRef.current.nodes,
+        edges: stateRef.current.edges,
+        customSymbols,
+        settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
+      })
+      if (!result.ok) {
+        setImportError(result.message)
         return
       }
-      const parsed = parseGraphDocumentJson(text)
-      if (!parsed.ok) {
-        setImportError(parsed.message)
-        return
-      }
-      const imported = documentToFlowState(parsed.document)
+      const imported = result.snapshot
       resetHistory()
       setCustomSymbols(imported.customSymbols)
       setDefaultSymbolColors(imported.settings.defaultSymbolColors ?? {})
       setNodes(stack(imported.nodes))
-      setEdges(sanitizeEdges(imported.nodes, imported.edges))
+      setEdges(imported.edges)
       if (imported.settings.gridSnapEnabled != null) {
         setGridSnapEnabled(imported.settings.gridSnapEnabled)
       }
@@ -1174,7 +1214,16 @@ export default function App() {
       setSelectedId(imported.nodes[0]?.id ?? null)
       setImportError(null)
     },
-    [resetHistory, setEdges, setNodes, stack],
+    [
+      customSymbols,
+      defaultSymbolColors,
+      gridSnapEnabled,
+      resetHistory,
+      setEdges,
+      setNodes,
+      stack,
+      voidHighlightEnabled,
+    ],
   )
 
   const deleteNode = useCallback(
@@ -1409,12 +1458,13 @@ export default function App() {
     <CustomSymbolProvider customSymbols={customSymbols} defaultSymbolColors={defaultSymbolColors}>
       <ReactFlowProvider>
         <div className="app-shell">
+            {bootstrapPending && <FirstRunDialog onChoose={handleBootstrap} />}
             <header className="topbar">
               <div className="topbar__brand">
                 <span className="topbar__mark" aria-hidden />
                 <div>
-                  <p className="topbar__eyebrow">Path of Building style</p>
-                  <h1>Passive Tree Prototype</h1>
+                  <p className="topbar__eyebrow">연습 우선 · 로컬 우선 트래커</p>
+                  <h1>Passive Tree v0.1</h1>
                 </div>
               </div>
 
@@ -1514,6 +1564,7 @@ export default function App() {
               onChangeSymbolId={onChangeSymbolId}
               onChangeNodeMedia={onChangeNodeMedia}
               onChangeStages={onChangeStages}
+              onAddPractice={addPractice}
               onChangeConnectEnabled={changeConnectEnabled}
               onChangeOrbitTierCount={changeOrbitTierCount}
               onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}

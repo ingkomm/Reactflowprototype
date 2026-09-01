@@ -9,7 +9,7 @@ import {
   type SymbolEditorKind,
 } from '../librarySymbols'
 import { NODE_SIZE } from '../orbit'
-import { useCustomSymbols } from '../CustomSymbolContext'
+import { useCustomSymbols } from '../customSymbolContext.shared'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import './NodeLibrary.css'
 

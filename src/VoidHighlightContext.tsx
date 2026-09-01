@@ -1,6 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react'
-
-const VoidHighlightContext = createContext(false)
+import type { ReactNode } from 'react'
+import { VoidHighlightContext } from './voidHighlightContext.shared'
 
 export function VoidHighlightProvider({
   enabled,
@@ -12,8 +11,4 @@ export function VoidHighlightProvider({
   return (
     <VoidHighlightContext.Provider value={enabled}>{children}</VoidHighlightContext.Provider>
   )
-}
-
-export function useVoidHighlight() {
-  return useContext(VoidHighlightContext)
 }

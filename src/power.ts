@@ -1,7 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import { parseRootSocketHandle } from './initialHub'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import type { PassiveNodeData, InitialConnectSlot } from './types'
+import type { GraphEdgeData, PassiveNodeData, InitialConnectSlot } from './types'
 import { NODE_SIZE } from './orbit'
 import { canNotableTransmit, kindUsesTrainingBands } from './stage'
 import {
@@ -21,6 +21,18 @@ export function edgeLinkKind(edge: Edge): LinkKind {
   if (edge.type === 'orbit') return 'orbit'
   if (edge.type === 'notable') return 'notable'
   return 'center'
+}
+
+/** Power/center/orbit links may be deactivated instead of deleted when Root disconnects. */
+export function isEdgeActive(edge: Edge): boolean {
+  const data = edge.data as GraphEdgeData | undefined
+  return data?.active !== false
+}
+
+function withEdgeActive(edge: Edge, active: boolean): Edge {
+  const data = (edge.data ?? {}) as GraphEdgeData
+  if (data.active === active) return edge
+  return { ...edge, data: { ...data, active } }
 }
 
 function isInitial(data: PassiveNodeData) {
@@ -76,6 +88,7 @@ export function computePoweredNodeIds(
   while (changed) {
     changed = false
     for (const edge of edges) {
+      if (!isEdgeActive(edge)) continue
       const kind = edgeLinkKind(edge)
       if (kind !== 'center' && kind !== 'orbit') continue
 
@@ -159,6 +172,7 @@ export function computePowerFlowMeta(
   while (changed) {
     changed = false
     for (const edge of edges) {
+      if (!isEdgeActive(edge)) continue
       const kind = edgeLinkKind(edge)
       if (kind !== 'center' && kind !== 'orbit') continue
 
@@ -288,6 +302,7 @@ export function getNodesReachableFromInitial(
 
   const adj = new Map<string, Set<string>>()
   for (const edge of edges) {
+    if (!isEdgeActive(edge)) continue
     if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type) continue
     for (const [a, b] of [
       [edge.source, edge.target],
@@ -311,20 +326,33 @@ export function getNodesReachableFromInitial(
   return reachable
 }
 
-/** Drop links whose endpoints are not both reachable from Initial. */
+/**
+ * Keep all valid links; deactivate center/orbit links not reachable from Root.
+ * Notable links stay active when both endpoints exist.
+ */
+export function syncEdgesReachableFromInitial(
+  nodes: PassiveFlowNode[],
+  edges: Edge[],
+): Edge[] {
+  const reachable = getNodesReachableFromInitial(nodes, edges.filter(isEdgeActive))
+  const nodeIds = new Set(nodes.map((n) => n.id))
+
+  return edges.map((e) => {
+    if (e.type === 'notable') {
+      const valid = nodeIds.has(e.source) && nodeIds.has(e.target)
+      return valid ? e : e
+    }
+    const active = reachable.has(e.source) && reachable.has(e.target)
+    return withEdgeActive(e, active)
+  })
+}
+
+/** @deprecated Use syncEdgesReachableFromInitial — links are deactivated, not deleted. */
 export function pruneEdgesReachableFromInitial(
   nodes: PassiveFlowNode[],
   edges: Edge[],
 ): Edge[] {
-  const reachable = getNodesReachableFromInitial(nodes, edges)
-  const nodeIds = new Set(nodes.map((n) => n.id))
-  if (reachable.size === 0) return edges.filter((e) => e.type === 'notable' && nodeIds.has(e.source) && nodeIds.has(e.target))
-  return edges.filter((e) => {
-    if (e.type === 'notable') {
-      return nodeIds.has(e.source) && nodeIds.has(e.target)
-    }
-    return reachable.has(e.source) && reachable.has(e.target)
-  })
+  return syncEdgesReachableFromInitial(nodes, edges)
 }
 
 /** Whether a new center/orbit link is allowed between two nodes. */

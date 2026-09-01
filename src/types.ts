@@ -15,11 +15,13 @@ export const INITIAL_NODE_ID = 'initial-main'
 export type OrbitTier = 1 | 2 | 3
 export type OrbitTierCount = 1 | 2 | 3
 
-/** One training log entry within a stage. Counts are capped by the stage goal. */
+/** One training log entry within a stage — one log = one practice session. */
 export type TrainingLog = {
   id: string
   label: string
   count: number
+  /** ISO date (YYYY-MM-DD) auto-recorded for each session. */
+  date?: string
   note?: string
   /** Optional external video links for this practice session. */
   media?: VideoMedia[]
@@ -62,6 +64,13 @@ export type GraphDocumentSettings = {
   voidHighlightEnabled?: boolean
   /** Default symbol color per library branch (built-in Default shape). */
   defaultSymbolColors?: Partial<Record<'mastery' | 'notable' | 'small', string>>
+}
+
+/** Edge payload persisted in graph documents. */
+export type GraphEdgeData = {
+  masteryId?: string
+  /** When false, link is kept but excluded from power propagation. */
+  active?: boolean
 }
 
 /** A progression stage with its own band, goal, and training log. */

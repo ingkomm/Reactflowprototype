@@ -17,6 +17,15 @@ import type {
 } from './types'
 import { GRAPH_SCHEMA_VERSION } from './types'
 import { validateVideoMediaList } from './videoMedia'
+import {
+  MAX_CUSTOM_SYMBOLS,
+  MAX_EDGE_COUNT,
+  MAX_JSON_BYTES,
+  MAX_LOG_COUNT,
+  MAX_NODE_COUNT,
+  isWithinStringLimit,
+} from './limits'
+import { validateGraphIntegrity } from './graphIntegrity'
 
 export type SerializedFlowNode = {
   id: string
@@ -98,6 +107,7 @@ function normalizeTrainingLog(value: unknown): TrainingLog | null {
   if (!isRecord(value)) return null
   if (typeof value.id !== 'string' || !value.id.trim()) return null
   if (typeof value.label !== 'string') return null
+  if (!isWithinStringLimit(value.label)) return null
   const count = typeof value.count === 'number' && Number.isFinite(value.count) ? Math.max(0, value.count) : 0
   const media = validateVideoMediaList(value.media)
   if (media === null) return null
@@ -106,7 +116,13 @@ function normalizeTrainingLog(value: unknown): TrainingLog | null {
     label: value.label,
     count,
   }
-  if (typeof value.note === 'string' && value.note.trim()) log.note = value.note.trim()
+  if (typeof value.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.date.trim())) {
+    log.date = value.date.trim()
+  }
+  if (typeof value.note === 'string' && value.note.trim()) {
+    if (!isWithinStringLimit(value.note)) return null
+    log.note = value.note.trim()
+  }
   if (media.length > 0) log.media = media
   return log
 }
@@ -143,6 +159,7 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
 
   const label = typeof value.label === 'string' ? value.label : 'Node'
+  if (!isWithinStringLimit(label)) return null
 
   const symbolIdRaw =
     typeof value.symbolId === 'string'
@@ -273,6 +290,9 @@ function normalizeSettings(value: unknown): GraphDocumentSettings {
 }
 
 export function parseGraphDocumentJson(text: string): GraphParseResult {
+  if (text.length > MAX_JSON_BYTES) {
+    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
@@ -290,7 +310,13 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
   if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
     return { ok: false, message: 'nodes 배열이 비어 있거나 없습니다.' }
   }
+  if (value.nodes.length > MAX_NODE_COUNT) {
+    return { ok: false, message: `노드 수가 제한(${MAX_NODE_COUNT})을 초과했습니다.` }
+  }
   if (!Array.isArray(value.edges)) return { ok: false, message: 'edges 배열이 없습니다.' }
+  if (value.edges.length > MAX_EDGE_COUNT) {
+    return { ok: false, message: `엣지 수가 제한(${MAX_EDGE_COUNT})을 초과했습니다.` }
+  }
 
   const nodes: SerializedFlowNode[] = []
   const nodeIds = new Set<string>()
@@ -317,6 +343,22 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
 
   const customSymbols = validateCustomSymbols(value.customSymbols)
   if (customSymbols === null) return { ok: false, message: 'customSymbols 배열 형식이 올바르지 않습니다.' }
+  if (customSymbols.length > MAX_CUSTOM_SYMBOLS) {
+    return { ok: false, message: `customSymbols 수가 제한(${MAX_CUSTOM_SYMBOLS})을 초과했습니다.` }
+  }
+
+  let totalLogs = 0
+  for (const node of nodes) {
+    for (const stage of node.data.stages ?? []) {
+      totalLogs += stage.logs.length
+    }
+  }
+  if (totalLogs > MAX_LOG_COUNT) {
+    return { ok: false, message: `연습 로그 수가 제한(${MAX_LOG_COUNT})을 초과했습니다.` }
+  }
+
+  const integrity = validateGraphIntegrity(nodes, edges)
+  if (integrity) return { ok: false, message: integrity.message }
 
   // Legacy `classes` array is ignored — symbolId on each node is authoritative.
 

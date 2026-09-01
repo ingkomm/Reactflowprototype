@@ -99,6 +99,7 @@ export type TreeWorkspaceProps = {
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
+  onAddPractice?: (nodeId: string) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -153,6 +154,7 @@ export function TreeWorkspace({
   onChangeSymbolId,
   onChangeNodeMedia,
   onChangeStages,
+  onAddPractice,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -261,7 +263,7 @@ export function TreeWorkspace({
               elevateNodesOnSelect={false}
               deleteKeyCode={['Backspace', 'Delete']}
               defaultEdgeOptions={defaultEdgeOptions}
-              proOptions={{ hideAttribution: true }}
+              proOptions={{ hideAttribution: false }}
             >
               <OrbitRotateController
                 commit={commit}
@@ -295,7 +297,7 @@ export function TreeWorkspace({
         </PowerProvider>
 
         <p className="canvas-hint">
-          Root 미연결 링크 자동 삭제 · Mastery/Notable 우클릭 동영상 핀 · 오르빗 최대 3단
+          Root 미연결 링크는 비활성화(삭제 안 함) · Mastery/Notable 우클릭 동영상 핀 · 오르빗 용량 1–24
         </p>
       </section>
 
@@ -320,6 +322,7 @@ export function TreeWorkspace({
           onChangeSymbolId={onChangeSymbolId}
           onChangeNodeMedia={onChangeNodeMedia}
           onChangeStages={onChangeStages}
+          onAddPractice={onAddPractice}
           onChangeConnectEnabled={onChangeConnectEnabled}
           onChangeOrbitTierCount={onChangeOrbitTierCount}
           onChangeSatelliteOrbitTier={onChangeSatelliteOrbitTier}

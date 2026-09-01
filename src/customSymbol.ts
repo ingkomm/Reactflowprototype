@@ -1,4 +1,5 @@
 import type { CustomSymbol } from './types'
+import { MAX_IMAGE_BYTES } from './limits'
 
 const BLOCKED_TAG = /<\/?(script|foreignObject|iframe|object|embed)\b[^>]*>/gi
 const EVENT_ATTR = /\s(on[a-z]+|formaction)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi
@@ -172,22 +173,6 @@ export function buildMaskedImageMarkup(dataUrl: string, width: number, height: n
   ].join('')
 }
 
-function extractFirstDataImage(markup: string): string | null {
-  const match = markup.match(
-    /\b(?:xlink:)?href\s*=\s*("|')(data:image\/(?:png|jpe?g|webp|gif)[^"']*)\1/i,
-  )
-  return match?.[2] ?? null
-}
-
-function isMostlyRasterMarkup(markup: string): boolean {
-  const withoutImages = markup
-    .replace(/<image\b[^>]*(?:\/>|>[\s\S]*?<\/image>)/gi, '')
-    .replace(/<defs\b[^>]*>[\s\S]*?<\/defs>/gi, '')
-  return !/<path\b|<circle\b|<rect\b|<polygon\b|<ellipse\b|<line\b|<polyline\b|<text\b/i.test(
-    withoutImages,
-  )
-}
-
 function parseSymbolColor(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
@@ -346,35 +331,34 @@ export function sanitizeSvgFile(svgText: string, name: string): SanitizeSvgResul
   }
 }
 
-/** Unified importer for SVG / PNG / JPEG / WebP / GIF. */
+/** Unified importer for PNG / JPEG / WebP / GIF (SVG disabled in v0.1). */
 export async function importSymbolFile(file: File): Promise<SanitizeSvgResult> {
   const name = file.name.replace(/\.[^.]+$/, '') || 'Symbol'
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    return {
+      ok: false,
+      message: `이미지 파일이 너무 큽니다 (최대 ${Math.round(MAX_IMAGE_BYTES / 1024)}KB).`,
+    }
+  }
 
   if (isRasterSymbolFile(file)) {
     return importRasterSymbol(file, name)
   }
 
+  if (isSvgSymbolFile(file)) {
+    return {
+      ok: false,
+      message:
+        'v0.1에서는 보안상 SVG 가져오기가 비활성화되어 있습니다. PNG/JPEG/WebP/GIF를 사용해 주세요.',
+    }
+  }
+
   if (!isSvgSymbolFile(file) && file.type && file.type !== 'image/svg+xml') {
-    return { ok: false, message: 'SVG 또는 PNG/JPEG/WebP 이미지만 가져올 수 있습니다.' }
+    return { ok: false, message: 'PNG/JPEG/WebP/GIF 이미지만 가져올 수 있습니다.' }
   }
 
-  let text: string
-  try {
-    text = await file.text()
-  } catch {
-    return { ok: false, message: '파일을 읽을 수 없습니다.' }
-  }
-
-  const base = sanitizeSvgFile(text, name)
-  if (!base.ok) return base
-
-  // High-res design exports are often a single embedded PNG — convert so tint works.
-  const embedded = extractFirstDataImage(base.symbol.markup)
-  if (embedded && isMostlyRasterMarkup(base.symbol.markup)) {
-    return rasterDataUrlToSymbol(embedded, name, base.symbol.id)
-  }
-
-  return base
+  return { ok: false, message: '지원하지 않는 파일 형식입니다.' }
 }
 
 export function validateCustomSymbol(value: unknown): CustomSymbol | null {

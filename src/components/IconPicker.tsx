@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ICON_SETS,
   iconsInSet,
@@ -24,10 +24,6 @@ export function IconPicker({ open, value, onClose, onSelect }: Props) {
 
   const [setId, setSetId] = useState<IconSetId>(currentSet)
 
-  useEffect(() => {
-    if (open) setSetId(currentSet)
-  }, [open, currentSet])
-
   const icons = iconsInSet(setId)
 
   if (!open) return null
@@ -35,6 +31,7 @@ export function IconPicker({ open, value, onClose, onSelect }: Props) {
   return (
     <div className="icon-picker-backdrop" role="presentation" onClick={onClose}>
       <div
+        key={currentSet}
         className="icon-picker"
         role="dialog"
         aria-modal="true"

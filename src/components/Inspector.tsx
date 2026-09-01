@@ -9,9 +9,9 @@ import type {
 } from '../types'
 import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from '../types'
 import {
-  createTrainingLog,
+  createPracticeSessionLog,
   ensureNotableStages,
-  kindUsesTrainingBands,
+  kindUsesPracticeLogs,
   sortedStages,
 } from '../stage'
 import {
@@ -27,7 +27,7 @@ import {
   customSymbolsForKind,
   isDefaultSymbolId,
 } from '../librarySymbols'
-import { useCustomSymbols } from '../CustomSymbolContext'
+import { useCustomSymbols } from '../customSymbolContext.shared'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { VideoMediaPanel } from './VideoMediaPanel'
@@ -70,6 +70,7 @@ type Props = {
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
+  onAddPractice?: (nodeId: string) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -95,6 +96,7 @@ export function Inspector({
   onChangeSymbolId,
   onChangeNodeMedia,
   onChangeStages,
+  onAddPractice,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -528,109 +530,121 @@ export function Inspector({
         </>
       )}
 
-      {kindUsesTrainingBands(data.kind) && (
+      {kindUsesPracticeLogs(data.kind) && (
         <div className="inspector__section">
           <div className="inspector__section-head">
-            <h3>트레이닝 로그</h3>
+            <h3>연습 기록</h3>
             <button
               type="button"
               className="btn btn--ghost"
-              onClick={() => {
-                const next = ensureNotableStages(stages)
-                const pool = next[0]!
-                patchStages(
-                  next.map((s, i) =>
-                    i === 0
-                      ? { ...pool, logs: [...pool.logs, createTrainingLog('로그', 1)] }
-                      : s,
-                  ),
-                )
-              }}
+              onClick={() => onAddPractice?.(nodeId)}
             >
-              + 로그
+              +1 연습
             </button>
           </div>
-          {notableLogs.length === 0 ? (
-            <p className="inspector__empty">로그 없음</p>
+          {data.kind === 'notable' ? (
+            <>
+              <div className="inspector__section-head">
+                <h3>트레이닝 로그</h3>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    const next = ensureNotableStages(stages)
+                    const pool = next[0]!
+                    patchStages(
+                      next.map((s, i) =>
+                        i === 0
+                          ? { ...pool, logs: [...pool.logs, createPracticeSessionLog(1)] }
+                          : s,
+                      ),
+                    )
+                  }}
+                >
+                  + 로그
+                </button>
+              </div>
+              {notableLogs.length === 0 ? (
+                <p className="inspector__empty">로그 없음</p>
+              ) : (
+                <ul className="training-list">
+                  {notableLogs.map((log) => (
+                    <li key={log.id} className="training-item">
+                      <input
+                        className="training-item__label"
+                        value={log.label}
+                        onChange={(e) => {
+                          const next = ensureNotableStages(stages)
+                          const pool = next[0]!
+                          patchStages(
+                            next.map((s, i) =>
+                              i === 0
+                                ? {
+                                    ...pool,
+                                    logs: pool.logs.map((l) =>
+                                      l.id === log.id ? { ...l, label: e.target.value } : l,
+                                    ),
+                                  }
+                                : s,
+                            ),
+                          )
+                        }}
+                        placeholder="로그 이름"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn--icon"
+                        onClick={() => {
+                          const next = ensureNotableStages(stages)
+                          const pool = next[0]!
+                          patchStages(
+                            next.map((s, i) =>
+                              i === 0
+                                ? {
+                                    ...pool,
+                                    logs: pool.logs.filter((l) => l.id !== log.id),
+                                  }
+                                : s,
+                            ),
+                          )
+                        }}
+                        aria-label="로그 삭제"
+                      >
+                        ×
+                      </button>
+                      <div className="training-item__videos">
+                        <VideoMediaPanel
+                          title={`${log.label || '로그'} 동영상`}
+                          media={log.media ?? []}
+                          onChange={(media) => {
+                            const next = ensureNotableStages(stages)
+                            const pool = next[0]!
+                            patchStages(
+                              next.map((s, i) =>
+                                i === 0
+                                  ? {
+                                      ...pool,
+                                      logs: pool.logs.map((l) =>
+                                        l.id === log.id ? { ...l, media } : l,
+                                      ),
+                                    }
+                                  : s,
+                              ),
+                            )
+                          }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           ) : (
-            <ul className="training-list">
-              {notableLogs.map((log) => (
-                <li key={log.id} className="training-item">
-                  <input
-                    className="training-item__label"
-                    value={log.label}
-                    onChange={(e) => {
-                      const next = ensureNotableStages(stages)
-                      const pool = next[0]!
-                      patchStages(
-                        next.map((s, i) =>
-                          i === 0
-                            ? {
-                                ...pool,
-                                logs: pool.logs.map((l) =>
-                                  l.id === log.id ? { ...l, label: e.target.value } : l,
-                                ),
-                              }
-                            : s,
-                        ),
-                      )
-                    }}
-                    placeholder="로그 이름"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--icon"
-                    onClick={() => {
-                      const next = ensureNotableStages(stages)
-                      const pool = next[0]!
-                      patchStages(
-                        next.map((s, i) =>
-                          i === 0
-                            ? {
-                                ...pool,
-                                logs: pool.logs.filter((l) => l.id !== log.id),
-                              }
-                            : s,
-                        ),
-                      )
-                    }}
-                    aria-label="로그 삭제"
-                  >
-                    ×
-                  </button>
-                  <div className="training-item__videos">
-                    <VideoMediaPanel
-                      title={`${log.label || '로그'} 동영상`}
-                      media={log.media ?? []}
-                      onChange={(media) => {
-                        const next = ensureNotableStages(stages)
-                        const pool = next[0]!
-                        patchStages(
-                          next.map((s, i) =>
-                            i === 0
-                              ? {
-                                  ...pool,
-                                  logs: pool.logs.map((l) =>
-                                    l.id === log.id ? { ...l, media } : l,
-                                  ),
-                                }
-                              : s,
-                          ),
-                        )
-                      }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <p className="inspector__empty">
+              Small 노드 — +1 연습으로 세션 로그가 추가됩니다 (날짜 자동 기록).
+            </p>
           )}
         </div>
-      )}
-
-      {data.kind === 'small' && (
-        <p className="inspector__empty">
-          Small — 띠 없음. 파워가 들어오면 그대로 전달합니다.
-        </p>
       )}
     </aside>
   )

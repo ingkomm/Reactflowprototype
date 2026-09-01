@@ -1,7 +1,24 @@
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import { outermostBandRadius, BAND_STROKE } from './components/TrainingBands'
+import {
+  outermostBandRadius,
+  BAND_STROKE,
+} from './orbitGeometry'
 import { kindUsesTrainingBands } from './stage'
+import { clampOrbitTierCapacity } from './limits'
+
+export {
+  BAND_GAP,
+  BAND_STROKE,
+  BAND_BASE_PAD,
+  COUNT_BAND_GAP,
+  MASTERY_NEON_RIM_PAD,
+  MASTERY_NEON_LABEL_GAP,
+  masteryNeonOuterRadius,
+  labelBelowBandOffset,
+  masteryNeonLabelOffset,
+} from './orbitGeometry'
+export { MIN_ORBIT_TIER_CAPACITY, MAX_ORBIT_TIER_CAPACITY, clampOrbitTierCapacity } from './limits'
 
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 120, // replaced by ROOT_HUB_SIZE below once orbit constants are known
@@ -47,8 +64,8 @@ export function normalizeOrbitTier(tier: number | undefined, tierCount: OrbitTie
 /** Max members on a tier ring; unfilled slots are conceptual voids. */
 export function getOrbitTierCapacity(data: PassiveNodeData, tier: OrbitTier): number {
   const custom = data.orbitCapacityByTier?.[tier]
-  if (typeof custom === 'number' && Number.isFinite(custom) && custom >= 1) {
-    return Math.floor(custom)
+  if (typeof custom === 'number' && Number.isFinite(custom)) {
+    return clampOrbitTierCapacity(custom)
   }
   return DEFAULT_ORBIT_TIER_CAPACITY
 }

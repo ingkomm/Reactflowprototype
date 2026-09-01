@@ -1,20 +1,7 @@
-import { createContext, useContext, type ReactNode } from 'react'
-import type { CustomSymbol, PassiveKind } from './types'
+import type { ReactNode } from 'react'
 import { resolveSymbolColor as resolveSymbolColorImpl, type SymbolEditorKind } from './librarySymbols'
-
-export type CustomSymbolContextValue = {
-  customSymbols: CustomSymbol[]
-  defaultSymbolColors: Partial<Record<SymbolEditorKind, string>>
-  getCustomSymbol: (id: string | null | undefined) => CustomSymbol | null
-  resolveSymbolColor: (symbolId: string | undefined | null, kind: PassiveKind) => string
-}
-
-const CustomSymbolContext = createContext<CustomSymbolContextValue>({
-  customSymbols: [],
-  defaultSymbolColors: {},
-  getCustomSymbol: () => null,
-  resolveSymbolColor: () => '#9B9A97',
-})
+import type { CustomSymbol } from './types'
+import { CustomSymbolContext, type CustomSymbolContextValue } from './customSymbolContext.shared'
 
 export function CustomSymbolProvider({
   customSymbols,
@@ -36,8 +23,4 @@ export function CustomSymbolProvider({
       resolveSymbolColorImpl(symbolId, kind, customSymbols, defaultSymbolColors),
   }
   return <CustomSymbolContext.Provider value={value}>{children}</CustomSymbolContext.Provider>
-}
-
-export function useCustomSymbols() {
-  return useContext(CustomSymbolContext)
 }

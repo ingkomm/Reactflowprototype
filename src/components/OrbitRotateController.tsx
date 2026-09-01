@@ -16,26 +16,11 @@ import {
 import type { PassiveFlowNode } from './PassiveNode'
 import type { OrbitTier, PassiveNodeData } from '../types'
 
-/** Suppresses pane click / selection clear while orbit ring is being rotated. */
-const orbitInteractionGuard = {
-  dragging: false,
-  suppressUntil: 0,
-  preserveSelectionId: null as string | null,
-}
-
-function beginOrbitRotateDrag(preserveSelectionId: string | null) {
-  orbitInteractionGuard.dragging = true
-  orbitInteractionGuard.preserveSelectionId = preserveSelectionId
-}
-
-function endOrbitRotateDrag() {
-  orbitInteractionGuard.dragging = false
-  orbitInteractionGuard.suppressUntil = Date.now() + 400
-}
-
-export function shouldSuppressOrbitSelectionClear() {
-  return orbitInteractionGuard.dragging || Date.now() < orbitInteractionGuard.suppressUntil
-}
+import {
+  beginOrbitRotateDrag,
+  endOrbitRotateDrag,
+  getOrbitPreserveSelectionId,
+} from '../orbitInteractionGuard'
 
 type Props = {
   commit: () => void
@@ -81,7 +66,9 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
   const { screenToFlowPosition } = useReactFlow()
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const nodesRef = useRef(nodes)
-  nodesRef.current = nodes
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
 
   const dragRef = useRef<{
     pointerId: number
@@ -250,7 +237,7 @@ export function OrbitRotateController({ commit, selectedIdRef, setNodes, stack, 
       pane.classList.remove('is-orbit-rotating')
       applyDragDelta(drag, e.clientX, e.clientY)
       endOrbitRotateDrag()
-      const preserveId = orbitInteractionGuard.preserveSelectionId
+      const preserveId = getOrbitPreserveSelectionId()
       if (preserveId) restoreSelection(preserveId)
     }
 

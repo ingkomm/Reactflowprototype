@@ -1,5 +1,5 @@
 import type { Edge } from '@xyflow/react'
-import type { PassiveKind, PassiveNodeData, InitialConnectSlot } from './types'
+import type { GraphEdgeData, PassiveKind, PassiveNodeData, InitialConnectSlot } from './types'
 import { DEFAULT_SYMBOL_ID_BY_KIND } from './librarySymbols'
 import { stagesForKind } from './stage'
 import {
@@ -81,6 +81,7 @@ export function passiveLinkEdge(sourceId: string, targetId: string): Edge {
     target: targetId,
     sourceHandle: 'center',
     targetHandle: 'center-target',
+    data: { active: true } satisfies GraphEdgeData,
   }
 }
 
@@ -97,6 +98,7 @@ export function rootSocketLinkEdge(
     target: connectId,
     sourceHandle: rootSocketSourceHandle(slot),
     targetHandle: 'center-target',
+    data: { active: true } satisfies GraphEdgeData,
   }
 }
 
@@ -118,7 +120,7 @@ export function orbitLinkEdge(sourceId: string, targetId: string, masteryId: str
     type: 'orbit',
     source: sourceId,
     target: targetId,
-    data: { masteryId },
+    data: { masteryId, active: true } satisfies GraphEdgeData,
     zIndex: 1,
   }
 }

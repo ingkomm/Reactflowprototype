@@ -88,8 +88,16 @@ describe('customSymbol', () => {
     const imported = sanitizeSvgFile(SAMPLE, 'Circle')
     if (!imported.ok) throw new Error('import failed')
     expect(validateCustomSymbol(imported.symbol)?.id).toBe(imported.symbol.id)
-    expect(
-      validateCustomSymbol({ ...imported.symbol, scale: 1.5 })?.scale,
-    ).toBe(1.5)
+  })
+
+  it('rejects svg file import in v0.1', async () => {
+    const file = new File(['<svg viewBox="0 0 10 10"></svg>'], 'x.svg', {
+      type: 'image/svg+xml',
+    })
+    const { importSymbolFile } = await import('./customSymbol')
+    const result = await importSymbolFile(file)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.message).toContain('SVG')
   })
 })

@@ -14,7 +14,7 @@ import {
   orbitLinkSpec,
   trimStraightEndpoints,
 } from '../orbit'
-import { usePowerSet, usePowerFlowMeta } from '../PowerContext'
+import { usePowerSet, usePowerFlowMeta } from '../powerContext.shared'
 import { orientPowerLinkVisual } from '../power'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
 

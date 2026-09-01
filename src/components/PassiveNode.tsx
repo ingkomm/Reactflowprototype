@@ -26,21 +26,21 @@ import {
 } from '../orbit'
 import type { OrbitTier } from '../types'
 import { isDefaultSymbolId, resolveSymbolLabel } from '../librarySymbols'
-import { useNodePowered } from '../PowerContext'
+import { useNodePowered } from '../powerContext.shared'
 import { canTransmitPower } from '../power'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
-import { useCustomSymbols } from '../CustomSymbolContext'
-import { useIsVideoPinned } from '../VideoPinContext'
+import { useCustomSymbols } from '../customSymbolContext.shared'
+import { useIsVideoPinned } from '../videoPinContext.shared'
 import {
-  TrainingBands,
   labelBelowBandOffset,
   masteryNeonLabelOffset,
   masteryNeonOuterRadius,
   outermostBandRadius,
-} from './TrainingBands'
+} from '../orbitGeometry'
+import { TrainingBands } from './TrainingBands'
 import { INITIAL_CONNECT_SLOT_COUNT, initialSocketOffset, rootSocketSourceHandle, rootSocketTargetHandle } from '../initialHub'
-import { useVoidHighlight } from '../VoidHighlightContext'
+import { useVoidHighlight } from '../voidHighlightContext.shared'
 import './PassiveNode.css'
 
 export type PassiveFlowNode = Node<PassiveNodeData, 'passive'>

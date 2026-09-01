@@ -1,6 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react'
-
-const VideoPinContext = createContext<ReadonlySet<string>>(new Set())
+import type { ReactNode } from 'react'
+import { VideoPinContext } from './videoPinContext.shared'
 
 export function VideoPinProvider({
   pinnedNodeIds,
@@ -14,12 +13,4 @@ export function VideoPinProvider({
       {children}
     </VideoPinContext.Provider>
   )
-}
-
-export function usePinnedVideoNodeIds() {
-  return useContext(VideoPinContext)
-}
-
-export function useIsVideoPinned(nodeId: string) {
-  return useContext(VideoPinContext).has(nodeId)
 }

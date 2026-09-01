@@ -86,7 +86,7 @@ export function validateVideoMediaList(value: unknown): VideoMedia[] | null {
 }
 
 export function youtubeEmbedUrl(videoId: string): string {
-  return `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`
+  return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=0&rel=0`
 }
 
 /** All videos on a node: node.media + stage log media (deduped by id). */

@@ -5,8 +5,53 @@ export function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`
 }
 
-export function createTrainingLog(label = 'Session', count = 1): TrainingLog {
-  return { id: uid('log'), label, count: Math.max(0, count) }
+export function formatPracticeDate(date = new Date()): string {
+  return date.toISOString().slice(0, 10)
+}
+
+export function createTrainingLog(label = 'Session', count = 1, date?: string): TrainingLog {
+  const sessionDate = date ?? formatPracticeDate()
+  return {
+    id: uid('log'),
+    label: label === 'Session' ? sessionDate : label,
+    count: Math.max(0, count),
+    date: sessionDate,
+  }
+}
+
+/** One practice session log with today's date. */
+export function createPracticeSessionLog(count = 1): TrainingLog {
+  const date = formatPracticeDate()
+  return createTrainingLog(date, count, date)
+}
+
+export function kindUsesPracticeLogs(kind: PassiveKind): boolean {
+  return kind === 'small' || kind === 'notable'
+}
+
+/** Small nodes use a single open-ended practice stage. */
+export function ensureSmallPracticeStages(stages: StageData[]): StageData[] {
+  if (stages.length > 0) {
+    return stages.map(withNormalizedStage)
+  }
+  return [createStage(1, '연습', 9999, [])]
+}
+
+/** Append one practice session (+1) for Small or Notable nodes. */
+export function addPracticeSession(stages: StageData[], kind: PassiveKind): StageData[] {
+  if (kind === 'notable') {
+    const next = ensureNotableStages(stages)
+    const pool = next[0]!
+    return next.map((s, i) =>
+      i === 0 ? { ...pool, logs: [...pool.logs, createPracticeSessionLog(1)] } : s,
+    )
+  }
+  if (kind === 'small') {
+    const next = ensureSmallPracticeStages(stages)
+    const pool = next[0]!
+    return [{ ...pool, logs: [...pool.logs, createPracticeSessionLog(1)] }]
+  }
+  return stages
 }
 
 export function createStage(

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -30,7 +31,11 @@ const ASPECT = 16 / 9
 
 type DragMode = 'move' | 'resize' | null
 
-export function PinnedVideoPopup({
+export function PinnedVideoPopup(props: Props) {
+  return <PinnedVideoPopupInner key={`${props.pinnedNodeId}-${props.stackIndex}`} {...props} />
+}
+
+function PinnedVideoPopupInner({
   pinnedNodeId,
   stackIndex,
   containerRef,
@@ -42,6 +47,14 @@ export function PinnedVideoPopup({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [offset, setOffset] = useState({ x: stackIndex * 28, y: stackIndex * 28 })
   const [playerWidth, setPlayerWidth] = useState(DEFAULT_PLAYER_WIDTH)
+  const [layout, setLayout] = useState({
+    nodeCenter: { x: 0, y: 0 },
+    popupLeft: 0,
+    popupTop: 0,
+    anchorX: 0,
+    anchorY: 0,
+    playerHeight: DEFAULT_PLAYER_WIDTH / ASPECT,
+  })
   const dragRef = useRef<{
     mode: DragMode
     startX: number
@@ -50,6 +63,7 @@ export function PinnedVideoPopup({
     originOffsetY: number
     originWidth: number
   } | null>(null)
+  const endDragRef = useRef<(() => void) | null>(null)
 
   const node = useMemo(
     () => nodes.find((n) => n.id === pinnedNodeId) ?? null,
@@ -59,41 +73,37 @@ export function PinnedVideoPopup({
   const data = (node?.data as PassiveNodeData | undefined) ?? null
   const videos = useMemo(() => (data ? collectNodeVideos(data) : []), [data])
 
-  useEffect(() => {
-    setActiveId(null)
-    setOffset({ x: stackIndex * 28, y: stackIndex * 28 })
-    setPlayerWidth(DEFAULT_PLAYER_WIDTH)
-  }, [pinnedNodeId, stackIndex])
-
   const active = useMemo(() => {
     if (!videos.length) return null
     return videos.find((v) => v.id === activeId) ?? videos[0]!
   }, [videos, activeId])
 
-  const onPointerMove = useCallback((event: PointerEvent) => {
-    const drag = dragRef.current
-    if (!drag) return
-    const dx = event.clientX - drag.startX
-    const dy = event.clientY - drag.startY
-    if (drag.mode === 'move') {
-      setOffset({ x: drag.originOffsetX + dx, y: drag.originOffsetY + dy })
-      return
+  useLayoutEffect(() => {
+    if (!node || !data) return
+    const size = NODE_SIZE[data.kind] ?? 52
+    const screen = flowToScreenPosition({
+      x: node.position.x + size / 2,
+      y: node.position.y + size / 2,
+    })
+    const bounds = containerRef.current?.getBoundingClientRect()
+    const nodeCenter = {
+      x: screen.x - (bounds?.left ?? 0),
+      y: screen.y - (bounds?.top ?? 0),
     }
-    if (drag.mode === 'resize') {
-      const delta = Math.max(dx, dy * ASPECT)
-      const next = Math.min(
-        MAX_PLAYER_WIDTH,
-        Math.max(MIN_PLAYER_WIDTH, drag.originWidth + delta),
-      )
-      setPlayerWidth(next)
-    }
-  }, [])
-
-  const endDrag = useCallback(() => {
-    dragRef.current = null
-    window.removeEventListener('pointermove', onPointerMove)
-    window.removeEventListener('pointerup', endDrag)
-  }, [onPointerMove])
+    const baseLeft = nodeCenter.x + Math.max(36, size * 0.35) + 40
+    const baseTop = Math.max(12, nodeCenter.y - 110)
+    const popupLeft = baseLeft + offset.x
+    const popupTop = baseTop + offset.y
+    const playerHeight = playerWidth / ASPECT
+    setLayout({
+      nodeCenter,
+      popupLeft,
+      popupTop,
+      anchorX: popupLeft + playerWidth / 2,
+      anchorY: popupTop + 20,
+      playerHeight,
+    })
+  }, [containerRef, data, flowToScreenPosition, node, offset.x, offset.y, playerWidth, transform])
 
   const beginDrag = useCallback(
     (mode: Exclude<DragMode, null>, event: ReactPointerEvent) => {
@@ -107,59 +117,70 @@ export function PinnedVideoPopup({
         originOffsetY: offset.y,
         originWidth: playerWidth,
       }
-      window.addEventListener('pointermove', onPointerMove)
-      window.addEventListener('pointerup', endDrag)
+
+      const handleMove = (moveEvent: PointerEvent) => {
+        const drag = dragRef.current
+        if (!drag) return
+        const dx = moveEvent.clientX - drag.startX
+        const dy = moveEvent.clientY - drag.startY
+        if (drag.mode === 'move') {
+          setOffset({ x: drag.originOffsetX + dx, y: drag.originOffsetY + dy })
+          return
+        }
+        const delta = Math.max(dx, dy * ASPECT)
+        const next = Math.min(
+          MAX_PLAYER_WIDTH,
+          Math.max(MIN_PLAYER_WIDTH, drag.originWidth + delta),
+        )
+        setPlayerWidth(next)
+      }
+
+      const handleUp = () => {
+        dragRef.current = null
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', handleUp)
+        endDragRef.current = null
+      }
+
+      endDragRef.current = handleUp
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', handleUp)
     },
-    [endDrag, offset.x, offset.y, onPointerMove, playerWidth],
+    [offset.x, offset.y, playerWidth],
   )
 
-  useEffect(() => () => endDrag(), [endDrag])
+  useEffect(() => {
+    return () => {
+      endDragRef.current?.()
+    }
+  }, [])
 
   if (!node || !data) return null
-
-  const size = NODE_SIZE[data.kind] ?? 52
-  void transform
-  const screen = flowToScreenPosition({
-    x: node.position.x + size / 2,
-    y: node.position.y + size / 2,
-  })
-  const bounds = containerRef.current?.getBoundingClientRect()
-  const nodeCenter = {
-    x: screen.x - (bounds?.left ?? 0),
-    y: screen.y - (bounds?.top ?? 0),
-  }
-  const baseLeft = nodeCenter.x + Math.max(36, size * 0.35) + 40
-  const baseTop = Math.max(12, nodeCenter.y - 110)
-  const popupLeft = baseLeft + offset.x
-  const popupTop = baseTop + offset.y
-  const playerHeight = playerWidth / ASPECT
-  const anchorX = popupLeft + playerWidth / 2
-  const anchorY = popupTop + 20
 
   return (
     <div className="pinned-video-layer" aria-live="polite">
       <svg className="pinned-video-layer__links" aria-hidden>
         <line
-          x1={nodeCenter.x}
-          y1={nodeCenter.y}
-          x2={anchorX}
-          y2={anchorY}
+          x1={layout.nodeCenter.x}
+          y1={layout.nodeCenter.y}
+          x2={layout.anchorX}
+          y2={layout.anchorY}
           className="pinned-video-layer__link"
         />
-        <circle cx={nodeCenter.x} cy={nodeCenter.y} r={5} className="pinned-video-layer__dot" />
-        <circle cx={anchorX} cy={anchorY} r={4} className="pinned-video-layer__dot" />
+        <circle cx={layout.nodeCenter.x} cy={layout.nodeCenter.y} r={5} className="pinned-video-layer__dot" />
+        <circle cx={layout.anchorX} cy={layout.anchorY} r={4} className="pinned-video-layer__dot" />
       </svg>
 
       <div
         className="pinned-video-popup"
         style={
           {
-            left: popupLeft,
-            top: popupTop,
+            left: layout.popupLeft,
+            top: layout.popupTop,
             width: playerWidth + 24,
             zIndex: 40 + stackIndex,
             '--player-width': `${playerWidth}px`,
-            '--player-height': `${playerHeight}px`,
+            '--player-height': `${layout.playerHeight}px`,
           } as CSSProperties
         }
         role="dialog"

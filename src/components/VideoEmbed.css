@@ -1,0 +1,23 @@
+.video-embed--placeholder {
+  display: grid;
+  place-items: center;
+  gap: 0.5rem;
+  min-height: 120px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-radius: 8px;
+}
+
+.video-embed__load-btn {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--teal) 18%, transparent);
+  color: var(--ink);
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+}
+
+.video-embed__hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
