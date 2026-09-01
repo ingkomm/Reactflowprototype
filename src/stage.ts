@@ -6,7 +6,10 @@ export function uid(prefix: string) {
 }
 
 export function formatPracticeDate(date = new Date()): string {
-  return date.toISOString().slice(0, 10)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 export function createTrainingLog(label = 'Session', count = 1, date?: string): TrainingLog {
@@ -244,8 +247,9 @@ export function notableStagesFromTotal(totalLogged: number): StageData[] {
 }
 
 export function stagesForKind(kind: PassiveKind, existing?: StageData[]): StageData[] {
-  if (!kindUsesTrainingBands(kind)) return []
-  return ensureNotableStages(existing ?? [])
+  if (kind === 'small') return ensureSmallPracticeStages(existing ?? [])
+  if (kindUsesTrainingBands(kind)) return ensureNotableStages(existing ?? [])
+  return []
 }
 
 export function nodeHasVisibleBands(data: PassiveNodeData, nodePowered: boolean): boolean {

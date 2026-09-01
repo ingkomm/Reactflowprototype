@@ -24,6 +24,81 @@ describe('graph integrity & import limits', () => {
     expect(result?.message).toContain('Root')
   })
 
+  it('rejects orbit capacity outside 1-24', () => {
+    const bad = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: 'initial-main',
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: 'default' },
+        },
+        {
+          id: 'mastery-a',
+          type: 'passive',
+          position: { x: 100, y: 0 },
+          data: {
+            label: 'M',
+            kind: 'mastery',
+            stages: [],
+            symbolId: 'default',
+            orbitCapacityByTier: { 1: 30 },
+            orbitTierCount: 1,
+          },
+        },
+      ],
+      edges: [],
+      customSymbols: [],
+    }
+    const result = validateGraphIntegrity(bad.nodes as never, bad.edges)
+    expect(result?.message).toContain('용량')
+  })
+
+  it('rejects negative orbit slots', () => {
+    const bad = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: 'initial-main',
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: 'default' },
+        },
+        {
+          id: 'mastery-a',
+          type: 'passive',
+          position: { x: 100, y: 0 },
+          data: {
+            label: 'M',
+            kind: 'mastery',
+            stages: [],
+            symbolId: 'default',
+            orbitCapacityByTier: { 1: 6 },
+            orbitTierCount: 1,
+          },
+        },
+        {
+          id: 'small-a',
+          type: 'passive',
+          position: { x: 200, y: 0 },
+          data: {
+            label: 'S',
+            kind: 'small',
+            stages: [],
+            symbolId: 'default',
+            masteryId: 'mastery-a',
+            orbitSlot: -1,
+          },
+        },
+      ],
+      edges: [],
+      customSymbols: [],
+    }
+    const result = validateGraphIntegrity(bad.nodes as never, bad.edges)
+    expect(result?.message).toContain('슬롯')
+  })
+
   it('rejects oversized JSON', () => {
     const huge = 'x'.repeat(3 * 1024 * 1024)
     const result = parseGraphDocumentJson(huge)

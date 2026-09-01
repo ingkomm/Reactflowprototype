@@ -64,8 +64,8 @@ export function SymbolKindEditor({
         </header>
 
         <p className="symbol-kind-editor__hint">
-          Default는 꽉 채운 원형입니다. SVG·PNG를 가져오면 단색 마스크로 변환되어 색상·확대를
-          조절할 수 있습니다.
+          Default는 꽉 채운 원형입니다. PNG·JPEG·WebP·GIF를 가져오면 단색 마스크로 변환되어
+          색상·확대를 조절할 수 있습니다.
         </p>
 
         <ul className="symbol-kind-editor__list">
@@ -131,12 +131,12 @@ export function SymbolKindEditor({
 
         <footer className="symbol-kind-editor__foot">
           <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-            Import SVG / PNG
+            Import PNG
           </button>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/svg+xml,.svg,image/png,.png,image/jpeg,.jpg,.jpeg,image/webp,.webp,image/gif,.gif"
+            accept="image/png,.png,image/jpeg,.jpg,.jpeg,image/webp,.webp,image/gif,.gif"
             hidden
             onChange={(event) => {
               const file = event.target.files?.[0]

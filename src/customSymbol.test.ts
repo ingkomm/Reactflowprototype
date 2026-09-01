@@ -8,6 +8,19 @@ import {
 } from './customSymbol'
 
 const SAMPLE = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" fill="#D9730D"/></svg>`
+const DEMO_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+function rasterSymbolFromMarkup(width: number, height: number) {
+  return {
+    id: 'cs-test',
+    name: 'Raster',
+    viewBox: `0 0 ${width} ${height}`,
+    width,
+    height,
+    markup: buildMaskedImageMarkup(DEMO_PNG, width, height),
+  }
+}
 
 describe('customSymbol', () => {
   it('imports svg with viewBox and converts paints to currentColor', () => {
@@ -84,10 +97,30 @@ describe('customSymbol', () => {
     expect(normalizeSymbolScale(1.23)).toBe(1.25)
   })
 
-  it('validates stored symbols', () => {
+  it('validates stored raster symbols', () => {
+    const symbol = rasterSymbolFromMarkup(24, 24)
+    expect(validateCustomSymbol(symbol)?.id).toBe(symbol.id)
+  })
+
+  it('rejects svg markup in JSON custom symbols', () => {
     const imported = sanitizeSvgFile(SAMPLE, 'Circle')
     if (!imported.ok) throw new Error('import failed')
-    expect(validateCustomSymbol(imported.symbol)?.id).toBe(imported.symbol.id)
+    expect(validateCustomSymbol(imported.symbol)).toBeNull()
+  })
+
+  it('rejects symbols with external URLs', () => {
+    const symbol = rasterSymbolFromMarkup(24, 24)
+    const bad = {
+      ...symbol,
+      markup: symbol.markup.replace(DEMO_PNG, 'https://evil.example/icon.png'),
+    }
+    expect(validateCustomSymbol(bad)).toBeNull()
+  })
+
+  it('rejects symbols with style tags', () => {
+    const symbol = rasterSymbolFromMarkup(24, 24)
+    const bad = { ...symbol, markup: `<style>body{}</style>${symbol.markup}` }
+    expect(validateCustomSymbol(bad)).toBeNull()
   })
 
   it('rejects svg file import in v0.1', async () => {

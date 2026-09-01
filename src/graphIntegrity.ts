@@ -1,7 +1,10 @@
 import type { SerializedEdge, SerializedFlowNode } from './graphDocument'
 import { INITIAL_NODE_ID } from './types'
 import type { PassiveNodeData, OrbitTier } from './types'
-import { clampOrbitTierCapacity } from './limits'
+import {
+  MAX_ORBIT_TIER_CAPACITY,
+  MIN_ORBIT_TIER_CAPACITY,
+} from './limits'
 import { normalizeOrbitTier, normalizeOrbitTierCount } from './orbit'
 
 const ALLOWED_EDGE_TYPES = new Set(['center', 'orbit', 'notable', undefined])
@@ -41,11 +44,12 @@ export function validateGraphIntegrity(
 
     if (data.kind === 'mastery' || data.kind === 'voidMastery') {
       for (const tier of orbitTierKeys(data)) {
-        const capacity = clampOrbitTierCapacity(
-          data.orbitCapacityByTier?.[tier] ?? 6,
-        )
-        if (capacity < 1 || capacity > 24) {
-          return { message: `오르빗 용량은 1~24 사이여야 합니다 (${node.id}, tier ${tier}).` }
+        const raw = data.orbitCapacityByTier?.[tier] ?? 6
+        if (typeof raw !== 'number' || !Number.isFinite(raw) || Math.floor(raw) !== raw) {
+          return { message: `오르빗 용량은 정수여야 합니다 (${node.id}, tier ${tier}).` }
+        }
+        if (raw < MIN_ORBIT_TIER_CAPACITY || raw > MAX_ORBIT_TIER_CAPACITY) {
+          return { message: `오르빗 용량은 ${MIN_ORBIT_TIER_CAPACITY}~${MAX_ORBIT_TIER_CAPACITY} 사이여야 합니다 (${node.id}, tier ${tier}).` }
         }
       }
     }
@@ -55,16 +59,24 @@ export function validateGraphIntegrity(
   for (const node of nodes) {
     const data = node.data
     if (!data.masteryId || data.orbitSlot == null) continue
+    const slot = data.orbitSlot
+    if (!Number.isInteger(slot) || slot < 0) {
+      return { message: `오르빗 슬롯은 0 이상의 정수여야 합니다 (${node.id}).` }
+    }
     const mastery = nodeById.get(data.masteryId)
     if (!mastery) continue
     const tier = normalizeOrbitTier(data.orbitTier, normalizeOrbitTierCount(mastery.data.orbitTierCount))
+    const capacity = mastery.data.orbitCapacityByTier?.[tier] ?? 6
+    if (slot >= capacity) {
+      return { message: `오르빗 슬롯이 용량을 초과합니다 (${node.id}, slot ${slot}, capacity ${capacity}).` }
+    }
     const key = `${data.masteryId}:${tier}`
     if (!slotUsage.has(key)) slotUsage.set(key, new Set())
     const used = slotUsage.get(key)!
-    if (used.has(data.orbitSlot)) {
-      return { message: `오르빗 슬롯 중복: ${data.masteryId} tier ${tier} slot ${data.orbitSlot}` }
+    if (used.has(slot)) {
+      return { message: `오르빗 슬롯 중복: ${data.masteryId} tier ${tier} slot ${slot}` }
     }
-    used.add(data.orbitSlot)
+    used.add(slot)
   }
 
   for (const edge of edges) {

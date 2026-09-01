@@ -173,6 +173,37 @@ export function buildMaskedImageMarkup(dataUrl: string, width: number, height: n
   ].join('')
 }
 
+const RASTER_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
+const BLOCKED_MARKUP = /<\/?(script|style|foreignObject|iframe|object|embed)\b/i
+const EVENT_ATTR_MARKUP = /\s(on[a-z]+|formaction)\s*=/i
+const EXTERNAL_URL_MARKUP = /\b(?:href|xlink:href)\s*=\s*("|')(?!data:image\/png;base64,)(?!#)[^"']*\1/i
+
+export type ParsedRasterSymbol = {
+  dataUrl: string
+  width: number
+  height: number
+}
+
+/** Extract raster data URL from masked-image markup produced by import. */
+export function parseRasterSymbolMarkup(markup: string): ParsedRasterSymbol | null {
+  if (!markup.includes(SYMBOL_MASK_ID)) return null
+  const hrefMatch = markup.match(/<image\b[^>]*\bhref="(data:image\/png;base64,[^"]+)"/i)
+  if (!hrefMatch?.[1] || !RASTER_DATA_URL.test(hrefMatch[1])) return null
+  const rectMatch = markup.match(/<rect\b[^>]*\bwidth="(\d+)"[^>]*\bheight="(\d+)"/i)
+  if (!rectMatch?.[1] || !rectMatch?.[2]) return null
+  const width = Number(rectMatch[1])
+  const height = Number(rectMatch[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+  return { dataUrl: hrefMatch[1], width, height }
+}
+
+function rejectUnsafeMarkup(markup: string): string | null {
+  if (BLOCKED_MARKUP.test(markup)) return null
+  if (EVENT_ATTR_MARKUP.test(markup)) return null
+  if (EXTERNAL_URL_MARKUP.test(markup)) return null
+  return markup
+}
+
 function parseSymbolColor(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
@@ -371,11 +402,11 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   const view = parseViewBox(raw.viewBox)
   if (!view) return null
 
-  // Masked raster symbols already use currentColor rect + image mask — don't rewrite fills.
-  const markup = raw.markup.includes(SYMBOL_MASK_ID)
-    ? sanitizeInnerMarkup(raw.markup)
-    : toMonochromeMarkup(sanitizeInnerMarkup(raw.markup))
-  if (!markup) return null
+  const safeMarkup = rejectUnsafeMarkup(raw.markup.trim())
+  if (!safeMarkup) return null
+  const raster = parseRasterSymbolMarkup(safeMarkup)
+  if (!raster) return null
+  if (raster.width !== view.width || raster.height !== view.height) return null
 
   const symbol: CustomSymbol = {
     id: raw.id.trim(),
@@ -383,7 +414,7 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
     viewBox: view.viewBox,
     width: view.width,
     height: view.height,
-    markup,
+    markup: safeMarkup,
   }
   if (raw.kind === 'mastery' || raw.kind === 'notable' || raw.kind === 'small') {
     symbol.kind = raw.kind

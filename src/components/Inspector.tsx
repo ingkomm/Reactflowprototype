@@ -9,10 +9,11 @@ import type {
 } from '../types'
 import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from '../types'
 import {
-  createPracticeSessionLog,
   ensureNotableStages,
+  ensureSmallPracticeStages,
   kindUsesPracticeLogs,
   sortedStages,
+  totalRawLoggedAcrossStages,
 } from '../stage'
 import {
   getOrbitTierCapacity,
@@ -131,11 +132,26 @@ export function Inspector({
       : []
   const currentSymbolId = isDefaultSymbolId(data.symbolId) ? DEFAULT_SYMBOL_ID : data.symbolId
   const notableLogs = ensureNotableStages(stages)[0]?.logs ?? []
+  const smallStages = ensureSmallPracticeStages(stages)
+  const smallLogs = smallStages[0]?.logs ?? []
+  const practiceLogs = data.kind === 'small' ? smallLogs : notableLogs
+  const practiceTotal = totalRawLoggedAcrossStages(data.kind === 'small' ? smallStages : ensureNotableStages(stages))
   const isFixedInitial = nodeId === INITIAL_NODE_ID
 
   const patchStages = (next: StageData[]) => {
+    if (data.kind === 'small') {
+      onChangeStages(nodeId, ensureSmallPracticeStages(next))
+      return
+    }
     onChangeStages(nodeId, ensureNotableStages(next))
   }
+
+  const logsByDate = practiceLogs.reduce<Map<string, typeof practiceLogs>>((map, log) => {
+    const date = log.date ?? '날짜 없음'
+    if (!map.has(date)) map.set(date, [])
+    map.get(date)!.push(log)
+    return map
+  }, new Map())
 
   return (
     <aside className="inspector">
@@ -263,7 +279,7 @@ export function Inspector({
                 )
               })}
             </div>
-            <p className="field-hint">왼쪽 Nodes의 ⚙ 버튼에서 색상·SVG 심볼을 설정할 수 있습니다.</p>
+            <p className="field-hint">왼쪽 Nodes의 ⚙ 버튼에서 색상·이미지 심볼을 설정할 수 있습니다.</p>
           </>
         ) : (
           <p className="inspector__empty">이 종류는 심볼을 선택할 수 없습니다.</p>
@@ -542,107 +558,97 @@ export function Inspector({
               +1 연습
             </button>
           </div>
-          {data.kind === 'notable' ? (
-            <>
-              <div className="inspector__section-head">
-                <h3>트레이닝 로그</h3>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => {
-                    const next = ensureNotableStages(stages)
-                    const pool = next[0]!
-                    patchStages(
-                      next.map((s, i) =>
-                        i === 0
-                          ? { ...pool, logs: [...pool.logs, createPracticeSessionLog(1)] }
-                          : s,
-                      ),
-                    )
-                  }}
-                >
-                  + 로그
-                </button>
-              </div>
-              {notableLogs.length === 0 ? (
-                <p className="inspector__empty">로그 없음</p>
-              ) : (
-                <ul className="training-list">
-                  {notableLogs.map((log) => (
-                    <li key={log.id} className="training-item">
-                      <input
-                        className="training-item__label"
-                        value={log.label}
-                        onChange={(e) => {
-                          const next = ensureNotableStages(stages)
-                          const pool = next[0]!
-                          patchStages(
-                            next.map((s, i) =>
-                              i === 0
-                                ? {
-                                    ...pool,
-                                    logs: pool.logs.map((l) =>
-                                      l.id === log.id ? { ...l, label: e.target.value } : l,
-                                    ),
-                                  }
-                                : s,
-                            ),
-                          )
-                        }}
-                        placeholder="로그 이름"
-                      />
-                      <button
-                        type="button"
-                        className="btn btn--icon"
-                        onClick={() => {
-                          const next = ensureNotableStages(stages)
-                          const pool = next[0]!
-                          patchStages(
-                            next.map((s, i) =>
-                              i === 0
-                                ? {
-                                    ...pool,
-                                    logs: pool.logs.filter((l) => l.id !== log.id),
-                                  }
-                                : s,
-                            ),
-                          )
-                        }}
-                        aria-label="로그 삭제"
-                      >
-                        ×
-                      </button>
-                      <div className="training-item__videos">
-                        <VideoMediaPanel
-                          title={`${log.label || '로그'} 동영상`}
-                          media={log.media ?? []}
-                          onChange={(media) => {
+          <p className="inspector__meta">총 {practiceTotal}회</p>
+          {practiceLogs.length === 0 ? (
+            <p className="inspector__empty">로그 없음</p>
+          ) : (
+            <ul className="training-list">
+              {[...logsByDate.entries()].map(([date, logs]) => (
+                <li key={date} className="training-item training-item--date-group">
+                  <div className="training-item__date">{date}</div>
+                  <ul className="training-list training-list--nested">
+                    {logs.map((log) => (
+                      <li key={log.id} className="training-item">
+                        {data.kind === 'notable' ? (
+                          <input
+                            className="training-item__label"
+                            value={log.label}
+                            onChange={(e) => {
+                              const next = ensureNotableStages(stages)
+                              const pool = next[0]!
+                              patchStages(
+                                next.map((s, i) =>
+                                  i === 0
+                                    ? {
+                                        ...pool,
+                                        logs: pool.logs.map((l) =>
+                                          l.id === log.id ? { ...l, label: e.target.value } : l,
+                                        ),
+                                      }
+                                    : s,
+                                ),
+                              )
+                            }}
+                            placeholder="로그 이름"
+                          />
+                        ) : (
+                          <span className="training-item__label">{log.label || date}</span>
+                        )}
+                        <span className="training-item__count">×{log.count}</span>
+                        <button
+                          type="button"
+                          className="btn btn--icon"
+                          onClick={() => {
+                            if (data.kind === 'small') {
+                              const next = ensureSmallPracticeStages(stages)
+                              const pool = next[0]!
+                              patchStages([{ ...pool, logs: pool.logs.filter((l) => l.id !== log.id) }])
+                              return
+                            }
                             const next = ensureNotableStages(stages)
                             const pool = next[0]!
                             patchStages(
                               next.map((s, i) =>
                                 i === 0
-                                  ? {
-                                      ...pool,
-                                      logs: pool.logs.map((l) =>
-                                        l.id === log.id ? { ...l, media } : l,
-                                      ),
-                                    }
+                                  ? { ...pool, logs: pool.logs.filter((l) => l.id !== log.id) }
                                   : s,
                               ),
                             )
                           }}
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          ) : (
-            <p className="inspector__empty">
-              Small 노드 — +1 연습으로 세션 로그가 추가됩니다 (날짜 자동 기록).
-            </p>
+                          aria-label="로그 삭제"
+                        >
+                          ×
+                        </button>
+                        {data.kind === 'notable' && (
+                          <div className="training-item__videos">
+                            <VideoMediaPanel
+                              title={`${log.label || '로그'} 동영상`}
+                              media={log.media ?? []}
+                              onChange={(media) => {
+                                const next = ensureNotableStages(stages)
+                                const pool = next[0]!
+                                patchStages(
+                                  next.map((s, i) =>
+                                    i === 0
+                                      ? {
+                                          ...pool,
+                                          logs: pool.logs.map((l) =>
+                                            l.id === log.id ? { ...l, media } : l,
+                                          ),
+                                        }
+                                      : s,
+                                  ),
+                                )
+                              }}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

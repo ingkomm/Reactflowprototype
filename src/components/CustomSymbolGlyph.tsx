@@ -1,6 +1,6 @@
 import { useId, type CSSProperties } from 'react'
 import type { CustomSymbol } from '../types'
-import { normalizeSymbolScale, SYMBOL_MASK_ID } from '../customSymbol'
+import { normalizeSymbolScale, parseRasterSymbolMarkup } from '../customSymbol'
 
 type Props = {
   symbol: CustomSymbol
@@ -11,13 +11,14 @@ type Props = {
   title?: string
 }
 
-/** Renders imported SVG as a monochrome glyph tinted by `color`. */
+/** Renders imported raster symbol as a monochrome glyph tinted by `color`. */
 export function CustomSymbolGlyph({ symbol, color, className, style, title }: Props) {
   const reactId = useId().replace(/:/g, '')
-  const markup = symbol.markup.includes(SYMBOL_MASK_ID)
-    ? symbol.markup.split(SYMBOL_MASK_ID).join(`mask-${reactId}`)
-    : symbol.markup
+  const maskId = `mask-${reactId}`
+  const raster = parseRasterSymbolMarkup(symbol.markup)
   const scale = normalizeSymbolScale(symbol.scale)
+
+  if (!raster) return null
 
   return (
     <svg
@@ -36,7 +37,29 @@ export function CustomSymbolGlyph({ symbol, color, className, style, title }: Pr
       role={title ? 'img' : undefined}
     >
       {title ? <title>{title}</title> : null}
-      <g fill="currentColor" dangerouslySetInnerHTML={{ __html: markup }} />
+      <defs>
+        <mask
+          id={maskId}
+          maskUnits="userSpaceOnUse"
+          x="0"
+          y="0"
+          width={raster.width}
+          height={raster.height}
+        >
+          <image
+            href={raster.dataUrl}
+            width={raster.width}
+            height={raster.height}
+            preserveAspectRatio="xMidYMid meet"
+          />
+        </mask>
+      </defs>
+      <rect
+        width={raster.width}
+        height={raster.height}
+        fill="currentColor"
+        mask={`url(#${maskId})`}
+      />
     </svg>
   )
 }

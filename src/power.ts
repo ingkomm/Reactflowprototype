@@ -302,7 +302,6 @@ export function getNodesReachableFromInitial(
 
   const adj = new Map<string, Set<string>>()
   for (const edge of edges) {
-    if (!isEdgeActive(edge)) continue
     if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type) continue
     for (const [a, b] of [
       [edge.source, edge.target],
@@ -334,7 +333,7 @@ export function syncEdgesReachableFromInitial(
   nodes: PassiveFlowNode[],
   edges: Edge[],
 ): Edge[] {
-  const reachable = getNodesReachableFromInitial(nodes, edges.filter(isEdgeActive))
+  const reachable = getNodesReachableFromInitial(nodes, edges)
   const nodeIds = new Set(nodes.map((n) => n.id))
 
   return edges.map((e) => {

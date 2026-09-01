@@ -10,11 +10,15 @@ import {
 import { EMPTY_GRAPH_EDGES, EMPTY_GRAPH_NODES } from './emptyGraph'
 import {
   backupDocumentToStorage,
+  hasBackupDocument,
+  hasStoredDocument,
   loadDocumentFromStorage,
   readBootstrapChoice,
+  restoreBackupFromStorage,
   saveDocumentToStorage,
   writeBootstrapChoice,
   type BootstrapChoice,
+  type StorageSaveResult,
 } from './persistence/autosave'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import type { CustomSymbol, GraphDocumentSettings } from './types'
@@ -32,6 +36,10 @@ export type GraphAppSnapshot = {
 export type GraphPersistInput = GraphAppSnapshot & {
   pinnedVideoNodeIds?: string[]
 }
+
+export type SaveStatus = 'idle' | 'saved' | 'failed'
+
+export type SaveFailureReason = 'quota' | 'too_large'
 
 const AUTOSAVE_DEBOUNCE_MS = 400
 
@@ -52,13 +60,11 @@ function flowFromBootstrap(choice: BootstrapChoice): GraphAppSnapshot {
   }
 }
 
-function tryLoadStored(): GraphAppSnapshot | null {
-  const stored = loadDocumentFromStorage()
-  if (!stored) return null
-  const imported = documentToFlowState(stored)
+function snapshotFromDocument(document: GraphDocumentV01): GraphAppSnapshot {
+  const imported = documentToFlowState(document)
   return {
     nodes: imported.nodes,
-    edges: imported.edges,
+    edges: sanitizeFlowEdges(imported.nodes, imported.edges),
     customSymbols: imported.customSymbols,
     settings: imported.settings,
   }
@@ -67,14 +73,19 @@ function tryLoadStored(): GraphAppSnapshot | null {
 export function resolveInitialGraphState(): {
   snapshot: GraphAppSnapshot | null
   needsBootstrap: boolean
+  storageCorrupt: boolean
 } {
-  const stored = tryLoadStored()
-  if (stored) return { snapshot: stored, needsBootstrap: false }
+  const stored = loadDocumentFromStorage()
+  if (stored.ok) return { snapshot: snapshotFromDocument(stored.document), needsBootstrap: false, storageCorrupt: false }
+
+  if (hasStoredDocument()) {
+    return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
+  }
 
   const choice = readBootstrapChoice()
-  if (choice) return { snapshot: flowFromBootstrap(choice), needsBootstrap: false }
+  if (choice) return { snapshot: flowFromBootstrap(choice), needsBootstrap: false, storageCorrupt: false }
 
-  return { snapshot: null, needsBootstrap: true }
+  return { snapshot: null, needsBootstrap: true, storageCorrupt: false }
 }
 
 export function sanitizeFlowEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
@@ -90,13 +101,26 @@ export function snapshotToDocument(input: GraphPersistInput): GraphDocumentV01 {
   })
 }
 
-export function useGraphAutosave(snapshot: GraphPersistInput, enabled: boolean) {
+export function persistSnapshot(snapshot: GraphPersistInput): StorageSaveResult {
+  return saveDocumentToStorage(snapshotToDocument(snapshot))
+}
+
+export function useGraphAutosave(
+  snapshot: GraphPersistInput,
+  enabled: boolean,
+  onStatus?: (status: SaveStatus, reason?: SaveFailureReason) => void,
+) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const flush = useCallback(() => {
     if (!enabled) return
-    saveDocumentToStorage(snapshotToDocument(snapshot))
-  }, [enabled, snapshot])
+    const result = persistSnapshot(snapshot)
+    if (result.ok) {
+      onStatus?.('saved')
+    } else {
+      onStatus?.('failed', result.reason)
+    }
+  }, [enabled, onStatus, snapshot])
 
   useEffect(() => {
     if (!enabled) return
@@ -141,6 +165,10 @@ export async function importGraphJsonFile(
     return { ok: false, message: '파일을 읽을 수 없습니다.' }
   }
 
+  if (text.length > MAX_JSON_BYTES) {
+    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
+  }
+
   backupDocumentToStorage(snapshotToDocument(current))
 
   const parsed = parseGraphDocumentJson(text)
@@ -159,3 +187,16 @@ export async function importGraphJsonFile(
     },
   }
 }
+
+export function restoreGraphFromBackup(): ImportJsonResult {
+  const backup = restoreBackupFromStorage()
+  if (!backup.ok) {
+    if (backup.reason === 'missing') {
+      return { ok: false, message: '복원할 백업이 없습니다.' }
+    }
+    return { ok: false, message: '백업 데이터가 손상되었습니다.' }
+  }
+  return { ok: true, snapshot: snapshotFromDocument(backup.document) }
+}
+
+export { hasBackupDocument }

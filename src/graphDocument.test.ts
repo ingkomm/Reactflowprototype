@@ -7,9 +7,12 @@ import {
   validateGraphDocument,
 } from './graphDocument'
 import { DEFAULT_SYMBOL_ID } from './librarySymbols'
-import { sanitizeSvgFile } from './customSymbol'
+import { buildMaskedImageMarkup } from './customSymbol'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import { createVideoMediaId } from './videoMedia'
+
+const DEMO_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 
 describe('graphDocument', () => {
   it('round-trips seed graph JSON', () => {
@@ -60,12 +63,18 @@ describe('graphDocument', () => {
   })
 
   it('preserves custom symbols and media references', () => {
-    const imported = sanitizeSvgFile(
-      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>',
-      'Star',
-    )
-    if (!imported.ok) throw new Error('svg import failed')
-    const customSymbols = [{ ...imported.symbol, kind: 'notable' as const }]
+    const markup = buildMaskedImageMarkup(DEMO_PNG, 24, 24)
+    const customSymbols = [
+      {
+        id: 'cs-star',
+        name: 'Star',
+        viewBox: '0 0 24 24',
+        width: 24,
+        height: 24,
+        markup,
+        kind: 'notable' as const,
+      },
+    ]
     const nodes = structuredClone(SEED_NODES)
     const notable = nodes.find((n) => n.id === 'notable-hiphop')
     if (notable) {

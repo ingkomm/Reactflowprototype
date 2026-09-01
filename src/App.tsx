@@ -69,10 +69,14 @@ import { useGraphHistory } from './useGraphHistory'
 import { FirstRunDialog } from './components/FirstRunDialog'
 import {
   commitBootstrapChoice,
+  hasBackupDocument,
   importGraphJsonFile,
   resolveInitialGraphState,
+  restoreGraphFromBackup,
   sanitizeFlowEdges,
   useGraphAutosave,
+  type SaveFailureReason,
+  type SaveStatus,
 } from './useGraphApp'
 import { addPracticeSession, kindUsesPracticeLogs } from './stage'
 import { clampOrbitTierCapacity } from './limits'
@@ -210,6 +214,10 @@ const initialGraph = resolveInitialGraphState()
 
 export default function App() {
   const [bootstrapPending, setBootstrapPending] = useState(initialGraph.needsBootstrap)
+  const [storageCorrupt, setStorageCorrupt] = useState(initialGraph.storageCorrupt)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveFailureReason, setSaveFailureReason] = useState<SaveFailureReason | null>(null)
+  const [backupAvailable, setBackupAvailable] = useState(hasBackupDocument())
   const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.snapshot?.nodes ?? [])
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.snapshot?.edges ?? [])
   const [gridSnapEnabled, setGridSnapEnabled] = useState(
@@ -266,7 +274,11 @@ export default function App() {
       customSymbols,
       settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
     },
-    !bootstrapPending,
+    !bootstrapPending && !storageCorrupt,
+    (status, reason) => {
+      setSaveStatus(status)
+      setSaveFailureReason(reason ?? null)
+    },
   )
 
   useEffect(() => {
@@ -1213,6 +1225,8 @@ export default function App() {
       }
       setSelectedId(imported.nodes[0]?.id ?? null)
       setImportError(null)
+      setStorageCorrupt(false)
+      setBackupAvailable(hasBackupDocument())
     },
     [
       customSymbols,
@@ -1225,6 +1239,31 @@ export default function App() {
       voidHighlightEnabled,
     ],
   )
+
+  const handleRestoreBackup = useCallback(() => {
+    const result = restoreGraphFromBackup()
+    if (!result.ok) {
+      setImportError(result.message)
+      return
+    }
+    const restored = result.snapshot
+    resetHistory()
+    setCustomSymbols(restored.customSymbols)
+    setDefaultSymbolColors(restored.settings.defaultSymbolColors ?? {})
+    setNodes(stack(restored.nodes))
+    setEdges(restored.edges)
+    if (restored.settings.gridSnapEnabled != null) {
+      setGridSnapEnabled(restored.settings.gridSnapEnabled)
+    }
+    if (restored.settings.voidHighlightEnabled != null) {
+      setVoidHighlightEnabled(restored.settings.voidHighlightEnabled)
+    }
+    setSelectedId(restored.nodes[0]?.id ?? null)
+    setStorageCorrupt(false)
+    setImportError(null)
+    setSaveStatus('saved')
+    setSaveFailureReason(null)
+  }, [resetHistory, setEdges, setNodes, stack])
 
   const deleteNode = useCallback(
     (nodeId: string) => {
@@ -1503,6 +1542,24 @@ export default function App() {
                 >
                   JSON 불러오기
                 </button>
+                {backupAvailable && (
+                  <button type="button" className="btn" onClick={handleRestoreBackup}>
+                    백업 복원
+                  </button>
+                )}
+                <span
+                  className={`topbar__save-status topbar__save-status--${saveStatus}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {saveStatus === 'saved'
+                    ? '저장됨'
+                    : saveStatus === 'failed'
+                      ? saveFailureReason === 'too_large'
+                        ? '저장 실패 (용량 초과)'
+                        : '저장 실패'
+                      : ''}
+                </span>
                 <input
                   ref={importInputRef}
                   type="file"
@@ -1520,6 +1577,20 @@ export default function App() {
             {importError && (
               <p className="import-error" role="alert">
                 {importError}
+              </p>
+            )}
+
+            {storageCorrupt && (
+              <p className="import-error" role="alert">
+                저장된 데이터가 손상되었습니다. JSON을 가져오거나 백업을 복원해 주세요.
+                {backupAvailable && (
+                  <>
+                    {' '}
+                    <button type="button" className="btn btn--ghost" onClick={handleRestoreBackup}>
+                      백업 복원
+                    </button>
+                  </>
+                )}
               </p>
             )}
 

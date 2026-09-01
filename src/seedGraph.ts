@@ -1,9 +1,9 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import type { OrbitTier } from './types'
+import type { OrbitTier, StageData, TrainingLog } from './types'
 import { INITIAL_NODE_ID } from './types'
 import { connectPositionForInitialHub } from './initialHub'
-import { notableStagesFromTotal } from './stage'
+import { createNotableStages, createTrainingLog } from './stage'
 import {
   layoutMasteryOrbit,
   mergeOrbitOrderFromTiers,
@@ -19,8 +19,7 @@ import {
 export { INITIAL_NODE_ID }
 
 export const DANCE_MASTERY_ID = 'mastery-dance'
-export const GYM_MASTERY_ID = 'mastery-gym'
-/** Root hub sockets: top → dance, bottom-right → gym, bottom-left spare. */
+/** Root hub sockets: top → dance, bottom-right spare, bottom-left spare. */
 export const CONNECT_TOP_ID = 'connect-top'
 export const CONNECT_BR_ID = 'connect-br'
 export const CONNECT_BL_ID = 'connect-bl'
@@ -36,14 +35,27 @@ const danceOrbitStartAngleByTier: Partial<Record<OrbitTier, number>> = {
   1: -90,
   2: 0,
 }
-const gymOrbitOrder = [
-  'notable-strength',
-  'notable-cardio',
-  'small-legs',
-  'small-back',
-  'small-run',
-  'small-core',
-]
+
+function demoLog(date: string): TrainingLog {
+  return createTrainingLog(date, 1, date)
+}
+
+function notableDemoStages(dates: string[]): StageData[] {
+  return createNotableStages(dates.length, dates.map(demoLog))
+}
+
+function smallDemoStages(dates: string[]): StageData[] {
+  return [
+    {
+      id: 'stage-demo',
+      index: 1,
+      label: '연습',
+      goal: 9999,
+      completedManually: false,
+      logs: dates.map(demoLog),
+    },
+  ]
+}
 
 function buildSeedNodes(): PassiveFlowNode[] {
   const base: PassiveFlowNode[] = [
@@ -110,7 +122,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('notable', '힙합', {
-        stages: notableStagesFromTotal(10),
+        stages: notableDemoStages(['2025-03-10', '2025-03-15', '2025-03-20']),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 0,
@@ -123,7 +135,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('notable', 'K-pop', {
-        stages: notableStagesFromTotal(8),
+        stages: notableDemoStages(['2025-04-01', '2025-04-05']),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 2,
@@ -136,7 +148,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '기본기', {
-        stages: [],
+        stages: smallDemoStages(['2025-05-01']),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 4,
@@ -149,7 +161,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '풋워크', {
-        stages: [],
+        stages: smallDemoStages(['2025-05-08', '2025-05-12']),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
         orbitSlot: 0,
@@ -162,118 +174,28 @@ function buildSeedNodes(): PassiveFlowNode[] {
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
       data: createPassiveData('small', '스트레칭', {
-        stages: [],
+        stages: smallDemoStages(['2025-05-15']),
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
         orbitSlot: 3,
         symbolId: 'default',
       }),
     },
-    {
-      id: GYM_MASTERY_ID,
-      type: 'passive',
-      position: { x: 780, y: 240 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('mastery', '운동', {
-        stages: [],
-        orbitStartAngle: -90,
-        orbitOrder: gymOrbitOrder,
-        orbitCapacityByTier: { 1: 8 },
-        orbitTierCount: 1,
-        symbolId: 'default',
-      }),
-    },
-    {
-      id: 'notable-strength',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('notable', '근력', {
-        stages: notableStagesFromTotal(12),
-        masteryId: GYM_MASTERY_ID,
-        orbitSlot: 0,
-        symbolId: 'default',
-      }),
-    },
-    {
-      id: 'notable-cardio',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('notable', '유산소', {
-        stages: notableStagesFromTotal(7),
-        masteryId: GYM_MASTERY_ID,
-        orbitSlot: 2,
-        symbolId: 'default',
-      }),
-    },
-    {
-      id: 'small-legs',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '하체', {
-        stages: [],
-        masteryId: GYM_MASTERY_ID,
-        orbitSlot: 4,
-        symbolId: 'default',
-      }),
-    },
-    {
-      id: 'small-back',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '등', {
-        stages: [],
-        masteryId: GYM_MASTERY_ID,
-        orbitSlot: 5,
-        symbolId: 'default',
-      }),
-    },
-    {
-      id: 'small-run',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '러닝', {
-        stages: [],
-        masteryId: GYM_MASTERY_ID,
-        orbitSlot: 6,
-        symbolId: 'default',
-      }),
-    },
-    {
-      id: 'small-core',
-      type: 'passive',
-      position: { x: 0, y: 0 },
-      dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '코어', {
-        stages: [],
-        masteryId: GYM_MASTERY_ID,
-        orbitSlot: 7,
-        symbolId: 'default',
-      }),
-    },
   ]
 
-  return withMasteryDragFlags(
-    layoutMasteryOrbit(layoutMasteryOrbit(base, DANCE_MASTERY_ID), GYM_MASTERY_ID),
-  )
+  return withMasteryDragFlags(layoutMasteryOrbit(base, DANCE_MASTERY_ID))
 }
 
 export const SEED_NODES = buildSeedNodes()
 
-/** Root hub → 3 Connect sockets; trees branch from top & bottom-right Connect. */
+/** Root hub → 3 Connect sockets; dance tree branches from top Connect. */
 export const SEED_EDGES: Edge[] = [
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_TOP_ID, 0),
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID, 1),
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID, 2),
   passiveLinkEdge(CONNECT_TOP_ID, 'small-basic'),
-  passiveLinkEdge(CONNECT_BR_ID, 'small-legs'),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], DANCE_MASTERY_ID),
-  ...orbitAdjacentEdges(gymOrbitOrder, GYM_MASTERY_ID),
 ]
 
 export const DEFAULT_SELECTED_NODE_ID = DANCE_MASTERY_ID

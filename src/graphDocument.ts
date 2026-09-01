@@ -6,10 +6,11 @@ import {
   migrateLegacyClassId,
   normalizeSymbolId,
 } from './librarySymbols'
-import { ensureNotableStages, stagesForKind } from './stage'
+import { ensureNotableStages, ensureSmallPracticeStages, stagesForKind } from './stage'
 import type {
   CustomSymbol,
   GraphDocumentSettings,
+  GraphEdgeData,
   PassiveKind,
   PassiveNodeData,
   StageData,
@@ -377,6 +378,9 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
     if (node.data.kind === 'notable' && node.data.stages) {
       node.data.stages = ensureNotableStages(node.data.stages)
     }
+    if (node.data.kind === 'small' && node.data.stages) {
+      node.data.stages = ensureSmallPracticeStages(node.data.stages)
+    }
   }
 
   const document: GraphDocumentV01 = {
@@ -399,16 +403,20 @@ export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
       position: { x: node.position.x, y: node.position.y },
       data: structuredClone(node.data as PassiveNodeData),
     })),
-    edges: input.edges.map((edge) => ({
-      id: edge.id,
-      type: edge.type,
-      source: edge.source,
-      target: edge.target,
-      sourceHandle: edge.sourceHandle,
-      targetHandle: edge.targetHandle,
-      data: edge.data ? structuredClone(edge.data as Record<string, unknown>) : undefined,
-      zIndex: edge.zIndex,
-    })),
+    edges: input.edges.map((edge) => {
+      const raw = edge.data ? (structuredClone(edge.data) as GraphEdgeData) : undefined
+      if (raw) delete raw.active
+      return {
+        id: edge.id,
+        type: edge.type,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
+        data: raw && Object.keys(raw).length > 0 ? raw : undefined,
+        zIndex: edge.zIndex,
+      }
+    }),
     customSymbols: structuredClone(input.customSymbols),
     settings: input.settings ? structuredClone(input.settings) : undefined,
   }
