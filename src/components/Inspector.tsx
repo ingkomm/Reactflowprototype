@@ -13,7 +13,6 @@ import {
   ensureSmallPracticeStages,
   kindUsesPracticeLogs,
   sortedStages,
-  totalRawLoggedAcrossStages,
 } from '../stage'
 import {
   getOrbitTierCapacity,
@@ -32,6 +31,7 @@ import { useCustomSymbols } from '../customSymbolContext.shared'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { VideoMediaPanel } from './VideoMediaPanel'
+import { DailyLogPanel } from './DailyLogPanel'
 import './Inspector.css'
 
 export type OrbitMember = {
@@ -71,7 +71,6 @@ type Props = {
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
-  onAddPractice?: (nodeId: string) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -97,7 +96,6 @@ export function Inspector({
   onChangeSymbolId,
   onChangeNodeMedia,
   onChangeStages,
-  onAddPractice,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -131,11 +129,6 @@ export function Inspector({
       ? customSymbolsForKind(customSymbols, data.kind)
       : []
   const currentSymbolId = isDefaultSymbolId(data.symbolId) ? DEFAULT_SYMBOL_ID : data.symbolId
-  const notableLogs = ensureNotableStages(stages)[0]?.logs ?? []
-  const smallStages = ensureSmallPracticeStages(stages)
-  const smallLogs = smallStages[0]?.logs ?? []
-  const practiceLogs = data.kind === 'small' ? smallLogs : notableLogs
-  const practiceTotal = totalRawLoggedAcrossStages(data.kind === 'small' ? smallStages : ensureNotableStages(stages))
   const isFixedInitial = nodeId === INITIAL_NODE_ID
 
   const patchStages = (next: StageData[]) => {
@@ -146,12 +139,20 @@ export function Inspector({
     onChangeStages(nodeId, ensureNotableStages(next))
   }
 
-  const logsByDate = practiceLogs.reduce<Map<string, typeof practiceLogs>>((map, log) => {
-    const date = log.date ?? '날짜 없음'
-    if (!map.has(date)) map.set(date, [])
-    map.get(date)!.push(log)
-    return map
-  }, new Map())
+  const practiceLogs =
+    data.kind === 'small'
+      ? ensureSmallPracticeStages(stages)[0]?.logs ?? []
+      : ensureNotableStages(stages)[0]?.logs ?? []
+
+  const handleLogsChange = (logs: typeof practiceLogs) => {
+    if (data.kind === 'small') {
+      const next = ensureSmallPracticeStages(stages)
+      patchStages([{ ...next[0]!, logs }])
+      return
+    }
+    const next = ensureNotableStages(stages)
+    patchStages(next.map((stage, index) => (index === 0 ? { ...stage, logs } : stage)))
+  }
 
   return (
     <aside className="inspector">
@@ -547,110 +548,7 @@ export function Inspector({
       )}
 
       {kindUsesPracticeLogs(data.kind) && (
-        <div className="inspector__section">
-          <div className="inspector__section-head">
-            <h3>연습 기록</h3>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={() => onAddPractice?.(nodeId)}
-            >
-              +1 연습
-            </button>
-          </div>
-          <p className="inspector__meta">총 {practiceTotal}회</p>
-          {practiceLogs.length === 0 ? (
-            <p className="inspector__empty">로그 없음</p>
-          ) : (
-            <ul className="training-list">
-              {[...logsByDate.entries()].map(([date, logs]) => (
-                <li key={date} className="training-item training-item--date-group">
-                  <div className="training-item__date">{date}</div>
-                  <ul className="training-list training-list--nested">
-                    {logs.map((log) => (
-                      <li key={log.id} className="training-item">
-                        {data.kind === 'notable' ? (
-                          <input
-                            className="training-item__label"
-                            value={log.label}
-                            onChange={(e) => {
-                              const next = ensureNotableStages(stages)
-                              const pool = next[0]!
-                              patchStages(
-                                next.map((s, i) =>
-                                  i === 0
-                                    ? {
-                                        ...pool,
-                                        logs: pool.logs.map((l) =>
-                                          l.id === log.id ? { ...l, label: e.target.value } : l,
-                                        ),
-                                      }
-                                    : s,
-                                ),
-                              )
-                            }}
-                            placeholder="로그 이름"
-                          />
-                        ) : (
-                          <span className="training-item__label">{log.label || date}</span>
-                        )}
-                        <span className="training-item__count">×{log.count}</span>
-                        <button
-                          type="button"
-                          className="btn btn--icon"
-                          onClick={() => {
-                            if (data.kind === 'small') {
-                              const next = ensureSmallPracticeStages(stages)
-                              const pool = next[0]!
-                              patchStages([{ ...pool, logs: pool.logs.filter((l) => l.id !== log.id) }])
-                              return
-                            }
-                            const next = ensureNotableStages(stages)
-                            const pool = next[0]!
-                            patchStages(
-                              next.map((s, i) =>
-                                i === 0
-                                  ? { ...pool, logs: pool.logs.filter((l) => l.id !== log.id) }
-                                  : s,
-                              ),
-                            )
-                          }}
-                          aria-label="로그 삭제"
-                        >
-                          ×
-                        </button>
-                        {data.kind === 'notable' && (
-                          <div className="training-item__videos">
-                            <VideoMediaPanel
-                              title={`${log.label || '로그'} 동영상`}
-                              media={log.media ?? []}
-                              onChange={(media) => {
-                                const next = ensureNotableStages(stages)
-                                const pool = next[0]!
-                                patchStages(
-                                  next.map((s, i) =>
-                                    i === 0
-                                      ? {
-                                          ...pool,
-                                          logs: pool.logs.map((l) =>
-                                            l.id === log.id ? { ...l, media } : l,
-                                          ),
-                                        }
-                                      : s,
-                                  ),
-                                )
-                              }}
-                            />
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <DailyLogPanel logs={practiceLogs} onChangeLogs={handleLogsChange} />
       )}
     </aside>
   )

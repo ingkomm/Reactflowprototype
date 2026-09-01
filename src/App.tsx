@@ -78,7 +78,6 @@ import {
   type SaveFailureReason,
   type SaveStatus,
 } from './useGraphApp'
-import { addPracticeSession, kindUsesPracticeLogs } from './stage'
 import { clampOrbitTierCapacity } from './limits'
 import './App.css'
 
@@ -902,20 +901,6 @@ export default function App() {
     [commit, setNodes],
   )
 
-  const addPractice = useCallback(
-    (nodeId: string) => {
-      const node = nodesRef.current.find((n) => n.id === nodeId)
-      if (!node) return
-      const data = node.data as PassiveNodeData
-      if (!kindUsesPracticeLogs(data.kind)) return
-      updateNodeData(nodeId, (d) => ({
-        ...d,
-        stages: addPracticeSession(d.stages ?? [], d.kind),
-      }))
-    },
-    [updateNodeData],
-  )
-
   const changeOrbitLocked = useCallback(
     (masteryId: string, locked: boolean) => {
       updateNodeData(masteryId, (d) => ({ ...d, orbitLocked: locked }))
@@ -1635,7 +1620,6 @@ export default function App() {
               onChangeSymbolId={onChangeSymbolId}
               onChangeNodeMedia={onChangeNodeMedia}
               onChangeStages={onChangeStages}
-              onAddPractice={addPractice}
               onChangeConnectEnabled={changeConnectEnabled}
               onChangeOrbitTierCount={changeOrbitTierCount}
               onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}

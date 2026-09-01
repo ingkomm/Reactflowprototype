@@ -99,7 +99,6 @@ export type TreeWorkspaceProps = {
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
-  onAddPractice?: (nodeId: string) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -154,7 +153,6 @@ export function TreeWorkspace({
   onChangeSymbolId,
   onChangeNodeMedia,
   onChangeStages,
-  onAddPractice,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -322,7 +320,6 @@ export function TreeWorkspace({
           onChangeSymbolId={onChangeSymbolId}
           onChangeNodeMedia={onChangeNodeMedia}
           onChangeStages={onChangeStages}
-          onAddPractice={onAddPractice}
           onChangeConnectEnabled={onChangeConnectEnabled}
           onChangeOrbitTierCount={onChangeOrbitTierCount}
           onChangeSatelliteOrbitTier={onChangeSatelliteOrbitTier}

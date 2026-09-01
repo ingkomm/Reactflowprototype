@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { validateCustomSymbols } from './customSymbol'
+import { isValidPracticeDate, migrateLegacyTrainingLogs, normalizeDailyLogs } from './dailyLog'
 import { layoutMasteryOrbit, isMasteryKind } from './orbit'
 import {
   migrateLegacyClassId,
@@ -107,18 +108,12 @@ function parsePosition(value: unknown): { x: number; y: number } | null {
 function normalizeTrainingLog(value: unknown): TrainingLog | null {
   if (!isRecord(value)) return null
   if (typeof value.id !== 'string' || !value.id.trim()) return null
-  if (typeof value.label !== 'string') return null
-  if (!isWithinStringLimit(value.label)) return null
-  const count = typeof value.count === 'number' && Number.isFinite(value.count) ? Math.max(0, value.count) : 0
+  if (typeof value.date !== 'string' || !isValidPracticeDate(value.date)) return null
   const media = validateVideoMediaList(value.media)
   if (media === null) return null
   const log: TrainingLog = {
     id: value.id.trim(),
-    label: value.label,
-    count,
-  }
-  if (typeof value.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.date.trim())) {
-    log.date = value.date.trim()
+    date: value.date.trim(),
   }
   if (typeof value.note === 'string' && value.note.trim()) {
     if (!isWithinStringLimit(value.note)) return null
@@ -137,9 +132,13 @@ function normalizeStage(value: unknown): StageData | null {
   if (!Array.isArray(value.logs)) return null
   const logs: TrainingLog[] = []
   for (const log of value.logs) {
-    const parsed = normalizeTrainingLog(log)
-    if (!parsed) return null
-    logs.push(parsed)
+    const parsedEntries = migrateLegacyTrainingLogs(log)
+    if (parsedEntries.length === 0) return null
+    for (const entry of parsedEntries) {
+      const normalized = normalizeTrainingLog(entry)
+      if (!normalized) return null
+      logs.push(normalized)
+    }
   }
   return {
     id: value.id.trim(),
@@ -147,7 +146,7 @@ function normalizeStage(value: unknown): StageData | null {
     label: value.label,
     goal: Math.max(1, Math.floor(value.goal)),
     completedManually: Boolean(value.completedManually),
-    logs,
+    logs: normalizeDailyLogs(logs),
   }
 }
 
@@ -394,6 +393,16 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
   return { ok: true, document }
 }
 
+function normalizePassiveDataForExport(data: PassiveNodeData): PassiveNodeData {
+  const cloned = structuredClone(data)
+  if (cloned.kind === 'small') {
+    cloned.stages = ensureSmallPracticeStages(cloned.stages ?? [])
+  } else if (cloned.kind === 'notable') {
+    cloned.stages = ensureNotableStages(cloned.stages ?? [])
+  }
+  return cloned
+}
+
 export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
   return {
     schemaVersion: GRAPH_SCHEMA_VERSION,
@@ -401,7 +410,7 @@ export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
       id: node.id,
       type: 'passive' as const,
       position: { x: node.position.x, y: node.position.y },
-      data: structuredClone(node.data as PassiveNodeData),
+      data: normalizePassiveDataForExport(node.data as PassiveNodeData),
     })),
     edges: input.edges.map((edge) => {
       const raw = edge.data ? (structuredClone(edge.data) as GraphEdgeData) : undefined

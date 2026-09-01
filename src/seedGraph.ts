@@ -3,7 +3,7 @@ import type { PassiveFlowNode } from './components/PassiveNode'
 import type { OrbitTier, StageData, TrainingLog } from './types'
 import { INITIAL_NODE_ID } from './types'
 import { connectPositionForInitialHub } from './initialHub'
-import { createNotableStages, createTrainingLog } from './stage'
+import { createDailyLog, createNotableStages } from './stage'
 import {
   layoutMasteryOrbit,
   mergeOrbitOrderFromTiers,
@@ -36,12 +36,12 @@ const danceOrbitStartAngleByTier: Partial<Record<OrbitTier, number>> = {
   2: 0,
 }
 
-function demoLog(date: string): TrainingLog {
-  return createTrainingLog(date, 1, date)
+function demoLog(date: string, note?: string): TrainingLog {
+  return createDailyLog(date, note)
 }
 
 function notableDemoStages(dates: string[]): StageData[] {
-  return createNotableStages(dates.length, dates.map(demoLog))
+  return createNotableStages(dates.length, dates.map((date) => demoLog(date)))
 }
 
 function smallDemoStages(dates: string[]): StageData[] {
@@ -52,7 +52,7 @@ function smallDemoStages(dates: string[]): StageData[] {
       label: '연습',
       goal: 9999,
       completedManually: false,
-      logs: dates.map(demoLog),
+      logs: dates.map((date) => demoLog(date)),
     },
   ]
 }

@@ -1,0 +1,87 @@
+.daily-log-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daily-log-panel__summary {
+  font-size: 0.82rem;
+  color: #9eb0bf;
+}
+
+.daily-log-panel__error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #ffb4b4;
+}
+
+.daily-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.daily-log-card {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #1a2430 84%, transparent);
+  border: 1px solid color-mix(in srgb, #8fa0b0 20%, transparent);
+}
+
+.daily-log-card--form {
+  margin-bottom: 4px;
+}
+
+.daily-log-card__title {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #d5e2ec;
+}
+
+.daily-log-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.daily-log-card__date {
+  font-size: 0.92rem;
+  color: #eef5fa;
+}
+
+.daily-log-card__note {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  color: #b7c4d0;
+  line-height: 1.45;
+}
+
+.daily-log-card__video {
+  font-size: 0.82rem;
+  color: #7fd9cb;
+  word-break: break-all;
+}
+
+.daily-log-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.daily-log-card textarea {
+  resize: vertical;
+  min-height: 56px;
+}
