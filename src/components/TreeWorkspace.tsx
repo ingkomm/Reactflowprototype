@@ -32,7 +32,7 @@ import { OrbitRotateController } from './OrbitRotateController'
 import { MiniMapCircleNode } from './MiniMapCircleNode'
 import { ZoomKeyboardController } from './ZoomKeyboardController'
 import type { SymbolEditorKind } from '../librarySymbols'
-import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, VideoMedia } from '../types'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from '../types'
 import { DEFAULT_ICON_BY_KIND } from '../types'
 import type { NodeTemplatePayload } from '../nodeTemplate'
 import { decodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
@@ -84,6 +84,7 @@ export type TreeWorkspaceProps = {
   onNodeContextMenu?: NodeMouseHandler
   pinnedVideoNodeIds: string[]
   onClosePinnedVideo: (nodeId: string) => void
+  onPinnedLogSelect?: (nodeId: string, logId: string) => void
   onNodeDragStart: OnNodeDrag<PassiveFlowNode>
   onNodeDrag: OnNodeDrag<PassiveFlowNode>
   onNodeDragStop: OnNodeDrag<PassiveFlowNode>
@@ -97,7 +98,6 @@ export type TreeWorkspaceProps = {
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
-  onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
@@ -137,6 +137,7 @@ export function TreeWorkspace({
   onNodeContextMenu,
   pinnedVideoNodeIds,
   onClosePinnedVideo,
+  onPinnedLogSelect,
   onNodeDragStart,
   onNodeDrag,
   onNodeDragStop,
@@ -150,7 +151,6 @@ export function TreeWorkspace({
   onRename,
   onChangeKind,
   onChangeSymbolId,
-  onChangeNodeMedia,
   onChangeStages,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
@@ -286,6 +286,7 @@ export function TreeWorkspace({
                 stackIndex={index}
                 containerRef={canvasWrapperRef}
                 onClose={onClosePinnedVideo}
+                onSelectLog={onPinnedLogSelect}
               />
             ))}
             </VideoPinProvider>
@@ -316,7 +317,6 @@ export function TreeWorkspace({
           onRename={onRename}
           onChangeKind={onChangeKind}
           onChangeSymbolId={onChangeSymbolId}
-          onChangeNodeMedia={onChangeNodeMedia}
           onChangeStages={onChangeStages}
           onChangeConnectEnabled={onChangeConnectEnabled}
           onChangeOrbitTierCount={onChangeOrbitTierCount}

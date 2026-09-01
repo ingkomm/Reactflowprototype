@@ -4,15 +4,16 @@ import type {
   OrbitTier,
   OrbitTierCount,
   StageData,
-  VideoMedia,
+  TrainingLog,
 } from '../types'
 import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from '../types'
 import {
   ensureNotableStages,
   ensureSmallPracticeStages,
-  kindUsesPracticeLogs,
   sortedStages,
+  uid,
 } from '../stage'
+import { extractDailyLogsFromNodeData, kindUsesDailyLogs } from '../dailyLogNode'
 import {
   getOrbitTierCapacity,
   getTierStartAngle,
@@ -29,7 +30,6 @@ import {
 import { useCustomSymbols } from '../customSymbolContext.shared'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
-import { VideoMediaPanel } from './VideoMediaPanel'
 import { DailyLogPanel } from './DailyLogPanel'
 import './Inspector.css'
 
@@ -53,7 +53,6 @@ type Props = {
   onRename: (nodeId: string, label: string) => void
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
-  onChangeNodeMedia: (nodeId: string, media: VideoMedia[]) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
@@ -77,7 +76,6 @@ export function Inspector({
   onRename,
   onChangeKind,
   onChangeSymbolId,
-  onChangeNodeMedia,
   onChangeStages,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
@@ -120,19 +118,32 @@ export function Inspector({
     onChangeStages(nodeId, ensureNotableStages(next))
   }
 
-  const practiceLogs =
-    data.kind === 'small'
-      ? ensureSmallPracticeStages(stages)[0]?.logs ?? []
-      : ensureNotableStages(stages)[0]?.logs ?? []
+  const practiceLogs = extractDailyLogsFromNodeData(data)
 
-  const handleLogsChange = (logs: typeof practiceLogs) => {
+  const handleLogsChange = (logs: TrainingLog[]) => {
     if (data.kind === 'small') {
       const next = ensureSmallPracticeStages(stages)
       patchStages([{ ...next[0]!, logs }])
       return
     }
-    const next = ensureNotableStages(stages)
-    patchStages(next.map((stage, index) => (index === 0 ? { ...stage, logs } : stage)))
+    if (data.kind === 'notable') {
+      const next = ensureNotableStages(stages)
+      patchStages(next.map((stage, index) => (index === 0 ? { ...stage, logs } : stage)))
+      return
+    }
+    if (data.kind === 'mastery' || data.kind === 'voidMastery') {
+      const existing = stages[0]
+      onChangeStages(nodeId, [
+        {
+          id: existing?.id ?? uid('stage'),
+          index: 1,
+          label: existing?.label ?? '기록',
+          goal: existing?.goal ?? 9999,
+          completedManually: false,
+          logs,
+        },
+      ])
+    }
   }
 
   return (
@@ -267,16 +278,6 @@ export function Inspector({
           <p className="inspector__empty">이 종류는 심볼을 선택할 수 없습니다.</p>
         )}
       </div>
-
-      {(data.kind === 'notable' || data.kind === 'mastery') && (
-        <div className="inspector__section">
-          <VideoMediaPanel
-            title="노드 동영상"
-            media={data.media ?? []}
-            onChange={(media) => onChangeNodeMedia(nodeId, media)}
-          />
-        </div>
-      )}
 
       {isMasteryKind(data.kind) && (
         <>
@@ -478,7 +479,7 @@ export function Inspector({
         </>
       )}
 
-      {kindUsesPracticeLogs(data.kind) && (
+      {kindUsesDailyLogs(data.kind) && (
         <DailyLogPanel
           logs={practiceLogs}
           onChangeLogs={handleLogsChange}

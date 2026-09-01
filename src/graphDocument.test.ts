@@ -62,7 +62,7 @@ describe('graphDocument', () => {
     expect(node?.data.classId).toBeUndefined()
   })
 
-  it('preserves custom symbols and media references', () => {
+  it('migrates node-level media into daily logs on import', () => {
     const markup = buildMaskedImageMarkup(DEMO_PNG, 24, 24)
     const customSymbols = [
       {
@@ -102,5 +102,8 @@ describe('graphDocument', () => {
     expect(parsed.document.customSymbols).toHaveLength(1)
     const restored = parsed.document.nodes.find((n) => n.id === 'notable-hiphop')
     expect(restored?.data.symbolId).toBe(customSymbols[0]!.id)
+    expect(restored?.data.media).toBeUndefined()
+    const logs = restored?.data.stages?.[0]?.logs ?? []
+    expect(logs.some((log) => log.media?.[0]?.url === 'https://youtu.be/dQw4w9WgXcQ')).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { TrainingLog } from '../types'
-import { memoPreview, recentMemoLogs, recentPracticeLogs } from '../dailyLog'
+import { dailyLogSummary, recentDailyLogs } from '../dailyLog'
 import './NodeContextPopup.css'
 
 export type NodeContextPopupState = {
@@ -45,8 +45,7 @@ export function NodeContextPopup({
   onToggleVideoPin,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const recentLogs = recentPracticeLogs(logs)
-  const memoLogs = recentMemoLogs(logs)
+  const recentLogs = recentDailyLogs(logs)
 
   useEffect(() => {
     if (!open) return
@@ -63,7 +62,7 @@ export function NodeContextPopup({
     const next = clampPosition(x, y, rect.width, rect.height)
     panelRef.current.style.left = `${next.x}px`
     panelRef.current.style.top = `${next.y}px`
-  }, [open, x, y, logs.length, memoLogs.length])
+  }, [open, x, y, logs.length])
 
   if (!open) return null
 
@@ -82,7 +81,7 @@ export function NodeContextPopup({
         </header>
 
         <section className="node-context-popup__section">
-          <h3>최근 연습 기록</h3>
+          <h3>Daily Log</h3>
           {recentLogs.length === 0 ? (
             <p className="node-context-popup__empty">기록 없음</p>
           ) : (
@@ -91,25 +90,8 @@ export function NodeContextPopup({
                 <li key={log.id}>
                   <button type="button" className="node-context-popup__item" onClick={() => onSelectLog(log.id)}>
                     <span className="node-context-popup__date">{log.date}</span>
+                    <span className="node-context-popup__memo">{dailyLogSummary(log)}</span>
                     {log.media?.[0]?.url ? <span className="node-context-popup__tag">영상</span> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="node-context-popup__section">
-          <h3>Simple Memo</h3>
-          {memoLogs.length === 0 ? (
-            <p className="node-context-popup__empty">메모 없음</p>
-          ) : (
-            <ul className="node-context-popup__list">
-              {memoLogs.map((log) => (
-                <li key={`memo-${log.id}`}>
-                  <button type="button" className="node-context-popup__item" onClick={() => onSelectLog(log.id)}>
-                    <span className="node-context-popup__memo">{memoPreview(log.note ?? '')}</span>
-                    <span className="node-context-popup__date node-context-popup__date--sub">{log.date}</span>
                   </button>
                 </li>
               ))}

@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { validateCustomSymbols } from './customSymbol'
+import { absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
 import { isValidPracticeDate, migrateLegacyTrainingLogs, normalizeDailyLogs } from './dailyLog'
 import { layoutMasteryOrbit, isMasteryKind } from './orbit'
 import {
@@ -225,7 +226,7 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   }
   if (media.length > 0) data.media = media
 
-  return data
+  return absorbNodeMediaIntoDailyLogs(data)
 }
 
 function normalizeSerializedNode(value: unknown): SerializedFlowNode | null {
@@ -400,7 +401,7 @@ function normalizePassiveDataForExport(data: PassiveNodeData): PassiveNodeData {
   } else if (cloned.kind === 'notable') {
     cloned.stages = ensureNotableStages(cloned.stages ?? [])
   }
-  return cloned
+  return absorbNodeMediaIntoDailyLogs(cloned)
 }
 
 export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {

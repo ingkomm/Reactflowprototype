@@ -162,18 +162,23 @@ export function removeDailyLog(logs: TrainingLog[], logId: string): TrainingLog[
   return logs.filter((log) => log.id !== logId)
 }
 
-export function recentPracticeLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
-  return sortedDailyLogs(logs).slice(0, limit)
-}
-
-export function recentMemoLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
-  return sortedDailyLogs(logs)
-    .filter((log) => Boolean(log.note?.trim()))
-    .slice(0, limit)
-}
-
 export function memoPreview(note: string, maxLength = 72): string {
   const trimmed = note.trim()
   if (trimmed.length <= maxLength) return trimmed
   return `${trimmed.slice(0, maxLength - 1)}…`
+}
+
+export function recentDailyLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
+  return sortedDailyLogs(logs).slice(0, limit)
+}
+
+/** @deprecated Use recentDailyLogs */
+export function recentPracticeLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
+  return recentDailyLogs(logs, limit)
+}
+
+export function dailyLogSummary(log: TrainingLog): string {
+  if (log.note?.trim()) return memoPreview(log.note)
+  if (log.media?.[0]?.url) return log.media[0].title || '동영상 기록'
+  return '날짜 기록'
 }

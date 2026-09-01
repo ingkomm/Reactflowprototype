@@ -89,9 +89,8 @@ export function youtubeEmbedUrl(videoId: string): string {
   return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=0&rel=0`
 }
 
-/** All videos on a node: node.media + stage log media (deduped by id). */
+/** All videos on a node from daily logs (deduped by id). */
 export function collectNodeVideos(data: {
-  media?: VideoMedia[]
   stages?: { logs?: { media?: VideoMedia[] }[] }[]
 }): VideoMedia[] {
   const seen = new Set<string>()
@@ -103,7 +102,6 @@ export function collectNodeVideos(data: {
       list.push(item)
     }
   }
-  push(data.media)
   for (const stage of data.stages ?? []) {
     for (const log of stage.logs ?? []) {
       push(log.media)

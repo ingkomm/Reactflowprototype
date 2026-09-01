@@ -33,9 +33,8 @@ describe('videoMedia', () => {
     expect(validateVideoMedia({ ...media!, url: 'data:video/mp4;base64,abc' })).toBeNull()
   })
 
-  it('collects node and stage-log videos without duplicates', () => {
+  it('collects stage-log videos without duplicates', () => {
     const media = collectNodeVideos({
-      media: [{ id: 'a', url: 'https://youtu.be/aaaaaaaaaaa', kind: 'youtube', provider: 'youtube' }],
       stages: [
         {
           logs: [
@@ -43,6 +42,11 @@ describe('videoMedia', () => {
               media: [
                 { id: 'a', url: 'https://youtu.be/aaaaaaaaaaa', kind: 'youtube', provider: 'youtube' },
                 { id: 'b', url: 'https://example.com/x', kind: 'external', provider: 'link' },
+              ],
+            },
+            {
+              media: [
+                { id: 'a', url: 'https://youtu.be/aaaaaaaaaaa', kind: 'youtube', provider: 'youtube' },
               ],
             },
           ],

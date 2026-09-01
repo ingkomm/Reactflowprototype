@@ -12,8 +12,9 @@ import {
 import { useStore, useReactFlow } from '@xyflow/react'
 import type { PassiveFlowNode } from './PassiveNode'
 import type { PassiveNodeData } from '../types'
+import { dailyLogSummary } from '../dailyLog'
+import { extractDailyLogsFromNodeData } from '../dailyLogNode'
 import { NODE_SIZE } from '../orbit'
-import { collectNodeVideos } from '../videoMedia'
 import { VideoEmbed } from './VideoEmbed'
 import './PinnedVideoPopup.css'
 
@@ -22,6 +23,7 @@ type Props = {
   stackIndex: number
   containerRef: RefObject<HTMLElement | null>
   onClose: (nodeId: string) => void
+  onSelectLog?: (nodeId: string, logId: string) => void
 }
 
 const DEFAULT_PLAYER_WIDTH = 320
@@ -40,11 +42,12 @@ function PinnedVideoPopupInner({
   stackIndex,
   containerRef,
   onClose,
+  onSelectLog,
 }: Props) {
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const transform = useStore((s) => s.transform)
   const { flowToScreenPosition } = useReactFlow()
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeLogId, setActiveLogId] = useState<string | null>(null)
   const [offset, setOffset] = useState({ x: stackIndex * 28, y: stackIndex * 28 })
   const [playerWidth, setPlayerWidth] = useState(DEFAULT_PLAYER_WIDTH)
   const [layout, setLayout] = useState({
@@ -71,12 +74,17 @@ function PinnedVideoPopupInner({
   )
 
   const data = (node?.data as PassiveNodeData | undefined) ?? null
-  const videos = useMemo(() => (data ? collectNodeVideos(data) : []), [data])
+  const logs = useMemo(() => (data ? extractDailyLogsFromNodeData(data) : []), [data])
 
-  const active = useMemo(() => {
-    if (!videos.length) return null
-    return videos.find((v) => v.id === activeId) ?? videos[0]!
-  }, [videos, activeId])
+  const resolvedLogId =
+    activeLogId && logs.some((log) => log.id === activeLogId) ? activeLogId : (logs[0]?.id ?? null)
+
+  const activeLog = useMemo(() => {
+    if (!logs.length || !resolvedLogId) return null
+    return logs.find((log) => log.id === resolvedLogId) ?? logs[0]!
+  }, [logs, resolvedLogId])
+
+  const activeVideo = activeLog?.media?.[0] ?? null
 
   useLayoutEffect(() => {
     if (!node || !data) return
@@ -94,7 +102,7 @@ function PinnedVideoPopupInner({
     const baseTop = Math.max(12, nodeCenter.y - 110)
     const popupLeft = baseLeft + offset.x
     const popupTop = baseTop + offset.y
-    const playerHeight = playerWidth / ASPECT
+    const playerHeight = activeLog?.media?.[0] ? playerWidth / ASPECT : 0
     setLayout({
       nodeCenter,
       popupLeft,
@@ -103,7 +111,17 @@ function PinnedVideoPopupInner({
       anchorY: popupTop + 20,
       playerHeight,
     })
-  }, [containerRef, data, flowToScreenPosition, node, offset.x, offset.y, playerWidth, transform])
+  }, [
+    activeLog?.media?.[0]?.url,
+    containerRef,
+    data,
+    flowToScreenPosition,
+    node,
+    offset.x,
+    offset.y,
+    playerWidth,
+    transform,
+  ])
 
   const beginDrag = useCallback(
     (mode: Exclude<DragMode, null>, event: ReactPointerEvent) => {
@@ -157,6 +175,11 @@ function PinnedVideoPopupInner({
 
   if (!node || !data) return null
 
+  const handleLogClick = (logId: string) => {
+    setActiveLogId(logId)
+    onSelectLog?.(pinnedNodeId, logId)
+  }
+
   return (
     <div className="pinned-video-layer" aria-live="polite">
       <svg className="pinned-video-layer__links" aria-hidden>
@@ -184,14 +207,14 @@ function PinnedVideoPopupInner({
           } as CSSProperties
         }
         role="dialog"
-        aria-label={`${data.label} 동영상`}
+        aria-label={`${data.label} Daily Log`}
       >
         <header
           className="pinned-video-popup__head"
           onPointerDown={(event) => beginDrag('move', event)}
         >
           <div>
-            <p className="pinned-video-popup__eyebrow">Pinned videos · 드래그로 이동</p>
+            <p className="pinned-video-popup__eyebrow">Pinned Daily Log · 드래그로 이동</p>
             <h3 className="pinned-video-popup__title">{data.label}</h3>
           </div>
           <button
@@ -205,40 +228,56 @@ function PinnedVideoPopupInner({
           </button>
         </header>
 
-        {videos.length === 0 ? (
-          <p className="pinned-video-popup__empty">이 노드에 연결된 동영상이 없습니다.</p>
+        {logs.length === 0 ? (
+          <p className="pinned-video-popup__empty">이 노드에 Daily Log가 없습니다.</p>
         ) : (
           <>
-            <label className="pinned-video-popup__select-field">
-              <span>동영상</span>
-              <select
-                className="pinned-video-popup__select"
-                value={active?.id ?? ''}
-                onChange={(event) => setActiveId(event.target.value)}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                {videos.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title || item.url}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {active ? (
-              <div className="pinned-video-popup__player">
-                <VideoEmbed media={active} />
+            <ul className="pinned-video-popup__log-list">
+              {logs.map((log) => {
+                const selected = log.id === resolvedLogId
+                return (
+                  <li key={log.id}>
+                    <button
+                      type="button"
+                      className={`pinned-video-popup__log-card${selected ? ' is-active' : ''}`}
+                      onClick={() => handleLogClick(log.id)}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      <span className="pinned-video-popup__log-date">{log.date}</span>
+                      <span className="pinned-video-popup__log-summary">{dailyLogSummary(log)}</span>
+                      {log.media?.[0]?.url ? (
+                        <span className="pinned-video-popup__log-tag">영상</span>
+                      ) : null}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+
+            {activeLog ? (
+              <div className="pinned-video-popup__detail">
+                {activeLog.note?.trim() ? (
+                  <p className="pinned-video-popup__memo">{activeLog.note.trim()}</p>
+                ) : null}
+                {activeVideo ? (
+                  <div className="pinned-video-popup__player">
+                    <VideoEmbed media={activeVideo} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </>
         )}
 
-        <button
-          type="button"
-          className="pinned-video-popup__resize"
-          aria-label="크기 조절"
-          title="드래그해서 크기 조절 (16:9 유지)"
-          onPointerDown={(event) => beginDrag('resize', event)}
-        />
+        {activeVideo ? (
+          <button
+            type="button"
+            className="pinned-video-popup__resize"
+            aria-label="크기 조절"
+            title="드래그해서 크기 조절 (16:9 유지)"
+            onPointerDown={(event) => beginDrag('resize', event)}
+          />
+        ) : null}
       </div>
     </div>
   )

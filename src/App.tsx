@@ -80,14 +80,11 @@ import {
   type SaveStatus,
 } from './useGraphApp'
 import { clampOrbitTierCapacity } from './limits'
-import { ensureNotableStages, ensureSmallPracticeStages, kindUsesPracticeLogs } from './stage'
+import { extractDailyLogsFromNodeData, absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
 import './App.css'
 
-function practiceLogsForNode(data: PassiveNodeData): TrainingLog[] {
-  if (!kindUsesPracticeLogs(data.kind)) return []
-  const stages = data.stages ?? []
-  if (data.kind === 'small') return ensureSmallPracticeStages(stages)[0]?.logs ?? []
-  return ensureNotableStages(stages)[0]?.logs ?? []
+function dailyLogsForNode(data: PassiveNodeData): TrainingLog[] {
+  return extractDailyLogsFromNodeData(data)
 }
 
 function uid(prefix: string) {
@@ -136,7 +133,7 @@ function buildPastedNode(
   const source = clipboard.data
   const kind = source.kind
   const stages = cloneStagesWithNewIds(source.stages ?? [])
-  const data: PassiveNodeData = {
+  const data = absorbNodeMediaIntoDailyLogs({
     label,
     kind,
     stages,
@@ -156,7 +153,7 @@ function buildPastedNode(
           : kind === 'connect'
             ? { connectEnabled: source.connectEnabled ?? true }
             : { masteryId: null, orbitTier: 1 }),
-  }
+  })
 
   return {
     id: uid(kind),
@@ -1250,6 +1247,11 @@ export default function App() {
     setContextMenu(null)
   }, [])
 
+  const handlePinnedLogSelect = useCallback((nodeId: string, logId: string) => {
+    setSelectedId(nodeId)
+    setFocusLogId(logId)
+  }, [])
+
   const handleToggleContextVideoPin = useCallback(() => {
     if (!contextMenu) return
     const nodeId = contextMenu.nodeId
@@ -1439,11 +1441,6 @@ export default function App() {
     [updateNodeData],
   )
 
-  const onChangeNodeMedia = useCallback(
-    (nodeId: string, media: VideoMedia[]) => updateNodeData(nodeId, (d) => ({ ...d, media })),
-    [updateNodeData],
-  )
-
   const onChangeStages = useCallback(
     (nodeId: string, stages: StageData[]) => updateNodeData(nodeId, (d) => ({ ...d, stages })),
     [updateNodeData],
@@ -1576,6 +1573,7 @@ export default function App() {
               onNodeContextMenu={onNodeContextMenu}
               pinnedVideoNodeIds={pinnedVideoNodeIds}
               onClosePinnedVideo={onClosePinnedVideo}
+              onPinnedLogSelect={handlePinnedLogSelect}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
@@ -1589,7 +1587,6 @@ export default function App() {
               onRename={onRenameNode}
               onChangeKind={changeKind}
               onChangeSymbolId={onChangeSymbolId}
-              onChangeNodeMedia={onChangeNodeMedia}
               onChangeStages={onChangeStages}
               onChangeConnectEnabled={changeConnectEnabled}
               onChangeOrbitTierCount={changeOrbitTierCount}
@@ -1608,7 +1605,7 @@ export default function App() {
                 x={contextMenu.x}
                 y={contextMenu.y}
                 nodeLabel={(contextMenuNode.data as PassiveNodeData).label}
-                logs={practiceLogsForNode(contextMenuNode.data as PassiveNodeData)}
+                logs={dailyLogsForNode(contextMenuNode.data as PassiveNodeData)}
                 canPinVideos={canPinNodeVideos((contextMenuNode.data as PassiveNodeData).kind)}
                 isVideoPinned={pinnedVideoNodeIds.includes(contextMenu.nodeId)}
                 onClose={() => setContextMenu(null)}
