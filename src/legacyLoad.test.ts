@@ -97,4 +97,57 @@ describe('legacy save recovery', () => {
     const parsed = parseGraphDocumentJson(serializeGraphDocument(doc))
     expect(parsed.ok).toBe(true)
   })
+
+  it('loads small node with invalid media without rejecting the document', () => {
+    const legacy = {
+      schemaVersion: GRAPH_SCHEMA_VERSION,
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: 'default' },
+        },
+        {
+          id: 'small-1',
+          type: 'passive',
+          position: { x: 160, y: 40 },
+          data: {
+            label: 'Legacy Small',
+            kind: 'small',
+            symbolId: 'default',
+            stages: [
+              {
+                id: 'st1',
+                index: 1,
+                label: '연습',
+                goal: 9999,
+                completedManually: false,
+                logs: [
+                  {
+                    id: 'l1',
+                    date: '2025-01-01',
+                    note: 'should become markdown',
+                    media: [{ id: 'bad', url: 'not-a-url' }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      edges: [],
+      customSymbols: [],
+      settings: { defaultSymbolColors: { small: '#AABBCC' } },
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(legacy))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const shard = parsed.document.nodes.find((n) => n.id === 'small-1')
+    expect(shard?.data.kind).toBe('shard')
+    expect(shard?.data.label).toBe('Legacy Small')
+    expect(shard?.data.markdown).toContain('should become markdown')
+    expect(parsed.document.settings?.defaultSymbolColors?.shard).toBe('#AABBCC')
+  })
+
 })
