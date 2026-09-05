@@ -116,8 +116,8 @@ export function orbitTierRadius(_tierCount: OrbitTierCount, tier: OrbitTier): nu
   return DEFAULT_ORBIT_RADIUS + (tier - 1) * ORBIT_TIER_STEP
 }
 
-/** Root hub diameter — matches the outer orbit span of a 3-tier Mastery hub. */
-export const ROOT_HUB_SIZE = orbitTierRadius(3, 3) * 2
+/** Root hub diameter — roughly Mastery orbit tier-1 ring diameter. */
+export const ROOT_HUB_SIZE = orbitTierRadius(1, 1) * 2
 
 NODE_SIZE.initial = ROOT_HUB_SIZE
 

@@ -31,7 +31,7 @@ import {
   isWithinStringLimit,
 } from './limits'
 import { validateGraphIntegrity } from './graphIntegrity'
-import { pinGraphSoRootCenteredAtOrigin } from './initialHub'
+import { pinGraphSoRootCenteredAtOrigin, snapSocketedConnectsToRoot } from './initialHub'
 import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags } from './orbit'
 
 export type SerializedFlowNode = {
@@ -495,6 +495,7 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
   }))
 
   nodes = pinGraphSoRootCenteredAtOrigin(nodes)
+  nodes = snapSocketedConnectsToRoot(nodes)
 
   for (const node of nodes) {
     if (isMasteryKind((node.data as PassiveNodeData).kind)) {

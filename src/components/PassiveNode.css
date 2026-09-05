@@ -175,6 +175,7 @@
 }
 
 .passive-node--initial {
+  --label-offset: 0px;
   --ring: #ffe066;
   --core: #1a1510;
   --accent: #ffe066;
@@ -222,20 +223,6 @@
   min-height: 0 !important;
   transform: translate(-50%, -50%) !important;
   z-index: 4;
-}
-
-.passive-node__title--initial {
-  top: 50%;
-  left: 50%;
-  bottom: auto;
-  transform: translate(-50%, -50%);
-  font-size: clamp(1rem, 2.8vw, 1.75rem);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.9;
-  max-width: 62%;
-  white-space: normal;
-  line-height: 1.15;
 }
 
 .passive-node--connect {
@@ -638,6 +625,22 @@
   overflow: visible;
   text-overflow: clip;
   mix-blend-mode: normal;
+}
+
+
+.passive-node--initial .passive-node__title,
+.passive-node__title--initial {
+  top: 50%;
+  left: 50%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  font-size: clamp(0.95rem, 2.6vw, 1.45rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.95;
+  max-width: 70%;
+  white-space: normal;
+  line-height: 1.15;
 }
 
 .passive-node--notable .passive-node__title {

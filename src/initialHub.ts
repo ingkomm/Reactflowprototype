@@ -98,3 +98,25 @@ export function pinGraphSoRootCenteredAtOrigin<
     },
   }))
 }
+
+/** Re-seat Connect nodes that declare an initialSlot onto the current Root rim. */
+export function snapSocketedConnectsToRoot<
+  T extends {
+    id: string
+    position: { x: number; y: number }
+    data?: { kind?: string; initialSlot?: 0 | 1 | 2 }
+  },
+>(nodes: T[]): T[] {
+  const root = nodes.find((node) => node.id === INITIAL_NODE_ID)
+  if (!root) return nodes
+  return nodes.map((node) => {
+    const slot = node.data?.initialSlot
+    if (node.data?.kind !== 'connect' || slot == null) return node
+    if (slot < 0 || slot > 2) return node
+    return {
+      ...node,
+      position: connectPositionForInitialHub(root.position, slot as 0 | 1 | 2),
+    }
+  })
+}
+

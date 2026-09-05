@@ -156,7 +156,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           '--outer-band-r': `${outerBandR}px`,
           '--connect-r': `${connectR}px`,
           '--icon-color': iconColor,
-          '--label-offset': `${labelOffset}px`,
+          '--label-offset': `${isInitialNode ? 0 : labelOffset}px`,
           '--orbit-r': `${outerOrbitR}px`,
           '--unpowered-glow': UNPOWERED_GLOW,
           '--tooltip-scale': String(1 / Math.max(zoom, 0.05)),
