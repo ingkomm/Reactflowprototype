@@ -22,21 +22,21 @@
   overflow: visible;
 }
 
-.passive-node--small {
+.passive-node--shard {
   --node-size: 36px;
   --ring: #8b9aa8;
   --core: #24313b;
   --accent: #d5dde5;
 }
 
-.passive-node--small .passive-node__ring {
+.passive-node--shard .passive-node__ring {
   border: 1.5px solid color-mix(in srgb, var(--icon-color) 72%, #e8eef3);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--icon-color) 22%, transparent),
     0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
 }
 
-.passive-node--small.is-unpowered .passive-node__ring {
+.passive-node--shard.is-unpowered .passive-node__ring {
   border-color: color-mix(in srgb, #7a8694 55%, transparent);
 }
 

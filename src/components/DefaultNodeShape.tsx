@@ -16,7 +16,7 @@ type Props = {
 
 const UNPOWERED_FILL = '#6a7580'
 
-/** Built-in defaults: mastery / notable / small = solid filled circles. Connect = socket. */
+/** Built-in defaults: mastery / notable / shard = solid filled circles. Connect = socket. */
 export function DefaultNodeShape({
   kind,
   powered = true,
