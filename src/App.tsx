@@ -73,6 +73,8 @@ import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { useGraphHistory } from './useGraphHistory'
 import { FirstRunDialog } from './components/FirstRunDialog'
 import { NodeContextPopup } from './components/NodeContextPopup'
+import { ShardMarkdownPreview } from './components/ShardMarkdownPreview'
+import { NotableLogViewer } from './components/NotableLogViewer'
 import {
   commitBootstrapChoice,
   createNewSheet,
@@ -1286,11 +1288,6 @@ export default function App() {
     return nodes.find((n) => n.id === contextMenu.nodeId) ?? null
   }, [contextMenu, nodes])
 
-  const handleContextLogSelect = useCallback((logId: string) => {
-    setFocusLogId(logId)
-    setContextMenu(null)
-  }, [])
-
   const handlePinnedLogSelect = useCallback((nodeId: string, logId: string) => {
     setSelectedId(nodeId)
     setFocusLogId(logId)
@@ -1661,18 +1658,46 @@ export default function App() {
             />
 
             {contextMenu && contextMenuNode ? (
-              <NodeContextPopup
-                open
-                x={contextMenu.x}
-                y={contextMenu.y}
-                nodeLabel={(contextMenuNode.data as PassiveNodeData).label}
-                logs={dailyLogsForNode(contextMenuNode.data as PassiveNodeData)}
-                canPinVideos={canPinNodeVideos((contextMenuNode.data as PassiveNodeData).kind)}
-                isVideoPinned={pinnedVideoNodeIds.includes(contextMenu.nodeId)}
-                onClose={() => setContextMenu(null)}
-                onSelectLog={handleContextLogSelect}
-                onToggleVideoPin={handleToggleContextVideoPin}
-              />
+              (() => {
+                const data = contextMenuNode.data as PassiveNodeData
+                const closeMenu = () => setContextMenu(null)
+                if (data.kind === 'shard') {
+                  return (
+                    <ShardMarkdownPreview
+                      open
+                      x={contextMenu.x}
+                      y={contextMenu.y}
+                      nodeLabel={data.label}
+                      markdown={data.markdown}
+                      onClose={closeMenu}
+                    />
+                  )
+                }
+                if (data.kind === 'notable') {
+                  return (
+                    <NotableLogViewer
+                      open
+                      x={contextMenu.x}
+                      y={contextMenu.y}
+                      nodeLabel={data.label}
+                      logs={dailyLogsForNode(data)}
+                      onClose={closeMenu}
+                    />
+                  )
+                }
+                return (
+                  <NodeContextPopup
+                    open
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    nodeLabel={data.label}
+                    canPinVideos={canPinNodeVideos(data.kind)}
+                    isVideoPinned={pinnedVideoNodeIds.includes(contextMenu.nodeId)}
+                    onClose={closeMenu}
+                    onToggleVideoPin={handleToggleContextVideoPin}
+                  />
+                )
+              })()
             ) : null}
 
             <SymbolKindEditor

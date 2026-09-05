@@ -1,21 +1,14 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import './NodeContextPopup.css'
-
-export type NodeContextPopupState = {
-  nodeId: string
-  x: number
-  y: number
-} | null
+import { MarkdownView } from './MarkdownView'
+import './ShardMarkdownPreview.css'
 
 type Props = {
   open: boolean
   x: number
   y: number
   nodeLabel: string
-  canPinVideos?: boolean
-  isVideoPinned?: boolean
+  markdown?: string
   onClose: () => void
-  onToggleVideoPin?: () => void
 }
 
 function clampPosition(x: number, y: number, width: number, height: number) {
@@ -28,16 +21,14 @@ function clampPosition(x: number, y: number, width: number, height: number) {
   }
 }
 
-/** Generic right-click menu for non-Shard/non-Notable nodes (e.g. Mastery pin). */
-export function NodeContextPopup({
+/** Read-only Shard markdown quick view (edit stays in Inspector). */
+export function ShardMarkdownPreview({
   open,
   x,
   y,
   nodeLabel,
-  canPinVideos = false,
-  isVideoPinned = false,
+  markdown,
   onClose,
-  onToggleVideoPin,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -56,38 +47,43 @@ export function NodeContextPopup({
     const next = clampPosition(x, y, rect.width, rect.height)
     panelRef.current.style.left = `${next.x}px`
     panelRef.current.style.top = `${next.y}px`
-  }, [open, x, y])
+  }, [open, x, y, markdown])
 
   if (!open) return null
+
+  const hasContent = Boolean(markdown?.trim())
 
   return (
     <>
       <button
         type="button"
-        className="node-context-popup__backdrop"
+        className="shard-markdown-preview__backdrop"
         aria-label="닫기"
         onClick={onClose}
       />
       <div
         ref={panelRef}
-        className="node-context-popup"
-        role="menu"
-        aria-label={`${nodeLabel} 컨텍스트 메뉴`}
+        className="shard-markdown-preview"
+        role="dialog"
+        aria-label={`${nodeLabel} Markdown 미리보기`}
         style={{ left: x, top: y }}
       >
-        <header className="node-context-popup__head">
-          <strong>{nodeLabel}</strong>
+        <header className="shard-markdown-preview__head">
+          <div>
+            <p className="shard-markdown-preview__kind">Shard</p>
+            <strong>{nodeLabel}</strong>
+          </div>
+          <button type="button" className="btn btn--ghost" onClick={onClose}>
+            닫기
+          </button>
         </header>
-
-        {canPinVideos && onToggleVideoPin ? (
-          <footer className="node-context-popup__foot">
-            <button type="button" className="btn btn--ghost" onClick={onToggleVideoPin}>
-              {isVideoPinned ? '동영상 핀 해제' : '동영상 핀'}
-            </button>
-          </footer>
-        ) : (
-          <p className="node-context-popup__empty">빠른 동작 없음</p>
-        )}
+        <div className="shard-markdown-preview__body">
+          {hasContent ? (
+            <MarkdownView markdown={markdown ?? ''} />
+          ) : (
+            <p className="shard-markdown-preview__empty">Markdown이 비어 있습니다.</p>
+          )}
+        </div>
       </div>
     </>
   )
