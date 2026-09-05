@@ -23,9 +23,9 @@ describe('power', () => {
     const nodes: PassiveFlowNode[] = [
       node(INITIAL_NODE_ID, 'initial'),
       node('connect-a', 'connect', { connectEnabled: true, initialSlot: 0 }),
-      node('small-b', 'small'),
+      node('shard-b', 'shard'),
     ]
-    const edges = [passiveLinkEdge('connect-a', 'small-b')]
+    const edges = [passiveLinkEdge('connect-a', 'shard-b')]
 
     const synced = syncEdgesReachableFromInitial(nodes, edges)
     expect(synced).toHaveLength(1)
@@ -36,25 +36,25 @@ describe('power', () => {
     const nodes: PassiveFlowNode[] = [
       node(INITIAL_NODE_ID, 'initial'),
       node('connect-a', 'connect', { connectEnabled: true, initialSlot: 0 }),
-      node('small-b', 'small'),
+      node('shard-b', 'shard'),
     ]
     const activeEdge = rootSocketLinkEdge(INITIAL_NODE_ID, 'connect-a', 0)
     const deadEdge = {
-      ...passiveLinkEdge('connect-a', 'small-b'),
+      ...passiveLinkEdge('connect-a', 'shard-b'),
       data: { active: false },
     }
     const powered = computePoweredNodeIds(nodes, [activeEdge, deadEdge])
-    expect(powered.has('small-b')).toBe(false)
+    expect(powered.has('shard-b')).toBe(false)
   })
 
   it('reactivates reachable edges when Root reconnects', () => {
     const nodes: PassiveFlowNode[] = [
       node(INITIAL_NODE_ID, 'initial'),
       node('connect-a', 'connect', { connectEnabled: true, initialSlot: 0 }),
-      node('small-b', 'small'),
+      node('shard-b', 'shard'),
     ]
     const rootLink = rootSocketLinkEdge(INITIAL_NODE_ID, 'connect-a', 0)
-    const branchLink = passiveLinkEdge('connect-a', 'small-b')
+    const branchLink = passiveLinkEdge('connect-a', 'shard-b')
 
     const disconnected = syncEdgesReachableFromInitial(nodes, [branchLink])
     expect(isEdgeActive(disconnected[0]!)).toBe(false)
@@ -64,9 +64,27 @@ describe('power', () => {
     expect(isEdgeActive(reconnected[1]!)).toBe(true)
 
     const reachable = getNodesReachableFromInitial(nodes, reconnected)
-    expect(reachable.has('small-b')).toBe(true)
+    expect(reachable.has('shard-b')).toBe(true)
 
     const powered = computePoweredNodeIds(nodes, reconnected)
-    expect(powered.has('small-b')).toBe(true)
+    expect(powered.has('shard-b')).toBe(true)
+  })
+
+  it('relays power from Connect to another Connect and downstream shard', () => {
+    const nodes = [
+      node(INITIAL_NODE_ID, 'initial'),
+      node('connect-a', 'connect', { connectEnabled: true, initialSlot: 0 }),
+      node('connect-b', 'connect', { connectEnabled: true }),
+      node('shard-x', 'shard'),
+    ]
+    const edges = [
+      rootSocketLinkEdge(INITIAL_NODE_ID, 'connect-a', 0),
+      passiveLinkEdge('connect-a', 'connect-b'),
+      passiveLinkEdge('connect-b', 'shard-x'),
+    ]
+    const powered = computePoweredNodeIds(nodes, edges)
+    expect(powered.has('connect-a')).toBe(true)
+    expect(powered.has('connect-b')).toBe(true)
+    expect(powered.has('shard-x')).toBe(true)
   })
 })

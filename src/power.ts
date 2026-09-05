@@ -59,13 +59,13 @@ function isStealth(data: PassiveNodeData) {
  * Whether a powered node may push power across a link.
  * - Initial: always (root source)
  * - Connect: when On
- * - Small: when powered
+ * - Shard: when powered
  * - Notable: first cumulative band (3) complete
  */
 export function canTransmitPower(data: PassiveNodeData): boolean {
   if (isInitial(data)) return true
   if (isConnect(data)) return isConnectEnabled(data)
-  if (data.kind === 'small') return true
+  if (data.kind === 'shard') return true
   if (isStealth(data) || isMastery(data)) return false
   if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
   return false
@@ -108,15 +108,19 @@ export function computePoweredNodeIds(
         if (isMastery(toData)) continue
         if (isStealth(toData)) continue
         if (isConnect(toData)) {
-          if (!isInitial(fromData)) continue
-          if (
-            !isValidRootConnectHandles(
-              isInitial(sd) ? source : target,
-              isConnect(sd) ? source : target,
-              edge.sourceHandle,
-              edge.targetHandle,
-            )
-          ) {
+          // Connect receives power from Root (socket) or from another powered Connect.
+          if (isInitial(fromData)) {
+            if (
+              !isValidRootConnectHandles(
+                isInitial(sd) ? source : target,
+                isConnect(sd) ? source : target,
+                edge.sourceHandle,
+                edge.targetHandle,
+              )
+            ) {
+              continue
+            }
+          } else if (!isConnect(fromData)) {
             continue
           }
         }
@@ -192,15 +196,19 @@ export function computePowerFlowMeta(
         if (isMastery(toData)) continue
         if (isStealth(toData)) continue
         if (isConnect(toData)) {
-          if (!isInitial(fromData)) continue
-          if (
-            !isValidRootConnectHandles(
-              isInitial(sd) ? source : target,
-              isConnect(sd) ? source : target,
-              edge.sourceHandle,
-              edge.targetHandle,
-            )
-          ) {
+          // Connect receives power from Root (socket) or from another powered Connect.
+          if (isInitial(fromData)) {
+            if (
+              !isValidRootConnectHandles(
+                isInitial(sd) ? source : target,
+                isConnect(sd) ? source : target,
+                edge.sourceHandle,
+                edge.targetHandle,
+              )
+            ) {
+              continue
+            }
+          } else if (!isConnect(fromData)) {
             continue
           }
         }
@@ -397,12 +405,12 @@ export function classifyPassiveConnection(
 
   if (!shareSameOrbit({ data: sd }, { data: td })) {
     if (isConnect(sd) && isConnect(td)) return 'center'
-    if (isConnect(sd) && (td.kind === 'small' || td.kind === 'notable')) return 'center'
-    if (isConnect(td) && (sd.kind === 'small' || sd.kind === 'notable')) return 'center'
-    if (sd.kind === 'small' && td.kind === 'small') return 'center'
+    if (isConnect(sd) && (td.kind === 'shard' || td.kind === 'notable')) return 'center'
+    if (isConnect(td) && (sd.kind === 'shard' || sd.kind === 'notable')) return 'center'
+    if (sd.kind === 'shard' && td.kind === 'shard') return 'center'
     if (
-      (sd.kind === 'small' && td.kind === 'notable') ||
-      (sd.kind === 'notable' && td.kind === 'small')
+      (sd.kind === 'shard' && td.kind === 'notable') ||
+      (sd.kind === 'notable' && td.kind === 'shard')
     ) {
       return 'center'
     }

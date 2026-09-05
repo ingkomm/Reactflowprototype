@@ -3,10 +3,10 @@ import { DEFAULT_ICON_BY_KIND } from './types'
 
 export const DEFAULT_SYMBOL_ID = 'default'
 
-export const LIBRARY_KINDS = ['mastery', 'notable', 'small', 'connect'] as const satisfies PassiveKind[]
+export const LIBRARY_KINDS = ['mastery', 'notable', 'shard', 'connect'] as const satisfies PassiveKind[]
 
 /** Kinds that support Import SVG symbol editor (Connect uses default socket only). */
-export const SYMBOL_EDITOR_KINDS = ['mastery', 'notable', 'small'] as const satisfies PassiveKind[]
+export const SYMBOL_EDITOR_KINDS = ['mastery', 'notable', 'shard'] as const satisfies PassiveKind[]
 
 export type LibraryKind = (typeof LIBRARY_KINDS)[number]
 export type SymbolEditorKind = (typeof SYMBOL_EDITOR_KINDS)[number]
@@ -14,7 +14,7 @@ export type SymbolEditorKind = (typeof SYMBOL_EDITOR_KINDS)[number]
 export const LIBRARY_KIND_LABEL: Record<LibraryKind, string> = {
   mastery: 'Mastery',
   notable: 'Notable',
-  small: 'Small',
+  shard: 'Shard',
   connect: 'Connect',
 }
 
@@ -23,7 +23,7 @@ export const DEFAULT_SYMBOL_ID_BY_KIND: Record<PassiveKind, string> = {
   connect: DEFAULT_SYMBOL_ID,
   mastery: DEFAULT_SYMBOL_ID,
   notable: DEFAULT_SYMBOL_ID,
-  small: DEFAULT_SYMBOL_ID,
+  shard: DEFAULT_SYMBOL_ID,
   voidMastery: DEFAULT_SYMBOL_ID,
   void: DEFAULT_SYMBOL_ID,
 }
@@ -101,14 +101,14 @@ export function resolveSymbolColor(
   symbolId: string | undefined | null,
   kind: PassiveKind,
   customSymbols: CustomSymbol[],
-  defaultSymbolColors: Partial<Record<'mastery' | 'notable' | 'small', string>> = {},
+  defaultSymbolColors: Partial<Record<'mastery' | 'notable' | 'shard', string>> = {},
 ): string {
   if (!isDefaultSymbolId(symbolId)) {
     const custom = customSymbols.find((s) => s.id === symbolId)
     if (custom?.color) return custom.color
   }
   const resolved = kind === 'voidMastery' ? 'mastery' : kind
-  if (resolved === 'mastery' || resolved === 'notable' || resolved === 'small') {
+  if (resolved === 'mastery' || resolved === 'notable' || resolved === 'shard') {
     return defaultSymbolColors[resolved] ?? DEFAULT_ICON_BY_KIND[resolved]
   }
   return DEFAULT_ICON_BY_KIND[kind]

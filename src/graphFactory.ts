@@ -31,6 +31,7 @@ export function createPassiveData(
       | 'connectEnabled'
       | 'symbolId'
       | 'stages'
+      | 'markdown'
     >
   > = {},
 ): PassiveNodeData {
@@ -40,6 +41,7 @@ export function createPassiveData(
     kind: resolvedKind,
     stages: extras.stages ?? stagesForKind(resolvedKind),
     symbolId: extras.symbolId ?? DEFAULT_SYMBOL_ID_BY_KIND[resolvedKind],
+    ...(extras.markdown != null && extras.markdown !== '' ? { markdown: extras.markdown } : {}),
     ...(isMasteryKind(resolvedKind)
       ? {
           orbitStartAngle: extras.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,

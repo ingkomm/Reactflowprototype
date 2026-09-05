@@ -13,7 +13,7 @@ import '@xyflow/react/dist/style.css'
 
 import { type PassiveFlowNode } from './components/PassiveNode'
 import { TreeWorkspace } from './components/TreeWorkspace'
-import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot } from './power'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot, isEdgeActive } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot, TrainingLog } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
@@ -462,8 +462,21 @@ export default function App() {
     if (dragPreviewNodes) return
     setEdges((eds) => {
       const next = sanitizeEdges(nodes, eds)
-      if (next.length === eds.length && next.every((e, i) => e.id === eds[i]?.id)) return eds
-      return next
+      const unchanged =
+        next.length === eds.length &&
+        next.every((e, i) => {
+          const prev = eds[i]
+          return (
+            prev != null &&
+            prev.id === e.id &&
+            isEdgeActive(prev) === isEdgeActive(e) &&
+            prev.source === e.source &&
+            prev.target === e.target &&
+            prev.sourceHandle === e.sourceHandle &&
+            prev.targetHandle === e.targetHandle
+          )
+        })
+      return unchanged ? eds : next
     })
   }, [nodes, edges, setEdges, dragPreviewNodes])
 
@@ -1000,6 +1013,12 @@ export default function App() {
                       ),
                     }),
             }
+            if (resolvedKind === 'shard') {
+              nextData.stages = []
+              if (prev.kind === 'shard' && data.markdown) nextData.markdown = data.markdown
+            } else {
+              delete nextData.markdown
+            }
             return { ...node, data: nextData }
           }
 
@@ -1463,6 +1482,17 @@ export default function App() {
     [updateNodeData],
   )
 
+  const onChangeMarkdown = useCallback(
+    (nodeId: string, markdown: string) =>
+      updateNodeData(nodeId, (d) => {
+        const next = { ...d }
+        if (markdown.trim()) next.markdown = markdown
+        else delete next.markdown
+        return next
+      }),
+    [updateNodeData],
+  )
+
   return (
     <CustomSymbolProvider customSymbols={customSymbols} defaultSymbolColors={defaultSymbolColors}>
       <ReactFlowProvider>
@@ -1622,6 +1652,7 @@ export default function App() {
               onChangeKind={changeKind}
               onChangeSymbolId={onChangeSymbolId}
               onChangeStages={onChangeStages}
+              onChangeMarkdown={onChangeMarkdown}
               onChangeConnectEnabled={changeConnectEnabled}
               onChangeOrbitTierCount={changeOrbitTierCount}
               onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}

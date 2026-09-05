@@ -1,4 +1,4 @@
-import type { PassiveKind, PassiveNodeData } from './types'
+import type { PassiveKind, PassiveNodeData, TrainingLog, VideoMedia } from './types'
 import {
   createDailyLog,
   formatPracticeDate,
@@ -6,7 +6,7 @@ import {
   sortedDailyLogs,
   upsertDailyLog,
 } from './dailyLog'
-import { ensureNotableStages, ensureSmallPracticeStages, uid } from './stage'
+import { ensureNotableStages, uid } from './stage'
 
 function offsetPracticeDate(daysFromToday: number): string {
   const date = new Date()
@@ -15,9 +15,6 @@ function offsetPracticeDate(daysFromToday: number): string {
 }
 
 export function extractDailyLogsFromNodeData(data: PassiveNodeData) {
-  if (data.kind === 'small') {
-    return sortedDailyLogs(ensureSmallPracticeStages(data.stages ?? [])[0]?.logs ?? [])
-  }
   if (data.kind === 'notable') {
     return sortedDailyLogs(ensureNotableStages(data.stages ?? [])[0]?.logs ?? [])
   }
@@ -27,19 +24,56 @@ export function extractDailyLogsFromNodeData(data: PassiveNodeData) {
   return []
 }
 
-/** Move legacy node-level videos into daily logs and clear duplicate storage. */
+/** Flatten legacy training logs into a single markdown document (Small → Shard migration). */
+export function trainingLogsToMarkdown(logs: TrainingLog[]): string {
+  const blocks: string[] = []
+  for (const log of sortedDailyLogs(logs)) {
+    const parts: string[] = [`## ${log.date}`]
+    if (log.note?.trim()) parts.push(log.note.trim())
+    for (const media of log.media ?? []) {
+      const label = media.title?.trim() || media.url
+      parts.push(`- [${label}](${media.url})`)
+    }
+    blocks.push(parts.join('\n\n'))
+  }
+  return blocks.join('\n\n').trim()
+}
+
+function appendMediaToMarkdown(markdown: string | undefined, media: VideoMedia[]): string {
+  const lines = media.map((item) => {
+    const label = item.title?.trim() || item.note?.trim() || item.url
+    return `- [${label}](${item.url})`
+  })
+  const chunk = lines.join('\n')
+  if (!chunk) return markdown?.trim() ?? ''
+  if (!markdown?.trim()) return chunk
+  return `${markdown.trim()}\n\n${chunk}`
+}
+
+/** Move legacy node-level videos into daily logs (or Shard markdown) and clear duplicate storage. */
 export function absorbNodeMediaIntoDailyLogs(data: PassiveNodeData): PassiveNodeData {
   const orphanMedia = data.media ?? []
-  const canStore =
-    data.kind === 'small' ||
-    data.kind === 'notable' ||
-    data.kind === 'mastery' ||
-    data.kind === 'voidMastery'
+  if (orphanMedia.length === 0) {
+    if (data.kind === 'shard') {
+      return { ...data, stages: [], media: undefined }
+    }
+    return data
+  }
 
-  if (!canStore) return data
+  if (data.kind === 'shard') {
+    return {
+      ...data,
+      stages: [],
+      media: undefined,
+      markdown: appendMediaToMarkdown(data.markdown, orphanMedia),
+    }
+  }
+
+  const canStore =
+    data.kind === 'notable' || data.kind === 'mastery' || data.kind === 'voidMastery'
+  if (!canStore) return { ...data, media: undefined }
 
   let logs = extractDailyLogsFromNodeData(data)
-  let changed = orphanMedia.length > 0
 
   for (let i = 0; i < orphanMedia.length; i++) {
     const item = orphanMedia[i]!
@@ -58,15 +92,7 @@ export function absorbNodeMediaIntoDailyLogs(data: PassiveNodeData): PassiveNode
     }
   }
 
-  if (!changed) return data
-
   const next: PassiveNodeData = { ...data, media: undefined }
-
-  if (data.kind === 'small') {
-    const stages = ensureSmallPracticeStages(data.stages ?? [])
-    next.stages = [{ ...stages[0]!, logs }]
-    return next
-  }
 
   if (data.kind === 'notable') {
     const stages = ensureNotableStages(data.stages ?? [])
@@ -93,5 +119,5 @@ export function nodeHasDailyLogs(data: PassiveNodeData): boolean {
 }
 
 export function kindUsesDailyLogs(kind: PassiveKind): boolean {
-  return kind === 'small' || kind === 'notable' || kind === 'mastery' || kind === 'voidMastery'
+  return kind === 'notable' || kind === 'mastery' || kind === 'voidMastery'
 }

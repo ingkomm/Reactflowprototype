@@ -79,12 +79,12 @@ describe('graph integrity & import limits', () => {
           },
         },
         {
-          id: 'small-a',
+          id: 'shard-a',
           type: 'passive',
           position: { x: 200, y: 0 },
           data: {
             label: 'S',
-            kind: 'small',
+            kind: 'shard',
             stages: [],
             symbolId: 'default',
             masteryId: 'mastery-a',

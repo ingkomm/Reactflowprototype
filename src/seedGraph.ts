@@ -31,8 +31,8 @@ export const CONNECT_BL_ID = 'connect-bl'
 const INITIAL_POSITION = { x: 80, y: 80 }
 
 const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
-  1: ['notable-hiphop', 'notable-kpop', 'small-basic'],
-  2: ['small-footwork', 'small-stretch'],
+  1: ['notable-hiphop', 'notable-kpop', 'shard-basic'],
+  2: ['shard-footwork', 'shard-stretch'],
 }
 const danceOrbitOrder = mergeOrbitOrderFromTiers(2, danceOrbitOrderByTier)
 const danceOrbitStartAngleByTier: Partial<Record<OrbitTier, number>> = {
@@ -46,19 +46,6 @@ function demoLog(date: string, note?: string): TrainingLog {
 
 function notableDemoStages(dates: string[]): StageData[] {
   return createNotableStages(dates.length, dates.map((date) => demoLog(date)))
-}
-
-function smallDemoStages(dates: string[]): StageData[] {
-  return [
-    {
-      id: 'stage-demo',
-      index: 1,
-      label: '연습',
-      goal: 9999,
-      completedManually: false,
-      logs: dates.map((date) => demoLog(date)),
-    },
-  ]
 }
 
 function buildSeedNodes(): PassiveFlowNode[] {
@@ -147,12 +134,13 @@ function buildSeedNodes(): PassiveFlowNode[] {
       }),
     },
     {
-      id: 'small-basic',
+      id: 'shard-basic',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '기본기', {
-        stages: smallDemoStages(['2025-05-01']),
+      data: createPassiveData('shard', '기본기', {
+        stages: [],
+        markdown: '## Note\n\n기본기 연습 메모',
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 1,
         orbitSlot: 4,
@@ -160,12 +148,13 @@ function buildSeedNodes(): PassiveFlowNode[] {
       }),
     },
     {
-      id: 'small-footwork',
+      id: 'shard-footwork',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '풋워크', {
-        stages: smallDemoStages(['2025-05-08', '2025-05-12']),
+      data: createPassiveData('shard', '풋워크', {
+        stages: [],
+        markdown: '## Note\n\n풋워크 연습 메모',
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
         orbitSlot: 0,
@@ -173,12 +162,13 @@ function buildSeedNodes(): PassiveFlowNode[] {
       }),
     },
     {
-      id: 'small-stretch',
+      id: 'shard-stretch',
       type: 'passive',
       position: { x: 0, y: 0 },
       dragHandle: '.node-drag-handle',
-      data: createPassiveData('small', '스트레칭', {
-        stages: smallDemoStages(['2025-05-15']),
+      data: createPassiveData('shard', '스트레칭', {
+        stages: [],
+        markdown: '## Note\n\n스트레칭 연습 메모',
         masteryId: DANCE_MASTERY_ID,
         orbitTier: 2,
         orbitSlot: 3,
@@ -199,7 +189,7 @@ export const SEED_EDGES: Edge[] = [
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_TOP_ID, 0),
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID, 1),
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID, 2),
-  passiveLinkEdge(CONNECT_TOP_ID, 'small-basic'),
+  passiveLinkEdge(CONNECT_TOP_ID, 'shard-basic'),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], DANCE_MASTERY_ID),
 ]

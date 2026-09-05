@@ -3,26 +3,37 @@ import {
   absorbNodeMediaIntoDailyLogs,
   extractDailyLogsFromNodeData,
   kindUsesDailyLogs,
+  trainingLogsToMarkdown,
 } from './dailyLogNode'
 import { createVideoMediaId } from './videoMedia'
 import { DEFAULT_SYMBOL_ID } from './librarySymbols'
 import type { PassiveNodeData } from './types'
 
 describe('dailyLogNode', () => {
-  it('extracts logs from small, notable, and mastery nodes', () => {
-    const small: PassiveNodeData = {
-      label: 'Small',
-      kind: 'small',
+  it('extracts logs from notable and mastery, not shard', () => {
+    const shard: PassiveNodeData = {
+      label: 'Shard',
+      kind: 'shard',
       symbolId: DEFAULT_SYMBOL_ID,
-      stages: [{ id: 's1', index: 1, label: '연습', goal: 9999, completedManually: false, logs: [{ id: 'l1', date: '2025-01-01' }] }],
+      stages: [],
+      markdown: '## hello',
     }
-    expect(extractDailyLogsFromNodeData(small)).toHaveLength(1)
+    expect(extractDailyLogsFromNodeData(shard)).toHaveLength(0)
 
     const mastery: PassiveNodeData = {
       label: 'Mastery',
       kind: 'mastery',
       symbolId: DEFAULT_SYMBOL_ID,
-      stages: [{ id: 's1', index: 1, label: '기록', goal: 9999, completedManually: false, logs: [{ id: 'l2', date: '2025-02-01', note: 'memo' }] }],
+      stages: [
+        {
+          id: 's1',
+          index: 1,
+          label: '기록',
+          goal: 9999,
+          completedManually: false,
+          logs: [{ id: 'l2', date: '2025-02-01', note: 'memo' }],
+        },
+      ],
     }
     expect(extractDailyLogsFromNodeData(mastery)[0]?.note).toBe('memo')
   })
@@ -50,8 +61,18 @@ describe('dailyLogNode', () => {
     expect(logs[0]?.note).toBe('Practice clip')
   })
 
+  it('flattens legacy training logs into markdown for shard migration', () => {
+    const md = trainingLogsToMarkdown([
+      { id: 'a', date: '2025-01-02', note: 'second' },
+      { id: 'b', date: '2025-01-01', note: 'first' },
+    ])
+    expect(md).toContain('## 2025-01-01')
+    expect(md).toContain('first')
+    expect(md).toContain('## 2025-01-02')
+  })
+
   it('flags kinds that use daily logs', () => {
-    expect(kindUsesDailyLogs('small')).toBe(true)
+    expect(kindUsesDailyLogs('shard')).toBe(false)
     expect(kindUsesDailyLogs('notable')).toBe(true)
     expect(kindUsesDailyLogs('mastery')).toBe(true)
     expect(kindUsesDailyLogs('connect')).toBe(false)

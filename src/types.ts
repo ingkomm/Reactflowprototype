@@ -3,7 +3,7 @@ export type InitialConnectSlot = 0 | 1 | 2
 export type PassiveKind =
   | 'initial'
   | 'connect'
-  | 'small'
+  | 'shard'
   | 'notable'
   | 'mastery'
   | 'voidMastery'
@@ -48,7 +48,7 @@ export type CustomSymbol = {
   /** Sanitized inner SVG markup (without outer svg wrapper). */
   markup: string
   /** Which library branch this symbol belongs to. */
-  kind?: 'mastery' | 'notable' | 'small'
+  kind?: 'mastery' | 'notable' | 'shard'
   /** Optional tint for ring + default-style previews. */
   color?: string
   /** Vector/raster glyph zoom relative to node face (1 = 100%). */
@@ -64,7 +64,7 @@ export type GraphDocumentSettings = {
   gridSnapScale?: number
   voidHighlightEnabled?: boolean
   /** Default symbol color per library branch (built-in Default shape). */
-  defaultSymbolColors?: Partial<Record<'mastery' | 'notable' | 'small', string>>
+  defaultSymbolColors?: Partial<Record<'mastery' | 'notable' | 'shard', string>>
 }
 
 /** Edge payload persisted in graph documents. */
@@ -112,7 +112,7 @@ export type NodeIconColor = (typeof NODE_ICON_COLORS)[number]
 export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
   initial: '#FFE066',
   connect: '#4DAB9A',
-  small: '#9B9A97',
+  shard: '#9B9A97',
   notable: '#D9730D',
   mastery: '#0F7B6C',
   voidMastery: '#0F7B6C',
@@ -122,8 +122,10 @@ export const DEFAULT_ICON_BY_KIND: Record<PassiveKind, NodeIconColor> = {
 export type PassiveNodeData = {
   label: string
   kind: PassiveKind
-  /** Ordered stages; Notable only uses cumulative 3/5/7 bands. Master/Small have none. */
+  /** Ordered stages; Notable uses cumulative bands. Mastery/Shard typically empty. */
   stages: StageData[]
+  /** Shard only: freeform markdown note (no training logs). */
+  markdown?: string
   /** Library symbol id — icon + color come from the built-in catalog. */
   symbolId: string
   /** Mastery: radius of the circular orbit for attached passives. */
@@ -149,9 +151,9 @@ export type PassiveNodeData = {
   orbitCapacityByTier?: Partial<Record<OrbitTier, number>>
   /** Mastery: when true, orbit membership count/order cannot change (rotation still allowed). */
   orbitLocked?: boolean
-  /** Small/Notable/Void only: the single Mastery this passive belongs to. */
+  /** Shard/Notable/Void only: the single Mastery this passive belongs to. */
   masteryId?: string | null
-  /** Small/Notable on an orbit: which tier ring (1 = innermost). */
+  /** Shard/Notable on an orbit: which tier ring (1 = innermost). */
   orbitTier?: OrbitTier
   /** Satellite slot index (0-based) within tier capacity; empty slots = void spacing. */
   orbitSlot?: number
@@ -174,7 +176,7 @@ export type PassiveNodeData = {
 export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
   initial: 'Root',
   connect: 'Connect',
-  small: 'Small',
+  shard: 'Shard',
   notable: 'Notable',
   mastery: 'Mastery',
   voidMastery: 'Void Master (retired)',
@@ -182,6 +184,6 @@ export const PASSIVE_KIND_LABEL: Record<PassiveKind, string> = {
 }
 
 /** Kinds the user can add from the Library tree. */
-export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = ['small', 'notable', 'mastery', 'connect']
+export const ADDABLE_PASSIVE_KINDS: PassiveKind[] = ['shard', 'notable', 'mastery', 'connect']
 
 export const DEFAULT_STAGE_GOAL = 3

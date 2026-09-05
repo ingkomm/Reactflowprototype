@@ -416,7 +416,7 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
     height: view.height,
     markup: safeMarkup,
   }
-  if (raw.kind === 'mastery' || raw.kind === 'notable' || raw.kind === 'small') {
+  if (raw.kind === 'mastery' || raw.kind === 'notable' || raw.kind === 'shard') {
     symbol.kind = raw.kind
   }
   const color = parseSymbolColor(raw.color)

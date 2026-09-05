@@ -14,14 +14,14 @@ export function uid(prefix: string) {
 }
 
 export function kindUsesPracticeLogs(kind: PassiveKind): boolean {
-  return kind === 'small' || kind === 'notable'
+  return kind === 'notable'
 }
 
 function normalizeStageLogs(logs: TrainingLog[]): TrainingLog[] {
   return normalizeDailyLogs(logs)
 }
 
-/** Small nodes use a single open-ended practice stage. */
+/** @deprecated Small→Shard no longer uses practice stages. */
 export function ensureSmallPracticeStages(stages: StageData[]): StageData[] {
   if (stages.length > 0) {
     return stages.map((stage) => ({
@@ -206,7 +206,7 @@ export function notableStagesFromTotal(totalLogged: number): StageData[] {
 }
 
 export function stagesForKind(kind: PassiveKind, existing?: StageData[]): StageData[] {
-  if (kind === 'small') return ensureSmallPracticeStages(existing ?? [])
+  if (kind === 'shard') return []
   if (kindUsesTrainingBands(kind)) return ensureNotableStages(existing ?? [])
   return []
 }

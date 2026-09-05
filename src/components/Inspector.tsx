@@ -9,7 +9,6 @@ import type {
 import { ADDABLE_PASSIVE_KINDS, INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from '../types'
 import {
   ensureNotableStages,
-  ensureSmallPracticeStages,
   sortedStages,
   uid,
 } from '../stage'
@@ -54,6 +53,7 @@ type Props = {
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
+  onChangeMarkdown: (nodeId: string, markdown: string) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -77,6 +77,7 @@ export function Inspector({
   onChangeKind,
   onChangeSymbolId,
   onChangeStages,
+  onChangeMarkdown,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -104,28 +105,19 @@ export function Inspector({
   const orbitTierCount = normalizeOrbitTierCount(data.orbitTierCount)
   const stages = sortedStages(data.stages ?? [])
   const kindCustomSymbols =
-    data.kind === 'mastery' || data.kind === 'notable' || data.kind === 'small'
+    data.kind === 'mastery' || data.kind === 'notable' || data.kind === 'shard'
       ? customSymbolsForKind(customSymbols, data.kind)
       : []
   const currentSymbolId = isDefaultSymbolId(data.symbolId) ? DEFAULT_SYMBOL_ID : data.symbolId
   const isFixedInitial = nodeId === INITIAL_NODE_ID
 
   const patchStages = (next: StageData[]) => {
-    if (data.kind === 'small') {
-      onChangeStages(nodeId, ensureSmallPracticeStages(next))
-      return
-    }
     onChangeStages(nodeId, ensureNotableStages(next))
   }
 
   const practiceLogs = extractDailyLogsFromNodeData(data)
 
   const handleLogsChange = (logs: TrainingLog[]) => {
-    if (data.kind === 'small') {
-      const next = ensureSmallPracticeStages(stages)
-      patchStages([{ ...next[0]!, logs }])
-      return
-    }
     if (data.kind === 'notable') {
       const next = ensureNotableStages(stages)
       patchStages(next.map((stage, index) => (index === 0 ? { ...stage, logs } : stage)))
@@ -438,7 +430,7 @@ export function Inspector({
         </>
       )}
 
-      {(data.kind === 'small' || data.kind === 'notable') && (
+      {(data.kind === 'shard' || data.kind === 'notable') && (
         <>
           <div className="inspector__section">
             <div className="inspector__section-head">
@@ -478,6 +470,40 @@ export function Inspector({
           </div>
         </>
       )}
+
+      {data.kind === 'shard' && (
+
+
+        <label className="field">
+
+
+          <span>Markdown</span>
+
+
+          <textarea
+
+
+            rows={12}
+
+
+            value={data.markdown ?? ''}
+
+
+            onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
+
+
+            placeholder="Shard 메모 (Markdown)"
+
+
+          />
+
+
+        </label>
+
+
+      )}
+
+
 
       {kindUsesDailyLogs(data.kind) && (
         <DailyLogPanel

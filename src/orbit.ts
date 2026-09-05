@@ -24,7 +24,7 @@ export { MIN_ORBIT_TIER_CAPACITY, MAX_ORBIT_TIER_CAPACITY, clampOrbitTierCapacit
 export const NODE_SIZE: Record<PassiveKind, number> = {
   initial: 120, // replaced by ROOT_HUB_SIZE below once orbit constants are known
   connect: 22,
-  small: 36,
+  shard: 36,
   notable: 52,
   mastery: 76,
   voidMastery: 76,
@@ -189,12 +189,12 @@ export function isConnectKind(kind: PassiveKind) {
 }
 
 export function isSatelliteKind(kind: PassiveKind) {
-  return kind === 'small' || kind === 'notable'
+  return kind === 'shard' || kind === 'notable'
 }
 
 /** Nodes that may sit on a mastery orbit. */
 export function isOrbitMemberKind(kind: PassiveKind) {
-  return kind === 'small' || kind === 'notable'
+  return kind === 'shard' || kind === 'notable'
 }
 
 export function isVoidPassing(data: PassiveNodeData) {

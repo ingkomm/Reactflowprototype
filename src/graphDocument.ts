@@ -1,14 +1,14 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { validateCustomSymbols } from './customSymbol'
-import { absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
+import { absorbNodeMediaIntoDailyLogs, trainingLogsToMarkdown } from './dailyLogNode'
 import { normalizeGridSnapScale } from './grid'
 import { isValidPracticeDate, migrateLegacyTrainingLogs, normalizeDailyLogs } from './dailyLog'
 import {
   migrateLegacyClassId,
   normalizeSymbolId,
 } from './librarySymbols'
-import { ensureNotableStages, ensureSmallPracticeStages, stagesForKind } from './stage'
+import { ensureNotableStages, stagesForKind } from './stage'
 import type {
   CustomSymbol,
   GraphDocumentSettings,
@@ -87,7 +87,7 @@ export type GraphParseResult = GraphParseError | GraphParseSuccess
 const PASSIVE_KINDS = new Set<PassiveKind>([
   'initial',
   'connect',
-  'small',
+  'shard',
   'notable',
   'mastery',
   'voidMastery',
@@ -153,9 +153,9 @@ function normalizeStage(value: unknown): StageData | null {
   }
 }
 
-function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 'small'): PassiveNodeData | null {
+function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 'shard'): PassiveNodeData | null {
   if (!isRecord(value)) return null
-  const kindRaw = value.kind
+  const kindRaw = value.kind === 'small' ? 'shard' : value.kind
   const kind = (typeof kindRaw === 'string' && PASSIVE_KINDS.has(kindRaw as PassiveKind)
     ? kindRaw
     : kindFallback) as PassiveKind
@@ -172,6 +172,7 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
         : undefined
 
   let stages: StageData[] = []
+  let legacyShardLogs: TrainingLog[] = []
   if (Array.isArray(value.stages)) {
     const parsed: StageData[] = []
     for (const stage of value.stages) {
@@ -179,9 +180,12 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
       if (!s) return null
       parsed.push(s)
     }
-    stages = stagesForKind(kind, parsed)
+    if (resolvedKind === 'shard') {
+      legacyShardLogs = parsed.flatMap((stage) => stage.logs)
+    }
+    stages = stagesForKind(resolvedKind, parsed)
   } else {
-    stages = stagesForKind(kind)
+    stages = stagesForKind(resolvedKind)
   }
 
   const media = validateVideoMediaList(value.media)
@@ -227,6 +231,16 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
     data.customSymbolId = value.customSymbolId as string | null
   }
   if (media.length > 0) data.media = media
+
+  if (resolvedKind === 'shard') {
+    const existingMarkdown = typeof value.markdown === 'string' ? value.markdown : ''
+    const fromLogs = trainingLogsToMarkdown(legacyShardLogs)
+    const markdown = existingMarkdown.trim() || fromLogs
+    data.stages = []
+    if (markdown) data.markdown = markdown
+  } else if (typeof value.markdown === 'string' && value.markdown.trim()) {
+    data.markdown = value.markdown
+  }
 
   return absorbNodeMediaIntoDailyLogs(data)
 }
@@ -275,7 +289,7 @@ function parseSymbolColor(value: unknown): string | undefined {
 function normalizeDefaultSymbolColors(value: unknown): GraphDocumentSettings['defaultSymbolColors'] {
   if (!isRecord(value)) return undefined
   const next: NonNullable<GraphDocumentSettings['defaultSymbolColors']> = {}
-  for (const kind of ['mastery', 'notable', 'small'] as const) {
+  for (const kind of ['mastery', 'notable', 'shard'] as const) {
     const color = parseSymbolColor(value[kind])
     if (color) next[kind] = color
   }
@@ -381,8 +395,8 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
     if (node.data.kind === 'notable' && node.data.stages) {
       node.data.stages = ensureNotableStages(node.data.stages)
     }
-    if (node.data.kind === 'small' && node.data.stages) {
-      node.data.stages = ensureSmallPracticeStages(node.data.stages)
+    if (node.data.kind === 'shard') {
+      node.data.stages = []
     }
   }
 
@@ -399,8 +413,8 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
 
 function normalizePassiveDataForExport(data: PassiveNodeData): PassiveNodeData {
   const cloned = structuredClone(data)
-  if (cloned.kind === 'small') {
-    cloned.stages = ensureSmallPracticeStages(cloned.stages ?? [])
+  if (cloned.kind === 'shard') {
+    cloned.stages = []
   } else if (cloned.kind === 'notable') {
     cloned.stages = ensureNotableStages(cloned.stages ?? [])
   }

@@ -54,7 +54,7 @@ export function NodeLibrary({ onPlaceTemplate, onOpenSymbolEditor }: Props) {
           const previewSize = Math.min(NODE_SIZE[kind], 34)
           const previewClass = kind === 'connect' ? ' node-library__preview--connect' : ''
           const previewColor =
-            kind === 'mastery' || kind === 'notable' || kind === 'small'
+            kind === 'mastery' || kind === 'notable' || kind === 'shard'
               ? resolveSymbolColor(DEFAULT_SYMBOL_ID, kind)
               : undefined
           return (

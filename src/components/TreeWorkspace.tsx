@@ -100,6 +100,7 @@ export type TreeWorkspaceProps = {
   onChangeKind: (nodeId: string, kind: PassiveKind) => void
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
+  onChangeMarkdown: (nodeId: string, markdown: string) => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -154,6 +155,7 @@ export function TreeWorkspace({
   onChangeKind,
   onChangeSymbolId,
   onChangeStages,
+  onChangeMarkdown,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -320,6 +322,7 @@ export function TreeWorkspace({
           onChangeKind={onChangeKind}
           onChangeSymbolId={onChangeSymbolId}
           onChangeStages={onChangeStages}
+          onChangeMarkdown={onChangeMarkdown}
           onChangeConnectEnabled={onChangeConnectEnabled}
           onChangeOrbitTierCount={onChangeOrbitTierCount}
           onChangeSatelliteOrbitTier={onChangeSatelliteOrbitTier}

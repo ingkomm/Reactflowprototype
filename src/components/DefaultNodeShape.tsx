@@ -27,7 +27,7 @@ export function DefaultNodeShape({
 }: Props) {
   const resolved = kind === 'voidMastery' ? 'mastery' : kind
   const tintKind =
-    resolved === 'mastery' || resolved === 'notable' || resolved === 'small'
+    resolved === 'mastery' || resolved === 'notable' || resolved === 'shard'
       ? resolved
       : kind
   const fill = powered ? (color ?? DEFAULT_ICON_BY_KIND[tintKind]) : UNPOWERED_FILL

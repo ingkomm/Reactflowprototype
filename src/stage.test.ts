@@ -6,15 +6,15 @@ import {
 } from './graphDocument'
 import { createPassiveData } from './graphFactory'
 import { INITIAL_NODE_ID } from './types'
-import { createDailyLog, countPracticeDaysInStages, formatPracticeDate } from './stage'
+import { createDailyLog, formatPracticeDate } from './stage'
 import type { PassiveFlowNode } from './components/PassiveNode'
 
-function smallNode(id: string, stages = createPassiveData('small', id).stages): PassiveFlowNode {
+function shardNode(id: string, extras: Partial<ReturnType<typeof createPassiveData>> = {}): PassiveFlowNode {
   return {
     id,
     type: 'passive',
     position: { x: 0, y: 0 },
-    data: createPassiveData('small', id, { stages }),
+    data: createPassiveData('shard', id, extras),
   }
 }
 
@@ -24,9 +24,20 @@ describe('daily practice logs', () => {
     expect(formatPracticeDate(date)).toBe('2025-01-15')
   })
 
-  it('preserves daily logs through JSON save and reload', () => {
+  it('migrates legacy Small logs into Shard markdown on reload', () => {
     const log = createDailyLog('2025-06-01', 'stretch')
-    const withLog = smallNode('small-a', [{ ...createPassiveData('small', 'small-a').stages[0]!, logs: [log] }])
+    const withLog = shardNode('shard-a', {
+      stages: [
+        {
+          id: 'stage-1',
+          index: 1,
+          label: '연습',
+          goal: 9999,
+          completedManually: false,
+          logs: [log],
+        },
+      ],
+    })
 
     const doc = buildGraphDocument({
       nodes: [
@@ -42,18 +53,36 @@ describe('daily practice logs', () => {
       customSymbols: [],
     })
 
-    const parsed = parseGraphDocumentJson(serializeGraphDocument(doc))
+    // Force legacy small kind into serialized payload
+    const raw = JSON.parse(serializeGraphDocument(doc)) as {
+      nodes: Array<{ id: string; data: Record<string, unknown> }>
+    }
+    const target = raw.nodes.find((n) => n.id === 'shard-a')!
+    target.data.kind = 'small'
+    target.data.stages = [
+      {
+        id: 'stage-1',
+        index: 1,
+        label: '연습',
+        goal: 9999,
+        completedManually: false,
+        logs: [log],
+      },
+    ]
+    delete target.data.markdown
+
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
 
-    const restored = parsed.document.nodes.find((n) => n.id === 'small-a')
-    expect(restored?.data.stages?.[0]?.logs).toHaveLength(1)
-    expect(restored?.data.stages?.[0]?.logs[0]?.date).toBe('2025-06-01')
-    expect(restored?.data.stages?.[0]?.logs[0]?.note).toBe('stretch')
-    expect(countPracticeDaysInStages(restored?.data.stages ?? [])).toBe(1)
+    const restored = parsed.document.nodes.find((n) => n.id === 'shard-a')
+    expect(restored?.data.kind).toBe('shard')
+    expect(restored?.data.stages).toEqual([])
+    expect(restored?.data.markdown).toContain('2025-06-01')
+    expect(restored?.data.markdown).toContain('stretch')
   })
 
-  it('migrates legacy count logs into consecutive practice days', () => {
+  it('migrates legacy count logs into Shard markdown', () => {
     const legacy = {
       schemaVersion: '0.1',
       nodes: [
@@ -64,7 +93,7 @@ describe('daily practice logs', () => {
           data: { label: 'Root', kind: 'initial', stages: [], symbolId: 'default' },
         },
         {
-          id: 'small-a',
+          id: 'shard-a',
           type: 'passive',
           position: { x: 10, y: 10 },
           data: {
@@ -99,9 +128,10 @@ describe('daily practice logs', () => {
     const parsed = parseGraphDocumentJson(JSON.stringify(legacy))
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
-    const logs = parsed.document.nodes.find((n) => n.id === 'small-a')?.data.stages?.[0]?.logs ?? []
-    expect(logs).toHaveLength(3)
-    expect(countPracticeDaysInStages(parsed.document.nodes.find((n) => n.id === 'small-a')?.data.stages ?? [])).toBe(3)
-    expect(logs.some((log) => log.note === 'legacy memo')).toBe(true)
+    const restored = parsed.document.nodes.find((n) => n.id === 'shard-a')
+    expect(restored?.data.kind).toBe('shard')
+    expect(restored?.data.stages).toEqual([])
+    expect(restored?.data.markdown).toContain('legacy memo')
+    expect(restored?.data.markdown).toContain('2025-05-')
   })
 })
