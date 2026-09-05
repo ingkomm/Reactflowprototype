@@ -148,6 +148,16 @@ export function useGraphAutosave(
   }, [enabled, flush])
 }
 
+
+/** Start a blank sheet. Backs up the current document so it can be restored. */
+export function createNewSheet(current: GraphPersistInput): GraphAppSnapshot {
+  backupDocumentToStorage(snapshotToDocument(current))
+  writeBootstrapChoice('empty')
+  const snapshot = flowFromBootstrap('empty')
+  saveDocumentToStorage(snapshotToDocument(snapshot))
+  return snapshot
+}
+
 export function commitBootstrapChoice(choice: BootstrapChoice): GraphAppSnapshot {
   writeBootstrapChoice(choice)
   const snapshot = flowFromBootstrap(choice)

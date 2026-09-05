@@ -75,6 +75,7 @@ import { FirstRunDialog } from './components/FirstRunDialog'
 import { NodeContextPopup } from './components/NodeContextPopup'
 import {
   commitBootstrapChoice,
+  createNewSheet,
   hasBackupDocument,
   importGraphJsonFile,
   resolveInitialGraphState,
@@ -1237,6 +1238,45 @@ export default function App() {
     setSaveFailureReason(null)
   }, [resetHistory, setEdges, setNodes, stack])
 
+
+  const handleNewSheet = useCallback(() => {
+    const confirmed = window.confirm(
+      '새 시트를 만들까요?\n현재 문서는 백업으로 저장된 뒤 빈 시트로 교체됩니다.',
+    )
+    if (!confirmed) return
+    const snapshot = createNewSheet({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    resetHistory()
+    setCustomSymbols(snapshot.customSymbols)
+    setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+    setNodes(stack(snapshot.nodes))
+    setEdges(snapshot.edges)
+    setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+    setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
+    setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+    setSelectedId(snapshot.nodes[0]?.id ?? null)
+    setStorageCorrupt(false)
+    setImportError(null)
+    setSaveStatus('saved')
+    setSaveFailureReason(null)
+    setBackupAvailable(hasBackupDocument())
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    resetHistory,
+    setEdges,
+    setNodes,
+    stack,
+    voidHighlightEnabled,
+  ])
+
+
   const deleteNode = useCallback(
     (nodeId: string) => {
       if (nodeId === INITIAL_NODE_ID) return
@@ -1547,6 +1587,9 @@ export default function App() {
                   disabled={!selectedId}
                 >
                   Delete Selected
+                </button>
+                <button type="button" className="btn" onClick={handleNewSheet}>
+                  새 시트
                 </button>
                 <button type="button" className="btn" onClick={handleExportJson}>
                   JSON보내기
