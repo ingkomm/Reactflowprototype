@@ -1,0 +1,113 @@
+.node-context-popup__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.node-context-popup {
+  position: fixed;
+  z-index: 41;
+  width: min(280px, calc(100vw - 16px));
+  max-height: min(420px, calc(100vh - 16px));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #121820 94%, transparent);
+  border: 1px solid color-mix(in srgb, #9eb0c2 28%, transparent);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
+}
+
+.node-context-popup__head {
+  font-size: 0.9rem;
+  color: #eef3f7;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.node-context-popup__head:active {
+  cursor: grabbing;
+}
+
+.node-context-popup__section h3 {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b7c4d0;
+}
+
+.node-context-popup__empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #9aa8b5;
+}
+
+.node-context-popup__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.node-context-popup__item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
+  background: #0f151c;
+  color: #eef3f7;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.node-context-popup__item:hover,
+.node-context-popup__item:focus-visible {
+  outline: 2px solid color-mix(in srgb, #d4a24c 55%, transparent);
+  outline-offset: 1px;
+}
+
+.node-context-popup__date {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.node-context-popup__date--sub {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #9eb0bf;
+}
+
+.node-context-popup__memo {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: #d5e2ec;
+  white-space: pre-wrap;
+}
+
+.node-context-popup__tag {
+  font-size: 0.72rem;
+  color: #7fd9cb;
+}
+
+.node-context-popup__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+}

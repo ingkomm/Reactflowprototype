@@ -1,0 +1,69 @@
+.shard-markdown-preview__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.shard-markdown-preview {
+  position: fixed;
+  z-index: 41;
+  width: min(420px, calc(100vw - 16px));
+  max-height: min(520px, calc(100vh - 16px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #121820 96%, transparent);
+  border: 1px solid color-mix(in srgb, #9eb0c2 28%, transparent);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
+}
+
+.shard-markdown-preview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #eef3f7;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.shard-markdown-preview__head:active {
+  cursor: grabbing;
+}
+
+.shard-markdown-preview__head .btn {
+  cursor: pointer;
+  user-select: auto;
+  touch-action: manipulation;
+}
+
+.shard-markdown-preview__kind {
+  margin: 0 0 2px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9eb0bf;
+}
+
+.shard-markdown-preview__body {
+  overflow: auto;
+  min-height: 120px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f151c;
+  border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+}
+
+.shard-markdown-preview__empty {
+  margin: 0;
+  color: #9aa8b5;
+  font-size: 0.88rem;
+}

@@ -1,0 +1,765 @@
+.passive-node {
+  --node-size: 56px;
+  --ring: #7a8694;
+  --core: #1f2a33;
+  --accent: #c9d2db;
+  --icon-color: #9b9a97;
+  --glow: rgba(201, 210, 219, 0.25);
+  --glow-blur: 16px;
+  --glow-alpha: 0.25;
+  --halo-strength: 0;
+  --band-level: 0;
+  --label-offset: 48px;
+
+  position: relative;
+  width: var(--node-size);
+  height: var(--node-size);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: default;
+  user-select: none;
+  overflow: visible;
+}
+
+.passive-node--shard {
+  --node-size: 36px;
+  --ring: #8b9aa8;
+  --core: #24313b;
+  --accent: #d5dde5;
+}
+
+.passive-node--shard .passive-node__ring {
+  border: 1.5px solid color-mix(in srgb, var(--icon-color) 72%, #e8eef3);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--icon-color) 22%, transparent),
+    0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
+}
+
+.passive-node--shard.is-unpowered .passive-node__ring {
+  border-color: color-mix(in srgb, #7a8694 55%, transparent);
+}
+
+.passive-node--notable {
+  --node-size: 52px;
+  --ring: #d4a24c;
+  --core: #2a2418;
+  --accent: #f0d59a;
+  --glow: rgba(212, 162, 76, 0.35);
+}
+
+.passive-node--mastery {
+  --node-size: 76px;
+  --ring: #3db8a8;
+  --core: #142528;
+  --accent: #9fe8dd;
+  --glow: rgba(61, 184, 168, 0.35);
+}
+
+/* Powered mastery: slow neon shimmer on the rim only — icon face stays clear. */
+.passive-node--mastery.is-mastery-powered .passive-node__neon-rim {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--node-size) + 8px);
+  height: calc(var(--node-size) + 8px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--icon-color) 8%, transparent) 40deg,
+    color-mix(in srgb, var(--icon-color) 55%, transparent) 70deg,
+    color-mix(in srgb, var(--icon-color) 90%, white 12%) 88deg,
+    color-mix(in srgb, var(--icon-color) 55%, transparent) 106deg,
+    color-mix(in srgb, var(--icon-color) 8%, transparent) 136deg,
+    transparent 180deg,
+    color-mix(in srgb, var(--icon-color) 6%, transparent) 220deg,
+    color-mix(in srgb, var(--icon-color) 40%, transparent) 250deg,
+    color-mix(in srgb, var(--icon-color) 72%, transparent) 268deg,
+    color-mix(in srgb, var(--icon-color) 40%, transparent) 286deg,
+    color-mix(in srgb, var(--icon-color) 6%, transparent) 316deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 5px),
+    #000 calc(100% - 3.5px),
+    #000 calc(100% - 1px),
+    transparent 100%
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 5px),
+    #000 calc(100% - 3.5px),
+    #000 calc(100% - 1px),
+    transparent 100%
+  );
+  filter: blur(0.4px) drop-shadow(0 0 2px color-mix(in srgb, var(--icon-color) 35%, transparent));
+  animation: mastery-neon-drift 22s linear infinite;
+  opacity: 0.72;
+}
+
+.passive-node--mastery.is-mastery-powered .passive-node__neon-rim::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 140deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--icon-color) 30%, transparent) 50deg,
+    color-mix(in srgb, var(--icon-color) 68%, transparent) 72deg,
+    color-mix(in srgb, var(--icon-color) 30%, transparent) 94deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 2px),
+    transparent 100%
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 2px),
+    transparent 100%
+  );
+  filter: blur(1.5px);
+  animation: mastery-neon-pulse 6s ease-in-out infinite;
+}
+
+.passive-node--mastery.is-mastery-powered .passive-node__neon-rim::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 4px color-mix(in srgb, var(--icon-color) 18%, transparent),
+    0 0 10px color-mix(in srgb, var(--icon-color) 8%, transparent);
+  animation: mastery-neon-breathe 8s ease-in-out infinite;
+}
+
+@keyframes mastery-neon-drift {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes mastery-neon-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    filter: blur(1.8px);
+  }
+  50% {
+    opacity: 0.85;
+    filter: blur(1px);
+  }
+}
+
+@keyframes mastery-neon-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.passive-node--initial {
+  --label-offset: 0px;
+  --ring: #ffe066;
+  --core: #1a1510;
+  --accent: #ffe066;
+  --glow: rgba(255, 224, 102, 0.45);
+}
+
+.passive-node--initial .passive-node__ring {
+  border: 2px solid color-mix(in srgb, #ffe066 75%, white);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.06), transparent 48%),
+    radial-gradient(circle at 50% 50%, #0a0e12 0%, #121820 72%, #1a2030 100%);
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.55),
+    0 0 24px color-mix(in srgb, #ffe066 45%, transparent),
+    0 0 48px color-mix(in srgb, #ffe066 18%, transparent);
+}
+
+.passive-node__initial-arena {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, #ffe066 22%, transparent);
+  background: radial-gradient(circle at 50% 45%, rgba(255, 224, 102, 0.04), transparent 70%);
+  pointer-events: none;
+}
+
+.passive-node__initial-socket {
+  position: absolute;
+  width: clamp(18px, 3.5%, 32px);
+  height: clamp(18px, 3.5%, 32px);
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #ffe066 55%, transparent);
+  background: color-mix(in srgb, #0a0e12 80%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, #ffe066 35%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.passive-node__handle--root-socket {
+  width: clamp(28px, 5%, 44px) !important;
+  height: clamp(28px, 5%, 44px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 4;
+}
+
+.passive-node--connect {
+  --node-size: 22px;
+  --ring: transparent;
+  --core: transparent;
+}
+
+.passive-node--connect .passive-node__ring {
+  background: transparent;
+  border: none;
+}
+
+.passive-node--connect.is-connect-on .passive-node__ring {
+  box-shadow:
+    0 0 5px rgba(66, 232, 144, 0.7),
+    0 0 10px rgba(66, 232, 144, 0.32),
+    inset 0 0 4px rgba(180, 255, 210, 0.3);
+  background: radial-gradient(
+    circle,
+    rgba(66, 232, 144, 0.55) 0%,
+    rgba(66, 232, 144, 0.18) 55%,
+    transparent 72%
+  );
+}
+
+.passive-node--connect.is-connect-off .passive-node__ring {
+  box-shadow:
+    0 0 5px rgba(224, 62, 62, 0.65),
+    0 0 10px rgba(224, 62, 62, 0.28),
+    inset 0 0 4px rgba(255, 120, 120, 0.25);
+  background: radial-gradient(
+    circle,
+    rgba(224, 62, 62, 0.5) 0%,
+    rgba(224, 62, 62, 0.15) 55%,
+    transparent 72%
+  );
+}
+
+.passive-node--connect.is-connect-unpowered .passive-node__ring {
+  box-shadow: 0 0 8px rgba(224, 62, 62, 0.25);
+  background: radial-gradient(
+    circle,
+    rgba(120, 130, 140, 0.25) 0%,
+    transparent 70%
+  );
+}
+
+.passive-node--connect .passive-node__title {
+  font-size: 0.58rem;
+  max-width: 5em;
+}
+
+.passive-node--void {
+  --node-size: 28px;
+  --ring: transparent;
+  --core: transparent;
+  --accent: #6a7580;
+}
+
+.passive-node--voidMastery {
+  --node-size: 76px;
+  --ring: transparent;
+  --core: transparent;
+  --accent: #6a7580;
+}
+
+.passive-node.is-stealth.is-void-highlighted .passive-node__ring {
+  opacity: 1;
+  border: 1px dashed color-mix(in srgb, #6cb6ea 62%, transparent);
+  box-shadow:
+    0 0 10px color-mix(in srgb, #6cb6ea 40%, transparent),
+    0 0 22px color-mix(in srgb, #6cb6ea 18%, transparent);
+}
+
+.passive-node.is-stealth.is-void-highlighted .passive-node__title {
+  opacity: 1;
+  visibility: visible;
+  color: #9ed4f0;
+}
+
+.passive-node.is-stealth.is-void-highlighted .passive-node__orbit {
+  opacity: 1;
+  border-color: color-mix(in srgb, #6cb6ea 38%, transparent);
+}
+
+.passive-node--voidMastery.is-void-highlighted .passive-node__ring {
+  border-style: dashed;
+}
+
+.passive-node--void.is-void-passing.is-void-highlighted .passive-node__ring {
+  border-style: dotted;
+}
+
+.passive-node.is-stealth .passive-node__halo {
+  display: none;
+}
+
+.passive-node.is-stealth .passive-node__ring {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.passive-node.is-stealth.is-unpowered .passive-node__ring {
+  background: transparent;
+  box-shadow: none;
+}
+
+.passive-node.is-stealth:hover .passive-node__ring,
+.passive-node.is-stealth.is-selected .passive-node__ring,
+.passive-node.is-stealth.is-ambient-visible .passive-node__ring {
+  opacity: 1;
+  border: 1px dashed color-mix(in srgb, #9aa8b5 14%, transparent);
+}
+
+.passive-node.is-stealth .passive-node__title {
+  opacity: 0;
+  visibility: hidden;
+  color: #8a949e;
+  text-shadow:
+    -1px 0 0 rgba(0, 0, 0, 0.92),
+    1px 0 0 rgba(0, 0, 0, 0.92),
+    0 -1px 0 rgba(0, 0, 0, 0.92),
+    0 1px 0 rgba(0, 0, 0, 0.92);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.passive-node--voidMastery .passive-node__title {
+  font-size: 0.78rem;
+  font-weight: 750;
+  max-width: min(12em, 168px);
+}
+
+.passive-node.is-stealth:hover .passive-node__title,
+.passive-node.is-stealth.is-selected .passive-node__title,
+.passive-node.is-stealth.is-ambient-visible .passive-node__title {
+  opacity: 1;
+  visibility: visible;
+}
+
+.passive-node.is-stealth .passive-node__tooltip {
+  display: none;
+}
+
+.passive-node.is-stealth .passive-node__orbit {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.passive-node.is-stealth:hover .passive-node__orbit,
+.passive-node.is-stealth.is-selected .passive-node__orbit,
+.passive-node.is-stealth.is-ambient-visible .passive-node__orbit {
+  opacity: 1;
+}
+
+.passive-node--void.is-void-passing .passive-node__ring {
+  border-style: dotted;
+}
+
+.passive-node.is-unpowered .passive-node__ring {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--icon-color) 45%, #151a20);
+}
+
+.passive-node.is-unpowered .passive-node__glyph {
+  opacity: 0.45;
+}
+
+.passive-node.is-unpowered .passive-node__title {
+  color: #6a7580;
+  text-shadow: none;
+}
+
+.passive-node.is-unpowered .passive-node__orbit {
+  opacity: 0.35;
+}
+
+.passive-node--mastery.has-orbit-rings-locked .passive-node__orbit {
+  opacity: 0.38;
+  border: 1px dashed color-mix(in srgb, #9fe8dd 34%, transparent);
+  box-shadow:
+    inset 0 0 20px rgba(61, 184, 168, 0.08),
+    0 0 10px rgba(61, 184, 168, 0.06);
+}
+
+.passive-node.is-unpowered.has-orbit-rings-locked .passive-node__orbit {
+  opacity: 0.32;
+  border-color: color-mix(in srgb, #9aa8b5 38%, transparent);
+}
+
+.passive-node--mastery.has-orbit-rings-visible .passive-node__orbit {
+  opacity: 1;
+  border: 1.5px dashed color-mix(in srgb, #9fe8dd 52%, transparent);
+  box-shadow:
+    inset 0 0 28px rgba(61, 184, 168, 0.12),
+    0 0 12px rgba(61, 184, 168, 0.06);
+}
+
+.passive-node.is-unpowered.has-orbit-rings-visible .passive-node__orbit {
+  opacity: 0.92;
+  border-color: color-mix(in srgb, #9aa8b5 55%, transparent);
+}
+
+.passive-node--mastery.is-orbit-forced-visible .passive-node__orbit {
+  opacity: 1;
+  border: 1.5px dashed color-mix(in srgb, #6cb6ea 58%, transparent);
+  box-shadow:
+    inset 0 0 28px rgba(108, 182, 234, 0.14),
+    0 0 14px rgba(108, 182, 234, 0.1);
+}
+
+.passive-node.is-unpowered.is-orbit-forced-visible .passive-node__orbit {
+  opacity: 1;
+}
+
+.passive-node--mastery.is-unpowered.is-orbit-highlighted .passive-node__orbit {
+  opacity: 1;
+  border-color: color-mix(in srgb, #9fe8dd 32%, transparent);
+  box-shadow: inset 0 0 24px rgba(61, 184, 168, 0.1);
+}
+
+.passive-node__orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, #9aa8b5 22%, transparent);
+  box-shadow: inset 0 0 24px rgba(154, 168, 181, 0.04);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.passive-node__orbit-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.passive-node__orbit-wrap .passive-node__orbit {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+}
+
+.passive-node__void-slot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, #6cb6ea 30%, transparent);
+  background: color-mix(in srgb, #6cb6ea 10%, transparent);
+  opacity: 0.5;
+}
+
+.passive-node__void-slot.is-highlighted {
+  opacity: 0.9;
+  border-color: color-mix(in srgb, #6cb6ea 58%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, #6cb6ea 38%, transparent);
+}
+
+.passive-node__halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Anchor the glow to the outermost stage band, then bloom outward with progress. */
+  width: calc(var(--outer-band-r) * 2 + 8px + var(--band-level) * 6px);
+  height: calc(var(--outer-band-r) * 2 + 8px + var(--band-level) * 6px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--halo-strength);
+  background: radial-gradient(
+    circle,
+    transparent 0%,
+    transparent 48%,
+    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent) 58%,
+    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 28%), transparent) 68%,
+    transparent 82%
+  );
+  filter: blur(calc(2.5px + var(--band-level) * 1.5px));
+  transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease, filter 0.2s ease;
+}
+
+.passive-node.has-bands .passive-node__halo {
+  box-shadow: 0 0 calc(var(--glow-blur) * 0.85)
+    color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
+}
+
+.passive-node__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: none;
+  box-shadow: 0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
+  background: var(--icon-color);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--icon-color);
+}
+
+/* Custom SVG: dark filled disc + monochrome icon tinted by selected color */
+.passive-node.has-custom-symbol .passive-node__ring {
+  background: color-mix(in srgb, var(--icon-color) 22%, #0d1218);
+  overflow: visible;
+}
+
+.passive-node__glyph {
+  width: 68%;
+  height: 68%;
+  display: block;
+  color: inherit;
+  fill: currentColor;
+}
+
+.passive-node__glyph--default {
+  /* Default = solid face circle; ring already provides the filled disc. */
+  display: none;
+}
+
+.passive-node__glyph--symbol {
+  width: 62%;
+  height: 62%;
+  fill: currentColor;
+  color: var(--icon-color);
+  object-fit: contain;
+  overflow: visible;
+}
+
+.passive-node.is-selected .passive-node__ring {
+  box-shadow:
+    0 0 0 2px #f4f7fa,
+    0 0 0 5px color-mix(in srgb, #8b9aa8 28%, transparent),
+    0 0 var(--glow-blur) color-mix(in srgb, var(--icon-color) calc(var(--glow-alpha) * 55%), transparent);
+}
+
+/* Center face = move; band annulus (overflowing ring) = connect */
+.passive-node__hit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: 5;
+  cursor: grab;
+}
+
+.passive-node__hit:active {
+  cursor: grabbing;
+}
+
+.passive-node__title {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - var(--label-offset)));
+  z-index: 30;
+  max-width: min(11em, 148px);
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-family: 'Manrope', 'IBM Plex Sans', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-align: center;
+  color: color-mix(in srgb, var(--icon-color) 55%, white);
+  /* Dark outline for readability + neon bloom — no fill behind the glyphs */
+  text-shadow:
+    -1px 0 0 rgba(0, 0, 0, 0.92),
+    1px 0 0 rgba(0, 0, 0, 0.92),
+    0 -1px 0 rgba(0, 0, 0, 0.92),
+    0 1px 0 rgba(0, 0, 0, 0.92),
+    -1px -1px 0 rgba(0, 0, 0, 0.75),
+    1px 1px 0 rgba(0, 0, 0, 0.75),
+    0 0 2px color-mix(in srgb, var(--icon-color) 95%, white),
+    0 0 8px var(--icon-color),
+    0 0 18px color-mix(in srgb, var(--icon-color) 85%, transparent),
+    0 0 32px color-mix(in srgb, var(--icon-color) 55%, transparent);
+  filter: none;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  mix-blend-mode: normal;
+}
+
+
+.passive-node--initial .passive-node__title,
+.passive-node__title--initial {
+  top: 50%;
+  left: 50%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  font-size: clamp(0.95rem, 2.6vw, 1.45rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.95;
+  max-width: 70%;
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.passive-node--notable .passive-node__title {
+  font-size: 0.78rem;
+  max-width: min(12em, 168px);
+}
+
+.passive-node--mastery .passive-node__title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  max-width: min(14em, 220px);
+}
+
+.passive-node.is-selected .passive-node__title {
+  color: color-mix(in srgb, var(--icon-color) 35%, white);
+  text-shadow:
+    -1px 0 0 rgba(0, 0, 0, 0.95),
+    1px 0 0 rgba(0, 0, 0, 0.95),
+    0 -1px 0 rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(0, 0, 0, 0.95),
+    0 0 3px #fff,
+    0 0 10px color-mix(in srgb, var(--icon-color) 95%, white),
+    0 0 20px var(--icon-color),
+    0 0 36px color-mix(in srgb, var(--icon-color) 70%, transparent),
+    0 0 52px color-mix(in srgb, var(--icon-color) 40%, transparent);
+}
+
+.passive-node__tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 12px);
+  bottom: auto;
+  transform: translateX(-50%) translateY(-4px) scale(var(--tooltip-scale, 1));
+  transform-origin: top center;
+  min-width: 168px;
+  max-width: 240px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #0a0e14 94%, transparent);
+  border: 1px solid color-mix(in srgb, #9eb0c2 22%, transparent);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* Unselected hover: softer tooltip */
+.passive-node:hover .passive-node__tooltip {
+  opacity: 0.72;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0) scale(var(--tooltip-scale, 1));
+}
+
+/* Selected hover: full-strength tooltip */
+.passive-node.is-selected:hover .passive-node__tooltip {
+  opacity: 1;
+}
+
+.passive-node__tooltip-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #f4f7fa;
+}
+
+.passive-node__tooltip-meta {
+  margin: 0;
+  font-size: 12px;
+  color: #9aa8b5;
+}
+
+.passive-node__tooltip-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.74rem;
+  color: #d5dde5;
+}
+
+/* Band-area connect ring (outside face); circular cursor instead of crosshair */
+.passive-node__handle {
+  width: calc(var(--connect-r, var(--outer-band-r)) * 2) !important;
+  height: calc(var(--connect-r, var(--outer-band-r)) * 2) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  opacity: 1;
+  z-index: 3;
+  pointer-events: all;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23eef3f7' stroke-width='2'/%3E%3C/svg%3E")
+      12 12,
+    pointer !important;
+}
+
+.react-flow__handle.passive-node__handle {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23eef3f7' stroke-width='2'/%3E%3C/svg%3E")
+      12 12,
+    pointer !important;
+}
+
+.passive-node__handle::before {
+  content: none;
+}
+
+.node-drag-handle {
+  pointer-events: all;
+}

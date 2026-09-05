@@ -1,0 +1,306 @@
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, #05080d 90%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topbar__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--amber);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 230, 170, 0.55), transparent 45%),
+    radial-gradient(circle at 50% 55%, #2a2418, #16120c 70%);
+  box-shadow: 0 0 16px rgba(212, 162, 76, 0.28);
+  flex: 0 0 auto;
+}
+
+.topbar__eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.topbar h1 {
+  margin: 2px 0 0;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.topbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topbar__kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.topbar__kind select {
+  border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
+  background: #0f151c;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+.topbar__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.topbar__toggle input {
+  accent-color: #9fe8dd;
+}
+
+.topbar__scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.topbar__scale select {
+  border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
+  background: #0f151c;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.import-error {
+  margin: 0;
+  padding: 8px 18px;
+  font-size: 0.82rem;
+  color: #ffb4b4;
+  background: color-mix(in srgb, #e03e3e 12%, #05080d);
+  border-bottom: 1px solid color-mix(in srgb, #e03e3e 28%, transparent);
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn--primary {
+  background: linear-gradient(180deg, #e0b25d, #c69036);
+  color: #1a1408;
+}
+
+.btn--danger {
+  background: color-mix(in srgb, #e07070 22%, transparent);
+  color: #ffc2c2;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  min-height: 0;
+}
+
+.inspector-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+}
+
+.inspector-pane .inspector {
+  flex: 1;
+  min-height: 0;
+  border-left: none;
+  width: 100%;
+}
+
+.inspector-resizer {
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 8px;
+  height: 100%;
+  z-index: 8;
+  border: none;
+  padding: 0;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.inspector-resizer:hover,
+.inspector-resizer:focus-visible,
+body.is-resizing-inspector .inspector-resizer {
+  background: color-mix(in srgb, #3db8a8 45%, transparent);
+}
+
+body.is-resizing-inspector {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing-inspector .react-flow {
+  pointer-events: none;
+}
+
+.canvas-pane {
+  position: relative;
+  min-height: 0;
+}
+
+.canvas-pane .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.react-flow__node-passive {
+  overflow: visible !important;
+}
+
+/* Links stay under nodes so titles are never covered by edges. */
+.canvas-pane .react-flow__edges {
+  z-index: 1 !important;
+}
+
+.canvas-pane .react-flow__nodes {
+  z-index: 3 !important;
+}
+
+.canvas-pane .react-flow__pane.is-orbit-hover {
+  cursor: grab;
+}
+
+.canvas-pane .react-flow__pane.is-orbit-rotating {
+  cursor: grabbing;
+}
+
+/* Override React Flow default crosshair on connection handles */
+.canvas-pane .react-flow__handle {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23eef3f7' stroke-width='2'/%3E%3C/svg%3E")
+      12 12,
+    pointer !important;
+}
+
+.canvas-pane .react-flow.connecting .react-flow__handle,
+.canvas-pane .react-flow__node .passive-node__handle {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23eef3f7' stroke-width='2'/%3E%3C/svg%3E")
+      12 12,
+    pointer !important;
+}
+
+.canvas-hint {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 5;
+  margin: 0;
+  max-width: min(420px, calc(100% - 28px));
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  color: #c5d0da;
+  background: color-mix(in srgb, #101820 82%, transparent);
+  border: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.react-flow__controls-button {
+  background: #080c12;
+  border-bottom-color: var(--line);
+  fill: #d7e0e8;
+}
+
+.react-flow__minimap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #05080d !important;
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar__actions {
+    justify-content: stretch;
+  }
+
+  .btn {
+    flex: 1;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto minmax(52vh, 1fr) auto;
+  }
+
+  .inspector-pane {
+    width: 100% !important;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 42vh;
+  }
+
+  .inspector-resizer {
+    display: none;
+  }
+
+  .inspector {
+    border-left: none;
+    border-top: none;
+    max-height: none;
+  }
+}
