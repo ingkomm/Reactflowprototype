@@ -76,10 +76,8 @@ import { NodeContextPopup } from './components/NodeContextPopup'
 import {
   commitBootstrapChoice,
   createNewSheet,
-  hasBackupDocument,
   importGraphJsonFile,
   resolveInitialGraphState,
-  restoreGraphFromBackup,
   sanitizeFlowEdges,
   useGraphAutosave,
   type SaveFailureReason,
@@ -228,7 +226,6 @@ export default function App() {
   const [storageCorrupt, setStorageCorrupt] = useState(initialGraph.storageCorrupt)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveFailureReason, setSaveFailureReason] = useState<SaveFailureReason | null>(null)
-  const [backupAvailable, setBackupAvailable] = useState(hasBackupDocument())
   const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.snapshot?.nodes ?? [])
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.snapshot?.edges ?? [])
   const [gridSnapEnabled, setGridSnapEnabled] = useState(
@@ -1195,7 +1192,6 @@ export default function App() {
       setSelectedId(imported.nodes[0]?.id ?? null)
       setImportError(null)
       setStorageCorrupt(false)
-      setBackupAvailable(hasBackupDocument())
     },
     [
       customSymbols,
@@ -1210,38 +1206,11 @@ export default function App() {
     ],
   )
 
-  const handleRestoreBackup = useCallback(() => {
-    const result = restoreGraphFromBackup()
-    if (!result.ok) {
-      setImportError(result.message)
-      return
-    }
-    const restored = result.snapshot
-    resetHistory()
-    setCustomSymbols(restored.customSymbols)
-    setDefaultSymbolColors(restored.settings.defaultSymbolColors ?? {})
-    setNodes(stack(restored.nodes))
-    setEdges(restored.edges)
-    if (restored.settings.gridSnapEnabled != null) {
-      setGridSnapEnabled(restored.settings.gridSnapEnabled)
-    }
-    if (restored.settings.gridSnapScale != null) {
-      setGridSnapScale(normalizeGridSnapScale(restored.settings.gridSnapScale))
-    }
-    if (restored.settings.voidHighlightEnabled != null) {
-      setVoidHighlightEnabled(restored.settings.voidHighlightEnabled)
-    }
-    setSelectedId(restored.nodes[0]?.id ?? null)
-    setStorageCorrupt(false)
-    setImportError(null)
-    setSaveStatus('saved')
-    setSaveFailureReason(null)
-  }, [resetHistory, setEdges, setNodes, stack])
 
 
   const handleNewSheet = useCallback(() => {
     const confirmed = window.confirm(
-      '새 시트를 만들까요?\n현재 문서는 백업으로 저장된 뒤 빈 시트로 교체됩니다.',
+      '새 시트를 만들까요?\n현재 작업 내용은 지워지고 빈 시트로 바뀝니다.',
     )
     if (!confirmed) return
     const snapshot = createNewSheet({
@@ -1263,7 +1232,6 @@ export default function App() {
     setImportError(null)
     setSaveStatus('saved')
     setSaveFailureReason(null)
-    setBackupAvailable(hasBackupDocument())
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -1601,11 +1569,6 @@ export default function App() {
                 >
                   JSON 불러오기
                 </button>
-                {backupAvailable && (
-                  <button type="button" className="btn" onClick={handleRestoreBackup}>
-                    백업 복원
-                  </button>
-                )}
                 <span
                   className={`topbar__save-status topbar__save-status--${saveStatus}`}
                   role="status"
@@ -1641,15 +1604,7 @@ export default function App() {
 
             {storageCorrupt && (
               <p className="import-error" role="alert">
-                저장된 데이터가 손상되었습니다. JSON을 가져오거나 백업을 복원해 주세요.
-                {backupAvailable && (
-                  <>
-                    {' '}
-                    <button type="button" className="btn btn--ghost" onClick={handleRestoreBackup}>
-                      백업 복원
-                    </button>
-                  </>
-                )}
+                저장된 데이터가 손상되었습니다. JSON을 불러와 주세요.
               </p>
             )}
 

@@ -10,7 +10,6 @@ import {
 import { EMPTY_GRAPH_EDGES, EMPTY_GRAPH_NODES } from './emptyGraph'
 import {
   backupDocumentToStorage,
-  hasBackupDocument,
   hasStoredDocument,
   loadDocumentFromStorage,
   readBootstrapChoice,
@@ -149,7 +148,7 @@ export function useGraphAutosave(
 }
 
 
-/** Start a blank sheet. Backs up the current document so it can be restored. */
+/** Start a blank sheet (silently snapshots previous document for crash recovery). */
 export function createNewSheet(current: GraphPersistInput): GraphAppSnapshot {
   backupDocumentToStorage(snapshotToDocument(current))
   writeBootstrapChoice('empty')
@@ -207,15 +206,3 @@ export async function importGraphJsonFile(
   }
 }
 
-export function restoreGraphFromBackup(): ImportJsonResult {
-  const backup = restoreBackupFromStorage()
-  if (!backup.ok) {
-    if (backup.reason === 'missing') {
-      return { ok: false, message: '복원할 백업이 없습니다.' }
-    }
-    return { ok: false, message: '백업 데이터가 손상되었습니다.' }
-  }
-  return { ok: true, snapshot: snapshotFromDocument(backup.document) }
-}
-
-export { hasBackupDocument }
