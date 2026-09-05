@@ -1569,19 +1569,17 @@ export default function App() {
                 >
                   JSON 불러오기
                 </button>
-                <span
-                  className={`topbar__save-status topbar__save-status--${saveStatus}`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  {saveStatus === 'saved'
-                    ? '저장됨'
-                    : saveStatus === 'failed'
-                      ? saveFailureReason === 'too_large'
-                        ? '저장 실패 (용량 초과)'
-                        : '저장 실패'
-                      : ''}
-                </span>
+                {saveStatus === 'failed' && (
+                  <span
+                    className="topbar__save-status topbar__save-status--failed"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {saveFailureReason === 'too_large'
+                      ? '저장 실패 (용량 초과)'
+                      : '저장 실패'}
+                  </span>
+                )}
                 <input
                   ref={importInputRef}
                   type="file"
