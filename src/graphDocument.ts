@@ -2,8 +2,8 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { validateCustomSymbols } from './customSymbol'
 import { absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
+import { normalizeGridSnapScale } from './grid'
 import { isValidPracticeDate, migrateLegacyTrainingLogs, normalizeDailyLogs } from './dailyLog'
-import { layoutMasteryOrbit, isMasteryKind } from './orbit'
 import {
   migrateLegacyClassId,
   normalizeSymbolId,
@@ -29,6 +29,8 @@ import {
   isWithinStringLimit,
 } from './limits'
 import { validateGraphIntegrity } from './graphIntegrity'
+import { pinGraphSoRootCenteredAtOrigin } from './initialHub'
+import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags } from './orbit'
 
 export type SerializedFlowNode = {
   id: string
@@ -284,6 +286,7 @@ function normalizeSettings(value: unknown): GraphDocumentSettings {
   if (!isRecord(value)) return {}
   const settings: GraphDocumentSettings = {}
   if (typeof value.gridSnapEnabled === 'boolean') settings.gridSnapEnabled = value.gridSnapEnabled
+  if (value.gridSnapScale != null) settings.gridSnapScale = normalizeGridSnapScale(value.gridSnapScale)
   if (typeof value.voidHighlightEnabled === 'boolean') settings.voidHighlightEnabled = value.voidHighlightEnabled
   const defaultSymbolColors = normalizeDefaultSymbolColors(value.defaultSymbolColors)
   if (defaultSymbolColors) settings.defaultSymbolColors = defaultSymbolColors
@@ -446,11 +449,15 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
     data: structuredClone(node.data),
   }))
 
+  nodes = pinGraphSoRootCenteredAtOrigin(nodes)
+
   for (const node of nodes) {
     if (isMasteryKind((node.data as PassiveNodeData).kind)) {
       nodes = layoutMasteryOrbit(nodes, node.id)
     }
   }
+
+  nodes = withMasteryDragFlags(nodes)
 
   const edges: Edge[] = document.edges.map((edge) => ({
     id: edge.id,

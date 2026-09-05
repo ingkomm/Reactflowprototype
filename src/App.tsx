@@ -27,7 +27,12 @@ import {
 import { createVideoMediaId, canPinNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
 import { stagesForKind, uid as stageUid } from './stage'
-import { snapNodeTopLeft } from './grid'
+import {
+  DEFAULT_GRID_SNAP_SCALE,
+  GRID_SNAP_SCALE_OPTIONS,
+  normalizeGridSnapScale,
+  snapNodeTopLeft,
+} from './grid'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
 import {
   DEFAULT_SELECTED_NODE_ID,
@@ -228,6 +233,9 @@ export default function App() {
   const [gridSnapEnabled, setGridSnapEnabled] = useState(
     initialGraph.snapshot?.settings.gridSnapEnabled ?? false,
   )
+  const [gridSnapScale, setGridSnapScale] = useState(
+    normalizeGridSnapScale(initialGraph.snapshot?.settings.gridSnapScale ?? DEFAULT_GRID_SNAP_SCALE),
+  )
   const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(
     initialGraph.snapshot?.settings.voidHighlightEnabled ?? false,
   )
@@ -279,7 +287,7 @@ export default function App() {
       nodes,
       edges,
       customSymbols,
-      settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     },
     !bootstrapPending && !storageCorrupt,
     (status, reason) => {
@@ -335,6 +343,7 @@ export default function App() {
       setCustomSymbols(snapshot.customSymbols)
       setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
       setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+      setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
       setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
       setNodes(stack(snapshot.nodes))
       setEdges(sanitizeFlowEdges(snapshot.nodes, snapshot.edges))
@@ -401,12 +410,13 @@ export default function App() {
   const handleNodesChange = useCallback(
     (changes: Parameters<typeof onNodesChange>[0]) => {
       const session = orbitDragSessionRef.current
-      const filtered =
-        session != null
-          ? changes.filter(
-              (c) => !(c.type === 'position' && 'id' in c && c.id === session.nodeId),
-            )
-          : changes
+      const filtered = changes.filter((c) => {
+        if (c.type === 'position' && 'id' in c && c.id === INITIAL_NODE_ID) return false
+        if (session != null && c.type === 'position' && 'id' in c && c.id === session.nodeId) {
+          return false
+        }
+        return true
+      })
       const removals = filtered.filter((c) => c.type === 'remove')
       const rest = filtered.filter((c) => c.type !== 'remove')
       if (rest.length > 0) onNodesChange(rest)
@@ -1104,7 +1114,7 @@ export default function App() {
     (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
       const kind = template.kind
       let position = flowPosition
-      if (gridSnapEnabled) position = snapNodeTopLeft(position)
+      if (gridSnapEnabled) position = snapNodeTopLeft(position, gridSnapScale)
       commit()
       const id = uid(kind)
       const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`, {
@@ -1121,7 +1131,7 @@ export default function App() {
       setNodes((nds) => stack([...nds, newNode]))
       setSelectedId(id)
     },
-    [commit, gridSnapEnabled, setNodes, stack],
+    [commit, gridSnapEnabled, gridSnapScale, setNodes, stack],
   )
 
   const handleExportJson = useCallback(() => {
@@ -1129,11 +1139,11 @@ export default function App() {
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
-      settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     })
     downloadGraphDocument(document)
     setImportError(null)
-  }, [customSymbols, defaultSymbolColors, gridSnapEnabled, voidHighlightEnabled])
+  }, [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled])
 
   const handleImportJson = useCallback(
     async (file: File) => {
@@ -1141,7 +1151,7 @@ export default function App() {
         nodes: stateRef.current.nodes,
         edges: stateRef.current.edges,
         customSymbols,
-        settings: { gridSnapEnabled, voidHighlightEnabled, defaultSymbolColors },
+        settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
       })
       if (!result.ok) {
         setImportError(result.message)
@@ -1156,6 +1166,9 @@ export default function App() {
       if (imported.settings.gridSnapEnabled != null) {
         setGridSnapEnabled(imported.settings.gridSnapEnabled)
       }
+      if (imported.settings.gridSnapScale != null) {
+        setGridSnapScale(normalizeGridSnapScale(imported.settings.gridSnapScale))
+      }
       if (imported.settings.voidHighlightEnabled != null) {
         setVoidHighlightEnabled(imported.settings.voidHighlightEnabled)
       }
@@ -1168,6 +1181,7 @@ export default function App() {
       customSymbols,
       defaultSymbolColors,
       gridSnapEnabled,
+      gridSnapScale,
       resetHistory,
       setEdges,
       setNodes,
@@ -1190,6 +1204,9 @@ export default function App() {
     setEdges(restored.edges)
     if (restored.settings.gridSnapEnabled != null) {
       setGridSnapEnabled(restored.settings.gridSnapEnabled)
+    }
+    if (restored.settings.gridSnapScale != null) {
+      setGridSnapScale(normalizeGridSnapScale(restored.settings.gridSnapScale))
     }
     if (restored.settings.voidHighlightEnabled != null) {
       setVoidHighlightEnabled(restored.settings.voidHighlightEnabled)
@@ -1307,7 +1324,7 @@ export default function App() {
       const data = node.data as PassiveNodeData
 
       if (isMasteryKind(data.kind)) {
-        const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
+        const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
         setNodes((nds) => {
           const synced = nds.map((n) =>
             n.id === node.id ? { ...n, position } : n,
@@ -1340,7 +1357,7 @@ export default function App() {
         ),
       )
     },
-    [gridSnapEnabled, nodes, setNodes, stack],
+    [gridSnapEnabled, gridSnapScale, nodes, setNodes, stack],
   )
 
   const onNodeDragStop = useCallback(
@@ -1352,7 +1369,7 @@ export default function App() {
 
       if (isMasteryKind(data.kind)) {
         setNodes((nds) => {
-          const position = gridSnapEnabled ? snapNodeTopLeft(node.position) : node.position
+          const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
           const synced = nds.map((n) => (n.id === node.id ? { ...n, position } : n))
           return stack(layoutMasteryOrbit(synced, node.id))
         })
@@ -1364,7 +1381,7 @@ export default function App() {
           setNodes((nds) =>
             stack(
               nds.map((n) =>
-                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position) } : n,
+                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position, gridSnapScale) } : n,
               ),
             ),
           )
@@ -1377,7 +1394,7 @@ export default function App() {
           setNodes((nds) =>
             stack(
               nds.map((n) =>
-                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position) } : n,
+                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position, gridSnapScale) } : n,
               ),
             ),
           )
@@ -1410,7 +1427,7 @@ export default function App() {
         )
         const attach = findOrbitAttachTarget(atPointer, dragged)
         if (!attach) {
-          finalPosition = snapNodeTopLeft(node.position)
+          finalPosition = snapNodeTopLeft(node.position, gridSnapScale)
         }
       }
 
@@ -1425,7 +1442,7 @@ export default function App() {
         ),
       )
     },
-    [gridSnapEnabled, setNodes, stack],
+    [gridSnapEnabled, gridSnapScale, setNodes, stack],
   )
 
   const onRenameNode = useCallback(
@@ -1469,6 +1486,22 @@ export default function App() {
                   />
                   <span>그리드 스냅</span>
                 </label>
+                {gridSnapEnabled ? (
+                  <label className="topbar__scale">
+                    <span>Scale</span>
+                    <select
+                      value={gridSnapScale}
+                      onChange={(e) => setGridSnapScale(normalizeGridSnapScale(Number(e.target.value)))}
+                      aria-label="그리드 스냅 Scale"
+                    >
+                      {GRID_SNAP_SCALE_OPTIONS.map((scale) => (
+                        <option key={scale} value={scale}>
+                          {scale}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="topbar__toggle">
                   <input
                     type="checkbox"
@@ -1555,6 +1588,7 @@ export default function App() {
               poweredIds={poweredIds}
               powerFlowMeta={powerFlowMeta}
               voidHighlightEnabled={voidHighlightEnabled}
+              gridSnapScale={gridSnapScale}
               selectedNode={selectedNode}
               selectedData={selectedData}
               masteryLabel={selectedMasteryLabel}

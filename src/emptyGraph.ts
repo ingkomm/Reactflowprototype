@@ -1,13 +1,13 @@
 import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { INITIAL_NODE_ID } from './types'
-import { connectPositionForInitialHub } from './initialHub'
+import { connectPositionForInitialHub, rootTopLeftAtOrigin } from './initialHub'
 import { withMasteryDragFlags } from './orbit'
 import { createPassiveData, rootSocketLinkEdge } from './graphFactory'
 
 export const EMPTY_CONNECT_IDS = ['connect-top', 'connect-br', 'connect-bl'] as const
 
-const INITIAL_POSITION = { x: 80, y: 80 }
+const INITIAL_POSITION = rootTopLeftAtOrigin()
 
 export function buildEmptyNodes(): PassiveFlowNode[] {
   const nodes: PassiveFlowNode[] = [
@@ -16,7 +16,7 @@ export function buildEmptyNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: INITIAL_POSITION,
       dragHandle: '.node-drag-handle',
-      draggable: true,
+      draggable: false,
       data: createPassiveData('initial', 'Root', { stages: [], symbolId: 'default' }),
     },
     ...EMPTY_CONNECT_IDS.map((id, slot) => ({

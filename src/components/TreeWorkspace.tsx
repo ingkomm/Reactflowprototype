@@ -65,6 +65,7 @@ export type TreeWorkspaceProps = {
   poweredIds: Set<string>
   powerFlowMeta: PowerFlowMeta
   voidHighlightEnabled: boolean
+  gridSnapScale?: number
   selectedNode: PassiveFlowNode | null
   selectedData: PassiveNodeData | null
   masteryLabel: string | null
@@ -118,6 +119,7 @@ export function TreeWorkspace({
   poweredIds,
   powerFlowMeta,
   voidHighlightEnabled,
+  gridSnapScale = 20,
   selectedNode,
   selectedData,
   masteryLabel,
@@ -269,7 +271,7 @@ export function TreeWorkspace({
                 restoreSelection={restoreFlowSelection}
               />
               <ZoomKeyboardController />
-              <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="#1c2430" />
+              <Background variant={BackgroundVariant.Dots} gap={gridSnapScale} size={1.2} color="#1c2430" />
               <Controls position="top-left" />
               <MiniMap
                 pannable

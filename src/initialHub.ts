@@ -1,4 +1,5 @@
 import type { InitialConnectSlot } from './types'
+import { INITIAL_NODE_ID } from './types'
 import { NODE_SIZE } from './orbit'
 
 export const INITIAL_CONNECT_SLOT_COUNT = 3
@@ -68,4 +69,32 @@ export function rootSocketFlowPosition(
     x: nodeTopLeft.x + offset.left,
     y: nodeTopLeft.y + offset.top,
   }
+}
+
+/** Flow top-left so the Root node center sits at world (0, 0). */
+export function rootTopLeftAtOrigin(): { x: number; y: number } {
+  const half = NODE_SIZE.initial / 2
+  return { x: -half, y: -half }
+}
+
+/**
+ * Translate the whole graph so Root's center is at (0, 0).
+ * Leaves relative layout intact for legacy documents.
+ */
+export function pinGraphSoRootCenteredAtOrigin<
+  T extends { id: string; position: { x: number; y: number } },
+>(nodes: T[]): T[] {
+  const root = nodes.find((node) => node.id === INITIAL_NODE_ID)
+  if (!root) return nodes
+  const target = rootTopLeftAtOrigin()
+  const dx = target.x - root.position.x
+  const dy = target.y - root.position.y
+  if (dx === 0 && dy === 0) return nodes
+  return nodes.map((node) => ({
+    ...node,
+    position: {
+      x: node.position.x + dx,
+      y: node.position.y + dy,
+    },
+  }))
 }

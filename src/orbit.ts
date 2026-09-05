@@ -1,4 +1,5 @@
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount } from './types'
+import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import {
   outermostBandRadius,
@@ -1390,7 +1391,7 @@ export function withMasteryDragFlags(
     return {
       ...node,
       dragHandle: '.node-drag-handle',
-      draggable: true,
+      draggable: node.id !== INITIAL_NODE_ID,
       zIndex: node.id === selectedId ? selectedZ : baseZ,
     }
   })

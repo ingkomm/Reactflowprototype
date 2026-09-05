@@ -88,6 +88,23 @@
   accent-color: #9fe8dd;
 }
 
+.topbar__scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.topbar__scale select {
+  border: 1px solid color-mix(in srgb, #8fa0b0 35%, transparent);
+  background: #0f151c;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
 .import-error {
   margin: 0;
   padding: 8px 18px;

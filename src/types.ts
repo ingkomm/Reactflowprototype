@@ -60,6 +60,8 @@ export type GraphSchemaVersion = typeof GRAPH_SCHEMA_VERSION
 
 export type GraphDocumentSettings = {
   gridSnapEnabled?: boolean
+  /** Snap / background grid size in world units (multiples of 10). */
+  gridSnapScale?: number
   voidHighlightEnabled?: boolean
   /** Default symbol color per library branch (built-in Default shape). */
   defaultSymbolColors?: Partial<Record<'mastery' | 'notable' | 'small', string>>

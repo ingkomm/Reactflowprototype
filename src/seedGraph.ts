@@ -2,7 +2,10 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { OrbitTier, StageData, TrainingLog } from './types'
 import { INITIAL_NODE_ID } from './types'
-import { connectPositionForInitialHub } from './initialHub'
+import {
+  connectPositionForInitialHub,
+  pinGraphSoRootCenteredAtOrigin,
+} from './initialHub'
 import { createDailyLog, createNotableStages } from './stage'
 import {
   layoutMasteryOrbit,
@@ -24,6 +27,7 @@ export const CONNECT_TOP_ID = 'connect-top'
 export const CONNECT_BR_ID = 'connect-br'
 export const CONNECT_BL_ID = 'connect-bl'
 
+/** Temporary layout origin; pinned to world (0,0) after orbit layout. */
 const INITIAL_POSITION = { x: 80, y: 80 }
 
 const danceOrbitOrderByTier: Partial<Record<OrbitTier, string[]>> = {
@@ -64,7 +68,7 @@ function buildSeedNodes(): PassiveFlowNode[] {
       type: 'passive',
       position: INITIAL_POSITION,
       dragHandle: '.node-drag-handle',
-      draggable: true,
+      draggable: false,
       data: createPassiveData('initial', 'Root', { stages: [], symbolId: 'default' }),
     },
     {
@@ -183,7 +187,9 @@ function buildSeedNodes(): PassiveFlowNode[] {
     },
   ]
 
-  return withMasteryDragFlags(layoutMasteryOrbit(base, DANCE_MASTERY_ID))
+  return withMasteryDragFlags(
+    pinGraphSoRootCenteredAtOrigin(layoutMasteryOrbit(base, DANCE_MASTERY_ID)),
+  )
 }
 
 export const SEED_NODES = buildSeedNodes()
