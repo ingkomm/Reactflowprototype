@@ -32,6 +32,19 @@
   justify-content: space-between;
   gap: 12px;
   color: #eef3f7;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.notable-log-viewer__head:active {
+  cursor: grabbing;
+}
+
+.notable-log-viewer__head .btn {
+  cursor: pointer;
+  user-select: auto;
+  touch-action: manipulation;
 }
 
 .notable-log-viewer__kind {

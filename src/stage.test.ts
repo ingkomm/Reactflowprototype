@@ -6,7 +6,7 @@ import {
 } from './graphDocument'
 import { createPassiveData } from './graphFactory'
 import { INITIAL_NODE_ID } from './types'
-import { createDailyLog, formatPracticeDate } from './stage'
+import { createDailyLog, formatPracticeDate, stagesForKind } from './stage'
 import type { PassiveFlowNode } from './components/PassiveNode'
 
 function shardNode(id: string, extras: Partial<ReturnType<typeof createPassiveData>> = {}): PassiveFlowNode {
@@ -133,5 +133,23 @@ describe('daily practice logs', () => {
     expect(restored?.data.stages).toEqual([])
     expect(restored?.data.markdown).toContain('legacy memo')
     expect(restored?.data.markdown).toContain('2025-05-')
+  })
+})
+
+describe('stagesForKind Mastery legacy preservation', () => {
+  it('keeps existing Mastery stages and defaults new Mastery to empty', () => {
+    const legacy = [
+      {
+        id: 's1',
+        index: 1,
+        label: '기록',
+        goal: 9999,
+        completedManually: false,
+        logs: [createDailyLog('2025-01-01', 'kept')],
+      },
+    ]
+    expect(stagesForKind('mastery', legacy)).toEqual(legacy)
+    expect(stagesForKind('voidMastery', legacy)).toEqual(legacy)
+    expect(stagesForKind('mastery')).toEqual([])
   })
 })

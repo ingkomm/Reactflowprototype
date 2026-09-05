@@ -183,4 +183,195 @@ describe('NotableLogViewer interactions', () => {
     expect(closed).toBe(0)
     view.unmount()
   })
+
+  it('moves on header drag, ignores close button, and resizes video player', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+
+    const view = mount(
+      <NotableLogViewer
+        open
+        x={40}
+        y={50}
+        nodeLabel="Drill"
+        logs={sampleLogs}
+        onClose={() => undefined}
+      />,
+    )
+
+    const panel = view.host.querySelector('[data-testid="notable-log-viewer"]') as HTMLElement
+    const head = view.host.querySelector('[data-testid="notable-log-viewer-head"]') as HTMLElement
+    const close = head.querySelector('button') as HTMLButtonElement
+
+    const leftBefore = panel.style.left
+    const topBefore = panel.style.top
+
+    act(() => {
+      close.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 80,
+          clientY: 60,
+          button: 0,
+          pointerId: 1,
+        }),
+      )
+      close.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 220,
+          clientY: 180,
+          pointerId: 1,
+        }),
+      )
+    })
+    expect(panel.style.left).toBe(leftBefore)
+    expect(panel.style.top).toBe(topBefore)
+
+    act(() => {
+      head.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 80,
+          clientY: 60,
+          button: 0,
+          pointerId: 2,
+        }),
+      )
+      head.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 140,
+          pointerId: 2,
+        }),
+      )
+      head.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 140,
+          pointerId: 2,
+        }),
+      )
+    })
+    expect(panel.style.left).not.toBe(leftBefore)
+    expect(panel.style.top).not.toBe(topBefore)
+
+    act(() => {
+      ;(view.host.querySelector('[data-testid="notable-mode-video"]') as HTMLButtonElement).click()
+    })
+    const newest = view.host.querySelector(
+      '[data-testid="notable-log-item-' + sampleLogs[1]!.id + '"]',
+    ) as HTMLButtonElement
+    act(() => {
+      newest.click()
+    })
+
+    const player = view.host.querySelector('[data-testid="notable-video-player"]') as HTMLElement
+    const resize = view.host.querySelector(
+      '[data-testid="notable-video-resize"]',
+    ) as HTMLButtonElement
+    expect(player.style.width).toBe('480px')
+    expect(player.style.height).toBe('270px')
+
+    act(() => {
+      resize.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 500,
+          clientY: 300,
+          button: 0,
+          pointerId: 3,
+        }),
+      )
+      window.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 580,
+          clientY: 360,
+          pointerId: 3,
+        }),
+      )
+      window.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 580,
+          clientY: 360,
+          pointerId: 3,
+        }),
+      )
+    })
+    expect(player.style.width).toBe('560px')
+    expect(player.style.height).toBe('330px')
+
+    view.unmount()
+  })
+})
+
+describe('ShardMarkdownPreview header drag', () => {
+  it('moves panel from header drag and does not start drag from close', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+
+    const view = mount(
+      <ShardMarkdownPreview
+        open
+        x={30}
+        y={40}
+        nodeLabel="Shard A"
+        markdown={'## Hello'}
+        onClose={() => undefined}
+      />,
+    )
+    const panel = view.host.querySelector('[data-testid="shard-markdown-preview"]') as HTMLElement
+    const head = view.host.querySelector(
+      '[data-testid="shard-markdown-preview-head"]',
+    ) as HTMLElement
+    const close = head.querySelector('button') as HTMLButtonElement
+    const leftBefore = panel.style.left
+
+    act(() => {
+      close.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 50,
+          clientY: 50,
+          button: 0,
+          pointerId: 1,
+        }),
+      )
+      close.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 180,
+          clientY: 120,
+          pointerId: 1,
+        }),
+      )
+    })
+    expect(panel.style.left).toBe(leftBefore)
+
+    act(() => {
+      head.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 50,
+          clientY: 50,
+          button: 0,
+          pointerId: 2,
+        }),
+      )
+      head.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 160,
+          clientY: 110,
+          pointerId: 2,
+        }),
+      )
+    })
+    expect(panel.style.left).not.toBe(leftBefore)
+    view.unmount()
+  })
 })

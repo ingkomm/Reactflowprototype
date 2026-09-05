@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { MarkdownView } from './MarkdownView'
+import { useFloatingPanelDrag } from '../useFloatingPanelDrag'
 import './ShardMarkdownPreview.css'
 
 type Props = {
@@ -11,16 +12,6 @@ type Props = {
   onClose: () => void
 }
 
-function clampPosition(x: number, y: number, width: number, height: number) {
-  const margin = 8
-  const maxX = Math.max(margin, window.innerWidth - width - margin)
-  const maxY = Math.max(margin, window.innerHeight - height - margin)
-  return {
-    x: Math.min(Math.max(margin, x), maxX),
-    y: Math.min(Math.max(margin, y), maxY),
-  }
-}
-
 /** Read-only Shard markdown quick view (edit stays in Inspector). */
 export function ShardMarkdownPreview({
   open,
@@ -30,7 +21,7 @@ export function ShardMarkdownPreview({
   markdown,
   onClose,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null)
+  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y)
 
   useEffect(() => {
     if (!open) return
@@ -40,14 +31,6 @@ export function ShardMarkdownPreview({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, onClose])
-
-  useLayoutEffect(() => {
-    if (!open || !panelRef.current) return
-    const rect = panelRef.current.getBoundingClientRect()
-    const next = clampPosition(x, y, rect.width, rect.height)
-    panelRef.current.style.left = `${next.x}px`
-    panelRef.current.style.top = `${next.y}px`
-  }, [open, x, y, markdown])
 
   if (!open) return null
 
@@ -66,9 +49,14 @@ export function ShardMarkdownPreview({
         className="shard-markdown-preview"
         role="dialog"
         aria-label={`${nodeLabel} Markdown 미리보기`}
-        style={{ left: x, top: y }}
+        data-testid="shard-markdown-preview"
+        style={{ left: position.x, top: position.y }}
       >
-        <header className="shard-markdown-preview__head">
+        <header
+          className="shard-markdown-preview__head"
+          data-testid="shard-markdown-preview-head"
+          {...headerDragProps}
+        >
           <div>
             <p className="shard-markdown-preview__kind">Shard</p>
             <strong>{nodeLabel}</strong>

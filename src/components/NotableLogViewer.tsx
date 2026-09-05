@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -8,6 +7,7 @@ import {
 } from 'react'
 import type { TrainingLog, VideoMedia } from '../types'
 import { dailyLogSummary, sortedDailyLogs } from '../dailyLog'
+import { useFloatingPanelDrag } from '../useFloatingPanelDrag'
 import { MarkdownView } from './MarkdownView'
 import { VideoEmbed } from './VideoEmbed'
 import './NotableLogViewer.css'
@@ -27,16 +27,6 @@ const DEFAULT_PLAYER_WIDTH = 480
 const DEFAULT_PLAYER_HEIGHT = 270
 const MIN_PLAYER_WIDTH = 320
 const MIN_PLAYER_HEIGHT = 180
-
-function clampPosition(x: number, y: number, width: number, height: number) {
-  const margin = 8
-  const maxX = Math.max(margin, window.innerWidth - width - margin)
-  const maxY = Math.max(margin, window.innerHeight - height - margin)
-  return {
-    x: Math.min(Math.max(margin, x), maxX),
-    y: Math.min(Math.max(margin, y), maxY),
-  }
-}
 
 function clampPlayerSize(width: number, height: number) {
   const maxWidth = Math.max(MIN_PLAYER_WIDTH, window.innerWidth - 48)
@@ -59,7 +49,7 @@ function videosOf(log: TrainingLog | null): VideoMedia[] {
 /**
  * Read-only Notable Daily Log viewer.
  * Remount with `key={nodeId}` from App for session defaults.
- * Player size is UI-only and is never written to the graph document.
+ * Panel position and player size are UI-only and never written to the graph document.
  */
 export function NotableLogViewer({
   open,
@@ -69,7 +59,7 @@ export function NotableLogViewer({
   logs,
   onClose,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null)
+  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y)
   const playlist = useMemo(() => sortedDailyLogs(logs), [logs])
   const [selectedLogId, setSelectedLogId] = useState<string | null>(
     () => playlist[0]?.id ?? null,
@@ -95,14 +85,6 @@ export function NotableLogViewer({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, onClose])
-
-  useLayoutEffect(() => {
-    if (!open || !panelRef.current) return
-    const rect = panelRef.current.getBoundingClientRect()
-    const next = clampPosition(x, y, rect.width, rect.height)
-    panelRef.current.style.left = `${next.x}px`
-    panelRef.current.style.top = `${next.y}px`
-  }, [open, x, y])
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -168,10 +150,14 @@ export function NotableLogViewer({
         className="notable-log-viewer"
         role="dialog"
         aria-label={`${nodeLabel} Log Viewer`}
-        style={{ left: x, top: y }}
+        style={{ left: position.x, top: position.y }}
         data-testid="notable-log-viewer"
       >
-        <header className="notable-log-viewer__head">
+        <header
+          className="notable-log-viewer__head"
+          data-testid="notable-log-viewer-head"
+          {...headerDragProps}
+        >
           <div>
             <p className="notable-log-viewer__kind">Notable</p>
             <strong>{nodeLabel}</strong>
@@ -285,6 +271,7 @@ export function NotableLogViewer({
                             aria-label="영상 크기 조절"
                             title="드래그해서 플레이어 크기 조절"
                             data-testid="notable-video-resize"
+                            data-no-drag
                             onPointerDown={beginResize}
                           />
                         </div>

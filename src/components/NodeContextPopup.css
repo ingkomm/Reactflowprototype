@@ -28,6 +28,13 @@
 .node-context-popup__head {
   font-size: 0.9rem;
   color: #eef3f7;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.node-context-popup__head:active {
+  cursor: grabbing;
 }
 
 .node-context-popup__section h3 {

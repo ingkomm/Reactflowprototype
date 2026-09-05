@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { useFloatingPanelDrag } from '../useFloatingPanelDrag'
 import './NodeContextPopup.css'
 
 export type NodeContextPopupState = {
@@ -18,16 +19,6 @@ type Props = {
   onToggleVideoPin?: () => void
 }
 
-function clampPosition(x: number, y: number, width: number, height: number) {
-  const margin = 8
-  const maxX = Math.max(margin, window.innerWidth - width - margin)
-  const maxY = Math.max(margin, window.innerHeight - height - margin)
-  return {
-    x: Math.min(Math.max(margin, x), maxX),
-    y: Math.min(Math.max(margin, y), maxY),
-  }
-}
-
 /** Generic right-click menu for non-Shard/non-Notable nodes (e.g. Mastery pin). */
 export function NodeContextPopup({
   open,
@@ -39,7 +30,7 @@ export function NodeContextPopup({
   onClose,
   onToggleVideoPin,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null)
+  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y)
 
   useEffect(() => {
     if (!open) return
@@ -49,14 +40,6 @@ export function NodeContextPopup({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [open, onClose])
-
-  useLayoutEffect(() => {
-    if (!open || !panelRef.current) return
-    const rect = panelRef.current.getBoundingClientRect()
-    const next = clampPosition(x, y, rect.width, rect.height)
-    panelRef.current.style.left = `${next.x}px`
-    panelRef.current.style.top = `${next.y}px`
-  }, [open, x, y])
 
   if (!open) return null
 
@@ -73,9 +56,14 @@ export function NodeContextPopup({
         className="node-context-popup"
         role="menu"
         aria-label={`${nodeLabel} 컨텍스트 메뉴`}
-        style={{ left: x, top: y }}
+        data-testid="node-context-popup"
+        style={{ left: position.x, top: position.y }}
       >
-        <header className="node-context-popup__head">
+        <header
+          className="node-context-popup__head"
+          data-testid="node-context-popup-head"
+          {...headerDragProps}
+        >
           <strong>{nodeLabel}</strong>
         </header>
 

@@ -208,6 +208,8 @@ export function notableStagesFromTotal(totalLogged: number): StageData[] {
 export function stagesForKind(kind: PassiveKind, existing?: StageData[]): StageData[] {
   if (kind === 'shard') return []
   if (kindUsesTrainingBands(kind)) return ensureNotableStages(existing ?? [])
+  // Mastery is contentless at runtime, but preserve legacy stages on load/import.
+  if (kind === 'mastery' || kind === 'voidMastery') return existing ?? []
   return []
 }
 

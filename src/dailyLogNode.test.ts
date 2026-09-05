@@ -71,6 +71,36 @@ describe('dailyLogNode', () => {
     expect(md).toContain('## 2025-01-02')
   })
 
+  it('preserves Mastery legacy node media without absorbing into stages', () => {
+    const media = {
+      id: createVideoMediaId(),
+      url: 'https://youtu.be/dQw4w9WgXcQ',
+      title: 'Legacy clip',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const stages = [
+      {
+        id: 's1',
+        index: 1,
+        label: '기록',
+        goal: 9999,
+        completedManually: false,
+        logs: [{ id: 'l1', date: '2025-02-01', note: 'memo' }],
+      },
+    ]
+    const mastery: PassiveNodeData = {
+      label: 'Mastery',
+      kind: 'mastery',
+      symbolId: DEFAULT_SYMBOL_ID,
+      stages,
+      media: [media],
+    }
+    const next = absorbNodeMediaIntoDailyLogs(mastery)
+    expect(next.media).toEqual([media])
+    expect(next.stages).toEqual(stages)
+  })
+
   it('flags kinds that use daily logs (Notable only; Mastery is contentless)', () => {
     expect(kindUsesDailyLogs('shard')).toBe(false)
     expect(kindUsesDailyLogs('notable')).toBe(true)

@@ -10,6 +10,7 @@ import { DEFAULT_SYMBOL_ID } from './librarySymbols'
 import { buildMaskedImageMarkup } from './customSymbol'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import { createVideoMediaId } from './videoMedia'
+import { INITIAL_NODE_ID } from './types'
 
 const DEMO_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -105,5 +106,76 @@ describe('graphDocument', () => {
     expect(restored?.data.media).toBeUndefined()
     const logs = restored?.data.stages?.[0]?.logs ?? []
     expect(logs.some((log) => log.media?.[0]?.url === 'https://youtu.be/dQw4w9WgXcQ')).toBe(true)
+  })
+
+  it('preserves Mastery legacy stages and media through parse/export round-trip', () => {
+    const media = {
+      id: createVideoMediaId(),
+      url: 'https://youtu.be/dQw4w9WgXcQ',
+      title: 'Legacy mastery clip',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const stages = [
+      {
+        id: 'mastery-stage-1',
+        index: 1,
+        label: '기록',
+        goal: 9999,
+        completedManually: false,
+        logs: [{ id: 'ml-1', date: '2025-03-01', note: 'legacy note' }],
+      },
+    ]
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'mastery-legacy',
+          type: 'passive',
+          position: { x: 10, y: 20 },
+          data: {
+            label: 'Legacy Mastery',
+            kind: 'mastery',
+            symbolId: DEFAULT_SYMBOL_ID,
+            stages,
+            media: [media],
+          },
+        },
+      ],
+      edges: [],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const loaded = parsed.document.nodes.find((n) => n.id === 'mastery-legacy')?.data
+    expect(loaded?.kind).toBe('mastery')
+    expect(loaded?.stages).toHaveLength(1)
+    expect(loaded?.stages?.[0]?.logs?.[0]?.note).toBe('legacy note')
+    expect(loaded?.media?.[0]?.url).toBe(media.url)
+
+    const exported = buildGraphDocument({
+      nodes: parsed.document.nodes,
+      edges: parsed.document.edges,
+      customSymbols: [],
+    })
+    expect(exported.schemaVersion).toBe('0.1')
+    const out = exported.nodes.find((n) => n.id === 'mastery-legacy')?.data
+    expect(out?.stages?.[0]?.id).toBe('mastery-stage-1')
+    expect(out?.stages?.[0]?.logs?.[0]?.note).toBe('legacy note')
+    expect(out?.media?.[0]?.url).toBe(media.url)
+
+    const reparsed = parseGraphDocumentJson(serializeGraphDocument(exported))
+    expect(reparsed.ok).toBe(true)
+    if (!reparsed.ok) return
+    const again = reparsed.document.nodes.find((n) => n.id === 'mastery-legacy')?.data
+    expect(again?.stages?.[0]?.logs?.[0]?.note).toBe('legacy note')
+    expect(again?.media?.[0]?.url).toBe(media.url)
   })
 })

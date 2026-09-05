@@ -6,7 +6,7 @@ import {
   sortedDailyLogs,
   upsertDailyLog,
 } from './dailyLog'
-import { ensureNotableStages, uid } from './stage'
+import { ensureNotableStages } from './stage'
 
 function offsetPracticeDate(daysFromToday: number): string {
   const date = new Date()
@@ -69,9 +69,12 @@ export function absorbNodeMediaIntoDailyLogs(data: PassiveNodeData): PassiveNode
     }
   }
 
-  const canStore =
-    data.kind === 'notable' || data.kind === 'mastery' || data.kind === 'voidMastery'
-  if (!canStore) return { ...data, media: undefined }
+  // Mastery stays contentless in the UI, but never convert or clear legacy media/stages.
+  if (data.kind === 'mastery' || data.kind === 'voidMastery') {
+    return data
+  }
+
+  if (data.kind !== 'notable') return { ...data, media: undefined }
 
   let logs = extractDailyLogsFromNodeData(data)
 
@@ -92,26 +95,12 @@ export function absorbNodeMediaIntoDailyLogs(data: PassiveNodeData): PassiveNode
     }
   }
 
-  const next: PassiveNodeData = { ...data, media: undefined }
-
-  if (data.kind === 'notable') {
-    const stages = ensureNotableStages(data.stages ?? [])
-    next.stages = stages.map((stage, index) => (index === 0 ? { ...stage, logs } : stage))
-    return next
+  const stages = ensureNotableStages(data.stages ?? [])
+  return {
+    ...data,
+    media: undefined,
+    stages: stages.map((stage, index) => (index === 0 ? { ...stage, logs } : stage)),
   }
-
-  const existing = data.stages?.[0]
-  next.stages = [
-    {
-      id: existing?.id ?? uid('stage'),
-      index: 1,
-      label: existing?.label ?? '기록',
-      goal: existing?.goal ?? 9999,
-      completedManually: false,
-      logs,
-    },
-  ]
-  return next
 }
 
 export function nodeHasDailyLogs(data: PassiveNodeData): boolean {
