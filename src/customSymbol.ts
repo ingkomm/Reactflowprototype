@@ -416,8 +416,11 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
     height: view.height,
     markup: safeMarkup,
   }
-  if (raw.kind === 'mastery' || raw.kind === 'notable' || raw.kind === 'shard') {
-    symbol.kind = raw.kind
+  const rawKind = (raw as { kind?: unknown }).kind
+  if (rawKind === 'small' || rawKind === 'shard') {
+    symbol.kind = 'shard'
+  } else if (rawKind === 'mastery' || rawKind === 'notable') {
+    symbol.kind = rawKind
   }
   const color = parseSymbolColor(raw.color)
   if (color) symbol.color = color
@@ -428,6 +431,7 @@ export function validateCustomSymbol(value: unknown): CustomSymbol | null {
   return symbol
 }
 
+/** Keep valid symbols; skip broken/duplicate entries so one bad import cannot wipe a save. */
 export function validateCustomSymbols(value: unknown): CustomSymbol[] | null {
   if (value == null) return []
   if (!Array.isArray(value)) return null
@@ -435,8 +439,8 @@ export function validateCustomSymbols(value: unknown): CustomSymbol[] | null {
   const seen = new Set<string>()
   for (const item of value) {
     const symbol = validateCustomSymbol(item)
-    if (!symbol) return null
-    if (seen.has(symbol.id)) return null
+    if (!symbol) continue
+    if (seen.has(symbol.id)) continue
     seen.add(symbol.id)
     symbols.push(symbol)
   }

@@ -17,15 +17,17 @@ import type {
   PassiveNodeData,
   StageData,
   TrainingLog,
+  VideoMedia,
 } from './types'
 import { GRAPH_SCHEMA_VERSION } from './types'
-import { validateVideoMediaList } from './videoMedia'
+import { validateVideoMedia } from './videoMedia'
 import {
   MAX_CUSTOM_SYMBOLS,
   MAX_EDGE_COUNT,
   MAX_JSON_BYTES,
   MAX_LOG_COUNT,
   MAX_NODE_COUNT,
+  MAX_STRING_LENGTH,
   isWithinStringLimit,
 } from './limits'
 import { validateGraphIntegrity } from './graphIntegrity'
@@ -108,19 +110,38 @@ function parsePosition(value: unknown): { x: number; y: number } | null {
   return { x, y }
 }
 
+function clampPersistedString(value: string): string {
+  if (isWithinStringLimit(value)) return value
+  return value.slice(0, MAX_STRING_LENGTH)
+}
+
+/** Keep valid videos; never reject a whole save for one bad media entry. */
+function softValidateMediaList(value: unknown): VideoMedia[] {
+  if (value == null) return []
+  if (!Array.isArray(value)) return []
+  const list: VideoMedia[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    const media = validateVideoMedia(item)
+    if (!media) continue
+    if (seen.has(media.id)) continue
+    seen.add(media.id)
+    list.push(media)
+  }
+  return list
+}
+
 function normalizeTrainingLog(value: unknown): TrainingLog | null {
   if (!isRecord(value)) return null
   if (typeof value.id !== 'string' || !value.id.trim()) return null
   if (typeof value.date !== 'string' || !isValidPracticeDate(value.date)) return null
-  const media = validateVideoMediaList(value.media)
-  if (media === null) return null
+  const media = softValidateMediaList(value.media)
   const log: TrainingLog = {
     id: value.id.trim(),
     date: value.date.trim(),
   }
   if (typeof value.note === 'string' && value.note.trim()) {
-    if (!isWithinStringLimit(value.note)) return null
-    log.note = value.note.trim()
+    log.note = clampPersistedString(value.note.trim())
   }
   if (media.length > 0) log.media = media
   return log
@@ -128,26 +149,30 @@ function normalizeTrainingLog(value: unknown): TrainingLog | null {
 
 function normalizeStage(value: unknown): StageData | null {
   if (!isRecord(value)) return null
-  if (typeof value.id !== 'string' || !value.id.trim()) return null
-  if (typeof value.index !== 'number' || !Number.isFinite(value.index)) return null
-  if (typeof value.label !== 'string') return null
-  if (typeof value.goal !== 'number' || !Number.isFinite(value.goal)) return null
-  if (!Array.isArray(value.logs)) return null
+  const id =
+    typeof value.id === 'string' && value.id.trim()
+      ? value.id.trim()
+      : `stage-${Math.random().toString(36).slice(2, 10)}`
+  const index =
+    typeof value.index === 'number' && Number.isFinite(value.index) ? Math.floor(value.index) : 1
+  const label = typeof value.label === 'string' ? clampPersistedString(value.label) : ''
+  const goal =
+    typeof value.goal === 'number' && Number.isFinite(value.goal)
+      ? Math.max(1, Math.floor(value.goal))
+      : 9999
+  const logsRaw = Array.isArray(value.logs) ? value.logs : []
   const logs: TrainingLog[] = []
-  for (const log of value.logs) {
-    const parsedEntries = migrateLegacyTrainingLogs(log)
-    if (parsedEntries.length === 0) return null
-    for (const entry of parsedEntries) {
+  for (const log of logsRaw) {
+    for (const entry of migrateLegacyTrainingLogs(log)) {
       const normalized = normalizeTrainingLog(entry)
-      if (!normalized) return null
-      logs.push(normalized)
+      if (normalized) logs.push(normalized)
     }
   }
   return {
-    id: value.id.trim(),
-    index: Math.floor(value.index),
-    label: value.label,
-    goal: Math.max(1, Math.floor(value.goal)),
+    id,
+    index,
+    label,
+    goal,
     completedManually: Boolean(value.completedManually),
     logs: normalizeDailyLogs(logs),
   }
@@ -161,8 +186,7 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
     : kindFallback) as PassiveKind
   const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
 
-  const label = typeof value.label === 'string' ? value.label : 'Node'
-  if (!isWithinStringLimit(label)) return null
+  const label = typeof value.label === 'string' ? clampPersistedString(value.label) : 'Node'
 
   const symbolIdRaw =
     typeof value.symbolId === 'string'
@@ -174,22 +198,27 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   let stages: StageData[] = []
   let legacyShardLogs: TrainingLog[] = []
   if (Array.isArray(value.stages)) {
-    const parsed: StageData[] = []
-    for (const stage of value.stages) {
-      const s = normalizeStage(stage)
-      if (!s) return null
-      parsed.push(s)
-    }
     if (resolvedKind === 'shard') {
-      legacyShardLogs = parsed.flatMap((stage) => stage.logs)
+      // Best-effort: never reject a Shard/Small node because legacy practice logs are messy.
+      for (const stage of value.stages) {
+        const s = normalizeStage(stage)
+        if (s) legacyShardLogs.push(...s.logs)
+      }
+      stages = []
+    } else {
+      const parsed: StageData[] = []
+      for (const stage of value.stages) {
+        const s = normalizeStage(stage)
+        if (!s) continue
+        parsed.push(s)
+      }
+      stages = stagesForKind(resolvedKind, parsed)
     }
-    stages = stagesForKind(resolvedKind, parsed)
   } else {
     stages = stagesForKind(resolvedKind)
   }
 
-  const media = validateVideoMediaList(value.media)
-  if (media === null) return null
+  const media = softValidateMediaList(value.media)
 
   const data: PassiveNodeData = {
     label,
@@ -293,6 +322,10 @@ function normalizeDefaultSymbolColors(value: unknown): GraphDocumentSettings['de
     const color = parseSymbolColor(value[kind])
     if (color) next[kind] = color
   }
+  if (!next.shard) {
+    const legacySmall = parseSymbolColor(value.small)
+    if (legacySmall) next.shard = legacySmall
+  }
   return Object.keys(next).length > 0 ? next : undefined
 }
 
@@ -350,11 +383,9 @@ export function validateGraphDocument(value: unknown): GraphParseResult {
   const edgeIds = new Set<string>()
   for (const item of value.edges) {
     const edge = normalizeSerializedEdge(item)
-    if (!edge) return { ok: false, message: '엣지 데이터 형식이 올바르지 않습니다.' }
-    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
-      return { ok: false, message: `엣지가 존재하지 않는 노드를 참조합니다: ${edge.id}` }
-    }
-    if (edgeIds.has(edge.id)) return { ok: false, message: `중복 엣지 id: ${edge.id}` }
+    if (!edge) continue
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue
+    if (edgeIds.has(edge.id)) continue
     edgeIds.add(edge.id)
     edges.push(edge)
   }

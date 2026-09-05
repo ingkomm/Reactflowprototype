@@ -76,9 +76,18 @@ export function resolveInitialGraphState(): {
   storageCorrupt: boolean
 } {
   const stored = loadDocumentFromStorage()
-  if (stored.ok) return { snapshot: snapshotFromDocument(stored.document), needsBootstrap: false, storageCorrupt: false }
+  if (stored.ok) {
+    // Rewrite migrated legacy docs (e.g. kind: small → shard) so the next load stays clean.
+    saveDocumentToStorage(stored.document)
+    return { snapshot: snapshotFromDocument(stored.document), needsBootstrap: false, storageCorrupt: false }
+  }
 
   if (hasStoredDocument()) {
+    const backup = restoreBackupFromStorage()
+    if (backup.ok) {
+      saveDocumentToStorage(backup.document)
+      return { snapshot: snapshotFromDocument(backup.document), needsBootstrap: false, storageCorrupt: false }
+    }
     return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
   }
 
