@@ -71,10 +71,11 @@ describe('dailyLogNode', () => {
     expect(md).toContain('## 2025-01-02')
   })
 
-  it('flags kinds that use daily logs', () => {
+  it('flags kinds that use daily logs (Notable only; Mastery is contentless)', () => {
     expect(kindUsesDailyLogs('shard')).toBe(false)
     expect(kindUsesDailyLogs('notable')).toBe(true)
-    expect(kindUsesDailyLogs('mastery')).toBe(true)
+    expect(kindUsesDailyLogs('mastery')).toBe(false)
+    expect(kindUsesDailyLogs('voidMastery')).toBe(false)
     expect(kindUsesDailyLogs('connect')).toBe(false)
   })
 })

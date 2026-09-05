@@ -298,7 +298,7 @@ export function TreeWorkspace({
         </PowerProvider>
 
         <p className="canvas-hint">
-          Root 미연결 링크는 비활성화(삭제 안 함) · Mastery/Notable 우클릭 동영상 핀 · 오르빗 용량 1–24
+          Root 미연결 링크는 비활성화(삭제 안 함) · Notable 우클릭 Log Viewer · 오르빗 용량 1–24
         </p>
       </section>
 

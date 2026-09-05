@@ -12,8 +12,10 @@
 .notable-log-viewer {
   position: fixed;
   z-index: 41;
-  width: min(720px, calc(100vw - 16px));
-  max-height: min(560px, calc(100vh - 16px));
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -45,11 +47,11 @@
   grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
   gap: 10px;
   min-height: 280px;
-  overflow: hidden;
 }
 
 .notable-log-viewer__playlist {
   overflow: auto;
+  max-height: min(480px, calc(100vh - 120px));
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
   background: #0f151c;
@@ -116,7 +118,6 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  overflow: hidden;
 }
 
 .notable-log-viewer__modes {
@@ -146,7 +147,6 @@
 
 .notable-log-viewer__note,
 .notable-log-viewer__video {
-  flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 10px 12px;
@@ -191,6 +191,74 @@
 .notable-log-viewer__video-item.is-active {
   border-color: color-mix(in srgb, #7fd9cb 50%, transparent);
   color: #7fd9cb;
+}
+
+.notable-log-viewer__player {
+  position: relative;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0a0e14;
+  border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
+  min-width: 320px;
+  min-height: 180px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 160px);
+}
+
+.notable-log-viewer__player .video-embed,
+.notable-log-viewer__player .video-embed--placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.notable-log-viewer__player .video-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.notable-log-viewer__resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  cursor: nwse-resize;
+  background:
+    linear-gradient(
+      135deg,
+      transparent 0 42%,
+      color-mix(in srgb, #d4a24c 80%, white) 42% 48%,
+      transparent 48% 62%,
+      color-mix(in srgb, #d4a24c 80%, white) 62% 68%,
+      transparent 68%
+    );
+  opacity: 0.85;
+}
+
+.notable-log-viewer__resize:hover,
+.notable-log-viewer__resize:focus-visible {
+  opacity: 1;
+  outline: 1px solid color-mix(in srgb, #d4a24c 70%, transparent);
+}
+
+body.is-notable-player-resizing {
+  cursor: nwse-resize !important;
+  user-select: none !important;
+}
+
+body.is-notable-player-resizing .notable-log-viewer__player .video-embed iframe {
+  pointer-events: none;
 }
 
 @media (max-width: 640px) {

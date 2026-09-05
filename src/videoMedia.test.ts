@@ -6,6 +6,7 @@ import {
   extractYouTubeId,
   isSafeHttpUrl,
   validateVideoMedia,
+  canPinNodeVideos,
 } from './videoMedia'
 
 describe('videoMedia', () => {
@@ -54,5 +55,15 @@ describe('videoMedia', () => {
       ],
     })
     expect(media.map((m) => m.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('canPinNodeVideos', () => {
+  it('allows Notable only (Mastery is contentless)', () => {
+    expect(canPinNodeVideos('notable')).toBe(true)
+    expect(canPinNodeVideos('mastery')).toBe(false)
+    expect(canPinNodeVideos('voidMastery')).toBe(false)
+    expect(canPinNodeVideos('shard')).toBe(false)
+    expect(canPinNodeVideos('connect')).toBe(false)
   })
 })

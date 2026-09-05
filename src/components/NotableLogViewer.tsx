@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { TrainingLog, VideoMedia } from '../types'
 import { dailyLogSummary, sortedDailyLogs } from '../dailyLog'
 import { MarkdownView } from './MarkdownView'
@@ -16,6 +23,11 @@ type Props = {
   onClose: () => void
 }
 
+const DEFAULT_PLAYER_WIDTH = 480
+const DEFAULT_PLAYER_HEIGHT = 270
+const MIN_PLAYER_WIDTH = 320
+const MIN_PLAYER_HEIGHT = 180
+
 function clampPosition(x: number, y: number, width: number, height: number) {
   const margin = 8
   const maxX = Math.max(margin, window.innerWidth - width - margin)
@@ -23,6 +35,15 @@ function clampPosition(x: number, y: number, width: number, height: number) {
   return {
     x: Math.min(Math.max(margin, x), maxX),
     y: Math.min(Math.max(margin, y), maxY),
+  }
+}
+
+function clampPlayerSize(width: number, height: number) {
+  const maxWidth = Math.max(MIN_PLAYER_WIDTH, window.innerWidth - 48)
+  const maxHeight = Math.max(MIN_PLAYER_HEIGHT, window.innerHeight - 160)
+  return {
+    width: Math.min(Math.max(MIN_PLAYER_WIDTH, Math.round(width)), maxWidth),
+    height: Math.min(Math.max(MIN_PLAYER_HEIGHT, Math.round(height)), maxHeight),
   }
 }
 
@@ -35,7 +56,11 @@ function videosOf(log: TrainingLog | null): VideoMedia[] {
   return log.media.filter((item) => item.url?.trim())
 }
 
-/** Read-only Notable Daily Log viewer (edit stays in Inspector / DailyLogPanel). */
+/**
+ * Read-only Notable Daily Log viewer.
+ * Remount with `key={nodeId}` from App for session defaults.
+ * Player size is UI-only and is never written to the graph document.
+ */
 export function NotableLogViewer({
   open,
   x,
@@ -46,22 +71,21 @@ export function NotableLogViewer({
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   const playlist = useMemo(() => sortedDailyLogs(logs), [logs])
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(null)
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(
+    () => playlist[0]?.id ?? null,
+  )
   const [viewerMode, setViewerMode] = useState<ViewerMode>('note')
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
-  const [sessionKey, setSessionKey] = useState<string | null>(null)
-
-  // Reset UI selection when a new popup session opens (node/open edge).
-  const openKey = open ? `${nodeLabel}:${playlist.map((l) => l.id).join(',')}` : null
-  if (open && openKey !== sessionKey) {
-    setSessionKey(openKey)
-    setSelectedLogId(playlist[0]?.id ?? null)
-    setViewerMode('note')
-    setSelectedVideoId(null)
-  }
-  if (!open && sessionKey !== null) {
-    setSessionKey(null)
-  }
+  const [playerSize, setPlayerSize] = useState({
+    width: DEFAULT_PLAYER_WIDTH,
+    height: DEFAULT_PLAYER_HEIGHT,
+  })
+  const resizeRef = useRef<{
+    startX: number
+    startY: number
+    originW: number
+    originH: number
+  } | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -78,7 +102,33 @@ export function NotableLogViewer({
     const next = clampPosition(x, y, rect.width, rect.height)
     panelRef.current.style.left = `${next.x}px`
     panelRef.current.style.top = `${next.y}px`
-  }, [open, x, y, playlist.length, viewerMode])
+  }, [open, x, y])
+
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const drag = resizeRef.current
+      if (!drag) return
+      setPlayerSize(
+        clampPlayerSize(
+          drag.originW + (event.clientX - drag.startX),
+          drag.originH + (event.clientY - drag.startY),
+        ),
+      )
+    }
+    const onUp = () => {
+      resizeRef.current = null
+      document.body.classList.remove('is-notable-player-resizing')
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      document.body.classList.remove('is-notable-player-resizing')
+    }
+  }, [])
 
   const selectedLog =
     playlist.find((log) => log.id === selectedLogId) ?? playlist[0] ?? null
@@ -89,6 +139,18 @@ export function NotableLogViewer({
   const selectLog = (logId: string) => {
     setSelectedLogId(logId)
     setSelectedVideoId(null)
+  }
+
+  const beginResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    resizeRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originW: playerSize.width,
+      originH: playerSize.height,
+    }
+    document.body.classList.add('is-notable-player-resizing')
   }
 
   if (!open) return null
@@ -107,6 +169,7 @@ export function NotableLogViewer({
         role="dialog"
         aria-label={`${nodeLabel} Log Viewer`}
         style={{ left: x, top: y }}
+        data-testid="notable-log-viewer"
       >
         <header className="notable-log-viewer__head">
           <div>
@@ -131,6 +194,8 @@ export function NotableLogViewer({
                       <button
                         type="button"
                         className={`notable-log-viewer__item${active ? ' is-active' : ''}`}
+                        data-testid={`notable-log-item-${log.id}`}
+                        aria-pressed={active}
                         onClick={() => selectLog(log.id)}
                       >
                         <span className="notable-log-viewer__date">{log.date}</span>
@@ -153,6 +218,7 @@ export function NotableLogViewer({
                   type="button"
                   role="tab"
                   aria-selected={viewerMode === 'note'}
+                  data-testid="notable-mode-note"
                   className={`notable-log-viewer__mode${viewerMode === 'note' ? ' is-active' : ''}`}
                   onClick={() => setViewerMode('note')}
                 >
@@ -162,6 +228,7 @@ export function NotableLogViewer({
                   type="button"
                   role="tab"
                   aria-selected={viewerMode === 'video'}
+                  data-testid="notable-mode-video"
                   className={`notable-log-viewer__mode${viewerMode === 'video' ? ' is-active' : ''}`}
                   onClick={() => setViewerMode('video')}
                 >
@@ -170,7 +237,7 @@ export function NotableLogViewer({
               </div>
 
               {viewerMode === 'note' ? (
-                <div className="notable-log-viewer__note">
+                <div className="notable-log-viewer__note" data-testid="notable-note-pane">
                   <p className="notable-log-viewer__note-date">{selectedLog?.date}</p>
                   {selectedLog?.note?.trim() ? (
                     <MarkdownView markdown={selectedLog.note} />
@@ -179,7 +246,7 @@ export function NotableLogViewer({
                   )}
                 </div>
               ) : (
-                <div className="notable-log-viewer__video">
+                <div className="notable-log-viewer__video" data-testid="notable-video-pane">
                   {videos.length === 0 ? (
                     <p className="notable-log-viewer__empty">No video</p>
                   ) : (
@@ -190,6 +257,7 @@ export function NotableLogViewer({
                             <li key={item.id}>
                               <button
                                 type="button"
+                                data-testid={`notable-video-item-${item.id}`}
                                 className={`notable-log-viewer__video-item${
                                   item.id === activeVideo?.id ? ' is-active' : ''
                                 }`}
@@ -201,7 +269,26 @@ export function NotableLogViewer({
                           ))}
                         </ul>
                       ) : null}
-                      {activeVideo ? <VideoEmbed media={activeVideo} /> : null}
+                      {activeVideo ? (
+                        <div
+                          className="notable-log-viewer__player"
+                          data-testid="notable-video-player"
+                          style={{
+                            width: playerSize.width,
+                            height: playerSize.height,
+                          }}
+                        >
+                          <VideoEmbed media={activeVideo} />
+                          <button
+                            type="button"
+                            className="notable-log-viewer__resize"
+                            aria-label="영상 크기 조절"
+                            title="드래그해서 플레이어 크기 조절"
+                            data-testid="notable-video-resize"
+                            onPointerDown={beginResize}
+                          />
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>

@@ -1676,6 +1676,7 @@ export default function App() {
                 if (data.kind === 'notable') {
                   return (
                     <NotableLogViewer
+                      key={contextMenu.nodeId}
                       open
                       x={contextMenu.x}
                       y={contextMenu.y}

@@ -110,6 +110,7 @@ export function collectNodeVideos(data: {
   return list
 }
 
+/** Video pin is Notable-only. Mastery no longer exposes content/pin UI. */
 export function canPinNodeVideos(kind: string): boolean {
-  return kind === 'mastery' || kind === 'notable' || kind === 'voidMastery'
+  return kind === 'notable'
 }

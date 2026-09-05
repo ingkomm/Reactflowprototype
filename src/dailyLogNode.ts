@@ -118,6 +118,7 @@ export function nodeHasDailyLogs(data: PassiveNodeData): boolean {
   return extractDailyLogsFromNodeData(data).length > 0
 }
 
+/** Runtime Daily Log editing/viewing is Notable-only. Mastery is a contentless center. */
 export function kindUsesDailyLogs(kind: PassiveKind): boolean {
-  return kind === 'notable' || kind === 'mastery' || kind === 'voidMastery'
+  return kind === 'notable'
 }
