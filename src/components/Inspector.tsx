@@ -472,35 +472,15 @@ export function Inspector({
       )}
 
       {data.kind === 'shard' && (
-
-
         <label className="field">
-
-
           <span>Markdown</span>
-
-
           <textarea
-
-
             rows={12}
-
-
             value={data.markdown ?? ''}
-
-
             onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
-
-
             placeholder="Shard 메모 (Markdown)"
-
-
           />
-
-
         </label>
-
-
       )}
 
 
