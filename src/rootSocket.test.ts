@@ -206,9 +206,43 @@ describe('Root socket endpoints', () => {
     expect(
       isValidRootPowerHandles(root, external, ROOT_POWER_HANDLE_ID, 'center-target'),
     ).toBe(false)
+    // Reverse (Orbit member → Power Core) is invalid — Core is source-only.
+    expect(
+      isValidRootPowerHandles(onOrbit, root, 'center', ROOT_POWER_HANDLE_ID),
+    ).toBe(false)
+    expect(
+      isValidRootPowerHandles(onOrbit, root, 'center', 'root-power-target'),
+    ).toBe(false)
     expect(
       isValidRootConnectHandles(root, onOrbit, rootSocketSourceHandle(0), 'center-target'),
     ).toBe(false)
+  })
+})
+
+describe('Root Power Core source-only UI', () => {
+  it('exposes exactly one root-power source Handle and no root-power-target', () => {
+    const src = readFileSync('src/components/PassiveNode.tsx', 'utf8')
+    expect(src).not.toMatch(/root-power-target/)
+    const blocks = [
+      ...src.matchAll(/<Handle[\s\S]*?id=\{ROOT_POWER_HANDLE_ID\}[\s\S]*?(?:\/>|>)/g),
+    ]
+    expect(blocks.length).toBe(1)
+    expect(blocks[0]![0]).toMatch(/type="source"/)
+    expect(blocks[0]![0]).not.toMatch(/type="target"/)
+  })
+
+  it('keeps Power Core at center and lifts Root title above it', () => {
+    const css = readFileSync('src/components/PassiveNode.css', 'utf8')
+    expect(css).toMatch(
+      /\.passive-node__handle--root-power[\s\S]*?left:\s*50%\s*!important[\s\S]*?top:\s*50%\s*!important/,
+    )
+    expect(css).toMatch(/\.passive-node__power-core[\s\S]*?left:\s*50%[\s\S]*?top:\s*50%/)
+    expect(css).toMatch(
+      /\.passive-node(?:--initial\s+\.passive-node__title|__title--initial)[\s\S]*?top:\s*44%/,
+    )
+    expect(css).not.toMatch(
+      /\.passive-node--initial\s+\.passive-node__title[\s\S]{0,120}top:\s*50%/,
+    )
   })
 })
 

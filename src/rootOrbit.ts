@@ -598,13 +598,10 @@ export function stripInvalidRootPowerEdges(
     const rootIsTarget = td.kind === 'initial'
     if (!rootIsSource && !rootIsTarget) return true
 
-    const powerHandle = rootIsSource
-      ? isRootPowerHandle(edge.sourceHandle)
-      : isRootPowerHandle(edge.targetHandle)
-    if (!powerHandle) return true
+    // Runtime Power Core edges are Root → member with sourceHandle root-power only.
+    if (!rootIsSource || !isRootPowerHandle(edge.sourceHandle)) return true
 
-    const other = rootIsSource ? target : source
-    const od = other.data as PassiveNodeData
+    const od = target.data as PassiveNodeData
     return isValidRootOrbitMemberKind(od.kind) && isOnRootOrbit(od)
   })
 }

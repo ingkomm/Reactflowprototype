@@ -707,7 +707,8 @@
 
 .passive-node--initial .passive-node__title,
 .passive-node__title--initial {
-  top: 50%;
+  /* Keep Power Core at exact center; lift label so it never covers the Core hitbox. */
+  top: 44%;
   left: 50%;
   bottom: auto;
   transform: translate(-50%, -50%);

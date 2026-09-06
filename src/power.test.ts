@@ -209,6 +209,12 @@ describe('power', () => {
     ).toBe(true)
     expect(isValidRootPowerHandles(root, member, 'center', 'center-target')).toBe(false)
     expect(isValidRootPowerHandles(root, member, 'socket-0', 'center-target')).toBe(false)
+    expect(
+      isValidRootPowerHandles(member, root, 'center', ROOT_POWER_HANDLE_ID),
+    ).toBe(false)
+    expect(
+      isValidRootPowerHandles(member, root, 'center', 'root-power-target'),
+    ).toBe(false)
 
     const powered = computePoweredNodeIds(nodes, [rootPowerLinkEdge(INITIAL_NODE_ID, 'na')])
     expect(powered.has('na')).toBe(true)

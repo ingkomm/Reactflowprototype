@@ -279,16 +279,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       {isInitialNode && (
         <>
+          {/* Power Core = source-only power start (drag must begin here). */}
           <Handle
             id={ROOT_POWER_HANDLE_ID}
             type="source"
-            position={Position.Top}
-            className="passive-node__handle passive-node__handle--root-power"
-            isConnectable
-          />
-          <Handle
-            id="root-power-target"
-            type="target"
             position={Position.Top}
             className="passive-node__handle passive-node__handle--root-power"
             isConnectable

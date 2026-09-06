@@ -16,9 +16,9 @@ describe('Root hub sizing', () => {
 })
 
 describe('Root Power Core helpers', () => {
-  it('recognizes root-power and root-power-target handles', () => {
+  it('recognizes only the source-only root-power handle', () => {
     expect(isRootPowerHandle(ROOT_POWER_HANDLE_ID)).toBe(true)
-    expect(isRootPowerHandle('root-power-target')).toBe(true)
+    expect(isRootPowerHandle('root-power-target')).toBe(false)
     expect(isRootPowerHandle('center')).toBe(false)
     expect(isRootPowerHandle('socket-0')).toBe(false)
     expect(isRootPowerHandle(null)).toBe(false)

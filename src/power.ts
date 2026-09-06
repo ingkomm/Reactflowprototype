@@ -464,22 +464,21 @@ export function isValidRootConnectHandles(
   return resolveRootConnectSlot(source, target, sourceHandle, targetHandle) !== null
 }
 
-/** Root Power Core ↔ Root Orbit Shard/Notable only. */
+/**
+ * Root Power Core → Root Orbit Shard/Notable only (source-only).
+ * Reverse (member → Power Core) is invalid — drag must start at the Core.
+ */
 export function isValidRootPowerHandles(
   source: PassiveFlowNode,
   target: PassiveFlowNode,
   sourceHandle?: string | null,
-  targetHandle?: string | null,
+  _targetHandle?: string | null,
 ): boolean {
   const sd = source.data as PassiveNodeData
   const td = target.data as PassiveNodeData
-  if (isInitial(sd) && isValidRootOrbitMemberKind(td.kind) && isOnRootOrbit(td)) {
-    return isRootPowerHandle(sourceHandle)
-  }
-  if (isInitial(td) && isValidRootOrbitMemberKind(sd.kind) && isOnRootOrbit(sd)) {
-    return isRootPowerHandle(targetHandle)
-  }
-  return false
+  if (!isInitial(sd)) return false
+  if (!isValidRootOrbitMemberKind(td.kind) || !isOnRootOrbit(td)) return false
+  return isRootPowerHandle(sourceHandle)
 }
 
 /** Root edge must use either a rim socket (Connect) or the Power Core (Orbit member). */

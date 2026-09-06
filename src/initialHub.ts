@@ -29,8 +29,9 @@ export function parseRootSocketHandle(
 /** Manual power start from Root center → Root Orbit Shard/Notable. */
 export const ROOT_POWER_HANDLE_ID = 'root-power'
 
+/** Power Core is source-only — never treat legacy `root-power-target` as valid at runtime. */
 export function isRootPowerHandle(handleId: string | null | undefined): boolean {
-  return handleId === ROOT_POWER_HANDLE_ID || handleId === 'root-power-target'
+  return handleId === ROOT_POWER_HANDLE_ID
 }
 
 /** Absolute flow position of the Root Power Core (exact hub center). */
