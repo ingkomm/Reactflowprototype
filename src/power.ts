@@ -80,12 +80,10 @@ export function computePoweredNodeIds(
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const powered = new Set<string>()
 
-  let rootId: string | null = null
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
     if (isInitial(data)) {
       powered.add(node.id)
-      rootId = node.id
     }
   }
   // Derived Start Link: Root center → Root Orbit Notable (membership only, not an edge).

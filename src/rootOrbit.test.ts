@@ -29,9 +29,7 @@ import {
   setRootOrbitStartAngle,
   ensureRootOrbitSlotsAssigned,
   rootOrbitAngleDegrees,
-  findNearestFreeRootOrbitSlot,
   buildRootOrbitStartEdges,
-  DEFAULT_ROOT_ORBIT_CAPACITY,
 } from './rootOrbit'
 import { computePoweredNodeIds, computePowerFlowMeta } from './power'
 

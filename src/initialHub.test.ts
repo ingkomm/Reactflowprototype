@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NODE_SIZE, ROOT_HUB_SIZE } from './orbit'
-import {
-  connectPositionForInitialHub,
-  pinGraphSoRootCenteredAtOrigin,
-  rootTopLeftAtOrigin,
-  snapSocketedConnectsToRoot,
-} from './initialHub'
+import { snapSocketedConnectsToRoot } from './initialHub'
 import { INITIAL_NODE_ID } from './types'
-// INITIAL via types if needed
 
 describe('Root hub sizing', () => {
   it('is sized for three internal Notable orbit rings', () => {

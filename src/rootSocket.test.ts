@@ -22,7 +22,6 @@ import {
 } from './initialHub'
 import { buildGraphDocument, documentToFlowState } from './graphDocument'
 import { INITIAL_NODE_ID } from './types'
-import type { PassiveFlowNode } from './components/PassiveNode'
 import { createPassiveData } from './graphFactory'
 import {
   ensureRootFixed,

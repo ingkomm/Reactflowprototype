@@ -78,11 +78,9 @@ import {
   stripRootOrbitWhenMasteryBound,
   buildRootOrbitStartEdges,
   getRootOrbitCapacity,
-  getRootOrbitStartAngle,
   setRootOrbitCapacity,
   setRootOrbitStartAngle,
   occupiedRootOrbitSlots,
-  ensureRootOrbitSlotsAssigned,
 } from './rootOrbit'
 import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { useGraphHistory } from './useGraphHistory'
