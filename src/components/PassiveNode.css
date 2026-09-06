@@ -253,6 +253,11 @@
   height: clamp(28px, 5%, 44px) !important;
   min-width: 0 !important;
   min-height: 0 !important;
+  /* Override centered .passive-node__handle left/top so each socket sits on the rim. */
+  left: var(--root-socket-left) !important;
+  top: var(--root-socket-top) !important;
+  right: auto !important;
+  bottom: auto !important;
   transform: translate(-50%, -50%) !important;
   /* Above Root hit layer so socket connect receives pointer events. */
   z-index: 6;

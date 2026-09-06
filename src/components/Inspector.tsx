@@ -22,6 +22,10 @@ import {
   orbitAngleOptions,
 } from '../orbit'
 import {
+  getRootOrbitCapacity,
+  getRootOrbitStartAngle,
+} from '../rootOrbit'
+import {
   DEFAULT_SYMBOL_ID,
   customSymbolsForKind,
   isDefaultSymbolId,
@@ -61,6 +65,8 @@ type Props = {
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onChangeOrbitCapacity: (masteryId: string, tier: OrbitTier, capacity: number) => void
+  onChangeRootOrbitCapacity: (tier: OrbitTier, capacity: number) => void
+  onChangeRootOrbitStartAngle: (tier: OrbitTier, degrees: number) => void
   onDetachFromMastery: (nodeId: string) => void
   onDeleteNode: (nodeId: string) => void
 }
@@ -85,6 +91,8 @@ export function Inspector({
   onChangeOrbitOrder,
   onChangeOrbitLocked,
   onChangeOrbitCapacity,
+  onChangeRootOrbitCapacity,
+  onChangeRootOrbitStartAngle,
   onDetachFromMastery,
   onDeleteNode,
 }: Props) {
@@ -172,10 +180,45 @@ export function Inspector({
       </label>
 
       {isFixedInitial ? (
-        <p className="inspector__empty">
-          Root Node — 전원 소스. 생성·삭제·종류 변경 불가. 3개 소켓에서 Connect 노드에만
-          링크로 전원을 공급합니다.
-        </p>
+        <>
+          <p className="inspector__empty">
+            Root Node — 전원 소스. 생성·삭제·종류 변경 불가. rim socket → Connect 회로, center →
+            Root Orbit Notable 파생 Start Link.
+          </p>
+          <h3 className="inspector__subtitle">Root Orbit (3단 고정)</h3>
+          {([1, 2, 3] as const).map((tier) => {
+            const capacity = getRootOrbitCapacity(data, tier)
+            const startAngle = getRootOrbitStartAngle(data, tier)
+            return (
+              <div key={`root-orbit-${tier}`} className="field">
+                <span>{tier}단</span>
+                <label className="field field--row">
+                  <span>Capacity</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={capacity}
+                    onChange={(e) =>
+                      onChangeRootOrbitCapacity(tier, Number(e.target.value) || 1)
+                    }
+                  />
+                </label>
+                <label className="field field--row">
+                  <span>Start Angle</span>
+                  <input
+                    type="number"
+                    step={15}
+                    value={startAngle}
+                    onChange={(e) =>
+                      onChangeRootOrbitStartAngle(tier, Number(e.target.value) || 0)
+                    }
+                  />
+                </label>
+              </div>
+            )
+          })}
+        </>
       ) : (
       <label className="field">
         <span>Kind</span>

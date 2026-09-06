@@ -23,8 +23,17 @@ import {
   isClearlyInsideRoot,
   overlapsRootArena,
   ROOT_BOUNDARY_GAP,
+  getRootOrbitCapacity,
+  getRootOrbitStartAngle,
+  setRootOrbitCapacity,
+  setRootOrbitStartAngle,
+  ensureRootOrbitSlotsAssigned,
+  rootOrbitAngleDegrees,
+  findNearestFreeRootOrbitSlot,
+  buildRootOrbitStartEdges,
+  DEFAULT_ROOT_ORBIT_CAPACITY,
 } from './rootOrbit'
-import { computePoweredNodeIds } from './power'
+import { computePoweredNodeIds, computePowerFlowMeta } from './power'
 
 function notable(id: string, x: number, y: number, extra: Record<string, unknown> = {}): PassiveFlowNode {
   return {
@@ -72,22 +81,30 @@ describe('Root orbit', () => {
     expect(laid.find((n) => n.id === 'n1')!.data.rootOrbitTier).toBe(1)
   })
 
-  it('has no global Notable hard cap', () => {
+  it('has no global Notable hard cap (per-tier capacity only)', () => {
     expect(rootOrbitHasGlobalHardCap()).toBe(false)
-    let nodes: PassiveFlowNode[] = [rootNode()]
+    let nodes: PassiveFlowNode[] = [
+      {
+        ...rootNode(),
+        data: setRootOrbitCapacity(rootNode().data as never, 1, 12),
+      },
+    ]
     for (let i = 0; i < 8; i++) {
       nodes.push(notable(`n${i}`, 50, 50))
       nodes = placeNotableOnRootOrbit(nodes, `n${i}`, 1)!
+      expect(nodes).toBeTruthy()
     }
-    expect(nodes.filter((n) => (n.data as { rootOrbitTier?: number }).rootOrbitTier === 1)).toHaveLength(8)
+    expect(
+      nodes.filter((n) => (n.data as { rootOrbitTier?: number }).rootOrbitTier === 1),
+    ).toHaveLength(8)
   })
 
-  it('does not create power from Root orbit membership alone', () => {
+  it('grants power to Root Orbit Notables via derived Start Link (no edge)', () => {
     let nodes = [rootNode(), notable('n1', 0, 0)]
     nodes = placeNotableOnRootOrbit(nodes, 'n1', 1)!
     const powered = computePoweredNodeIds(nodes, [])
     expect(powered.has(INITIAL_NODE_ID)).toBe(true)
-    expect(powered.has('n1')).toBe(false)
+    expect(powered.has('n1')).toBe(true)
   })
 
   it('keeps Root non-draggable at origin', () => {
@@ -245,5 +262,115 @@ describe('Root stacking and boundary eject', () => {
     const cy = m.position.y + NODE_SIZE.mastery / 2
     const need = ROOT_HUB_RADIUS + outer + NODE_SIZE.notable / 2 + ROOT_BOUNDARY_GAP
     expect(Math.hypot(cx, cy)).toBeGreaterThanOrEqual(need - 1e-6)
+  })
+})
+
+describe('Root orbit capacity/slot layout', () => {
+  it('round-trips capacity and start angle on Root data', () => {
+    let root = rootNode()
+    root = {
+      ...root,
+      data: setRootOrbitStartAngle(
+        setRootOrbitCapacity(root.data as never, 2, 8),
+        2,
+        45,
+      ),
+    }
+    expect(getRootOrbitCapacity(root.data as never, 2)).toBe(8)
+    expect(getRootOrbitStartAngle(root.data as never, 2)).toBe(45)
+  })
+
+  it('places members by startAngle + 360 * slot / capacity', () => {
+    let nodes = [
+      {
+        ...rootNode(),
+        data: setRootOrbitStartAngle(
+          setRootOrbitCapacity(rootNode().data as never, 1, 4),
+          1,
+          -90,
+        ),
+      },
+      notable('n0', 0, 0),
+      notable('n1', 0, 0),
+    ]
+    nodes = nodes.map((n) => {
+      if (n.id === 'n0') {
+        return { ...n, data: { ...n.data, rootOrbitTier: 1 as const, rootOrbitSlot: 0 } }
+      }
+      if (n.id === 'n1') {
+        return { ...n, data: { ...n.data, rootOrbitTier: 1 as const, rootOrbitSlot: 1 } }
+      }
+      return n
+    })
+    const laid = layoutRootOrbit(nodes)
+    const a = laid.find((n) => n.id === 'n0')!
+    const b = laid.find((n) => n.id === 'n1')!
+    const size = NODE_SIZE.notable
+    const angle0 = (rootOrbitAngleDegrees(-90, 0, 4) * Math.PI) / 180
+    const angle1 = (rootOrbitAngleDegrees(-90, 1, 4) * Math.PI) / 180
+    const r = ROOT_ORBIT_TIER_RADIUS[1]
+    expect(a.position.x + size / 2).toBeCloseTo(Math.cos(angle0) * r, 5)
+    expect(a.position.y + size / 2).toBeCloseTo(Math.sin(angle0) * r, 5)
+    expect(b.position.x + size / 2).toBeCloseTo(Math.cos(angle1) * r, 5)
+    expect(b.position.y + size / 2).toBeCloseTo(Math.sin(angle1) * r, 5)
+  })
+
+  it('assigns deterministic slots when missing on load', () => {
+    let nodes = [
+      rootNode(),
+      notable('b', 0, 0, { rootOrbitTier: 1 }),
+      notable('a', 0, 0, { rootOrbitTier: 1 }),
+    ]
+    nodes = ensureRootOrbitSlotsAssigned(nodes)
+    const a = nodes.find((n) => n.id === 'a')!
+    const b = nodes.find((n) => n.id === 'b')!
+    expect(a.data.rootOrbitSlot).toBe(0)
+    expect(b.data.rootOrbitSlot).toBe(1)
+  })
+
+  it('fails attach when tier has no free slot then ejects on drag', () => {
+    let root = {
+      ...rootNode(),
+      data: setRootOrbitCapacity(rootNode().data as never, 1, 1),
+    }
+    let nodes = [
+      root,
+      notable('taken', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
+      notable('new', 0, 0),
+    ]
+    nodes = layoutRootOrbit(nodes)
+    const size = NODE_SIZE.notable
+    const drop = { x: -size / 2, y: -size / 2 }
+    const result = placeNotableFromRootOrbitDrag(nodes, 'new', drop)
+    expect(result?.kind).toBe('detached')
+    expect(result!.nodes.find((n) => n.id === 'new')!.data.rootOrbitTier).toBeUndefined()
+  })
+})
+
+describe('Root orbit derived Start Link / power', () => {
+  it('builds ephemeral Start Links that are not document edges', () => {
+    let nodes = [
+      rootNode(),
+      notable('n1', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
+    ]
+    nodes = layoutRootOrbit(nodes)
+    const derived = buildRootOrbitStartEdges(nodes)
+    expect(derived).toHaveLength(1)
+    expect(derived[0]!.id.startsWith('derived-root-orbit-')).toBe(true)
+    expect(derived[0]!.data).toMatchObject({ derivedRootOrbitStart: true })
+  })
+
+  it('powers Root Orbit Notables from Root without a persisted edge', () => {
+    let nodes = [
+      rootNode(),
+      notable('n1', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
+    ]
+    nodes = layoutRootOrbit(nodes)
+    const powered = computePoweredNodeIds(nodes, [])
+    expect(powered.has(INITIAL_NODE_ID)).toBe(true)
+    expect(powered.has('n1')).toBe(true)
+    const meta = computePowerFlowMeta(nodes, [])
+    expect(meta.parent.get('n1')).toBe(INITIAL_NODE_ID)
+    expect(meta.depth.get('n1')).toBe(1)
   })
 })

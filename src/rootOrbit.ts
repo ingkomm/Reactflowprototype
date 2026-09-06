@@ -1,3 +1,4 @@
+import type { Edge } from '@xyflow/react'
 import type { PassiveNodeData } from './types'
 import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
@@ -63,44 +64,209 @@ export function getRootOrbitMembers(
   })
 }
 
+export const DEFAULT_ROOT_ORBIT_CAPACITY = 6
+export const DEFAULT_ROOT_ORBIT_START_ANGLE = -90
+export const MIN_ROOT_ORBIT_CAPACITY = 1
+export const MAX_ROOT_ORBIT_CAPACITY = 24
+
+function rootNodeData(nodes: PassiveFlowNode[]): PassiveNodeData | null {
+  const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
+  return root ? (root.data as PassiveNodeData) : null
+}
+
+export function getRootOrbitCapacity(
+  rootData: PassiveNodeData | null | undefined,
+  tier: RootOrbitTier,
+): number {
+  const raw = rootData?.rootOrbitCapacityByTier?.[tier]
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return Math.max(
+      MIN_ROOT_ORBIT_CAPACITY,
+      Math.min(MAX_ROOT_ORBIT_CAPACITY, Math.floor(raw)),
+    )
+  }
+  return DEFAULT_ROOT_ORBIT_CAPACITY
+}
+
+export function getRootOrbitStartAngle(
+  rootData: PassiveNodeData | null | undefined,
+  tier: RootOrbitTier,
+): number {
+  const raw = rootData?.rootOrbitStartAngleByTier?.[tier]
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  return DEFAULT_ROOT_ORBIT_START_ANGLE
+}
+
+export function setRootOrbitCapacity(
+  data: PassiveNodeData,
+  tier: RootOrbitTier,
+  capacity: number,
+): PassiveNodeData {
+  const next = Math.max(
+    MIN_ROOT_ORBIT_CAPACITY,
+    Math.min(MAX_ROOT_ORBIT_CAPACITY, Math.floor(capacity)),
+  )
+  return {
+    ...data,
+    rootOrbitCapacityByTier: {
+      ...(data.rootOrbitCapacityByTier ?? {}),
+      [tier]: next,
+    },
+  }
+}
+
+export function setRootOrbitStartAngle(
+  data: PassiveNodeData,
+  tier: RootOrbitTier,
+  degrees: number,
+): PassiveNodeData {
+  return {
+    ...data,
+    rootOrbitStartAngleByTier: {
+      ...(data.rootOrbitStartAngleByTier ?? {}),
+      [tier]: degrees,
+    },
+  }
+}
+
+export function normalizeRootOrbitSlot(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  const slot = Math.floor(value)
+  return slot < 0 ? null : slot
+}
+
+export function rootOrbitAngleDegrees(
+  startAngle: number,
+  slot: number,
+  capacity: number,
+): number {
+  const cap = Math.max(1, capacity)
+  return startAngle + (360 * slot) / cap
+}
+
+function angularDistanceDeg(a: number, b: number): number {
+  let d = Math.abs(a - b) % 360
+  if (d > 180) d = 360 - d
+  return d
+}
+
+export function occupiedRootOrbitSlots(
+  nodes: PassiveFlowNode[],
+  tier: RootOrbitTier,
+  exceptId?: string,
+): Set<number> {
+  const occupied = new Set<number>()
+  for (const node of nodes) {
+    if (exceptId && node.id === exceptId) continue
+    const data = node.data as PassiveNodeData
+    if (data.kind !== 'notable') continue
+    if (normalizeRootOrbitTier(data.rootOrbitTier) !== tier) continue
+    const slot = normalizeRootOrbitSlot(data.rootOrbitSlot)
+    if (slot != null) occupied.add(slot)
+  }
+  return occupied
+}
+
+export function findNearestFreeRootOrbitSlot(
+  nodes: PassiveFlowNode[],
+  tier: RootOrbitTier,
+  pointerAngleDeg: number,
+  exceptId?: string,
+): number | null {
+  const rootData = rootNodeData(nodes)
+  const capacity = getRootOrbitCapacity(rootData, tier)
+  const start = getRootOrbitStartAngle(rootData, tier)
+  const occupied = occupiedRootOrbitSlots(nodes, tier, exceptId)
+  let best: number | null = null
+  let bestErr = Infinity
+  for (let slot = 0; slot < capacity; slot++) {
+    if (occupied.has(slot)) continue
+    const angle = rootOrbitAngleDegrees(start, slot, capacity)
+    const err = angularDistanceDeg(pointerAngleDeg, angle)
+    if (err < bestErr) {
+      bestErr = err
+      best = slot
+    }
+  }
+  return best
+}
+
+/** Assign missing rootOrbitSlot values deterministically (stable by id). */
+export function ensureRootOrbitSlotsAssigned(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
+  const rootData = rootNodeData(nodes)
+  let next = nodes
+  for (const tier of [1, 2, 3] as const) {
+    const capacity = getRootOrbitCapacity(rootData, tier)
+    const members = getRootOrbitMembers(next, tier)
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id))
+    const occupied = occupiedRootOrbitSlots(next, tier)
+    for (const member of members) {
+      const data = member.data as PassiveNodeData
+      const existing = normalizeRootOrbitSlot(data.rootOrbitSlot)
+      if (existing != null && existing < capacity) {
+        occupied.add(existing)
+        continue
+      }
+      let slot: number | null = null
+      for (let s = 0; s < capacity; s++) {
+        if (!occupied.has(s)) {
+          slot = s
+          break
+        }
+      }
+      if (slot == null) slot = members.findIndex((m) => m.id === member.id)
+      occupied.add(slot)
+      next = next.map((node) =>
+        node.id === member.id
+          ? {
+              ...node,
+              data: { ...(node.data as PassiveNodeData), rootOrbitSlot: slot! },
+            }
+          : node,
+      )
+    }
+  }
+  return next
+}
+
+
 function topLeftFromCenter(cx: number, cy: number, size: number) {
   return { x: cx - size / 2, y: cy - size / 2 }
 }
 
 /** Strip optional Root-orbit membership field. */
 export function withoutRootOrbitTier(data: PassiveNodeData): PassiveNodeData {
-  if (normalizeRootOrbitTier(data.rootOrbitTier) == null) return data
-  const { rootOrbitTier: _r, ...rest } = data
+  if (normalizeRootOrbitTier(data.rootOrbitTier) == null && data.rootOrbitSlot == null) {
+    return data
+  }
+  const { rootOrbitTier: _r, rootOrbitSlot: _s, ...rest } = data
   return rest
 }
 
 /** Layout all Root-orbit Notables around world origin (Root center). */
 export function layoutRootOrbit(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
-  const byTier: Record<RootOrbitTier, PassiveFlowNode[]> = { 1: [], 2: [], 3: [] }
-  for (const node of nodes) {
-    const data = node.data as PassiveNodeData
-    if (data.kind !== 'notable') continue
-    const tier = normalizeRootOrbitTier(data.rootOrbitTier)
-    if (tier == null) continue
-    byTier[tier].push(node)
-  }
-
+  const rootData = rootNodeData(nodes)
   const positions = new Map<string, { x: number; y: number }>()
   for (const tier of [1, 2, 3] as const) {
-    const members = byTier[tier]
+    const members = getRootOrbitMembers(nodes, tier)
     if (members.length === 0) continue
     const radius = ROOT_ORBIT_TIER_RADIUS[tier]
-    const start = (-90 * Math.PI) / 180
-    members.forEach((member, index) => {
-      const angle = start + (index * 2 * Math.PI) / members.length
+    const capacity = getRootOrbitCapacity(rootData, tier)
+    const start = getRootOrbitStartAngle(rootData, tier)
+    for (const member of members) {
+      const data = member.data as PassiveNodeData
+      const slot = normalizeRootOrbitSlot(data.rootOrbitSlot)
+      if (slot == null) continue
+      const angleDeg = rootOrbitAngleDegrees(start, slot, capacity)
+      const rad = (angleDeg * Math.PI) / 180
       const size = NODE_SIZE.notable
       positions.set(
         member.id,
-        topLeftFromCenter(Math.cos(angle) * radius, Math.sin(angle) * radius, size),
+        topLeftFromCenter(Math.cos(rad) * radius, Math.sin(rad) * radius, size),
       )
-    })
+    }
   }
-
   if (positions.size === 0) return nodes
   return nodes.map((node) => {
     const next = positions.get(node.id)
@@ -152,6 +318,7 @@ export function placeNotableOnRootOrbit(
   nodes: PassiveFlowNode[],
   satelliteId: string,
   preferredTier?: RootOrbitTier,
+  preferredSlot?: number,
 ): PassiveFlowNode[] | null {
   const satellite = nodes.find((n) => n.id === satelliteId)
   if (!satellite) return null
@@ -159,6 +326,16 @@ export function placeNotableOnRootOrbit(
   if (data.kind !== 'notable') return null
 
   const tier = preferredTier ?? 1
+  const size = NODE_SIZE.notable
+  const cx = satellite.position.x + size / 2
+  const cy = satellite.position.y + size / 2
+  const pointerAngle = (Math.atan2(cy, cx) * 180) / Math.PI
+  const slot =
+    preferredSlot != null
+      ? preferredSlot
+      : findNearestFreeRootOrbitSlot(nodes, tier, pointerAngle, satelliteId)
+  if (slot == null) return null
+
   const cleared = clearMasteryOrbitFields(nodes, satelliteId)
   let next = cleared.nodes.map((node) => {
     if (node.id !== satelliteId) return node
@@ -169,6 +346,7 @@ export function placeNotableOnRootOrbit(
         ...d,
         masteryId: null,
         rootOrbitTier: tier,
+        rootOrbitSlot: slot,
       },
     }
   })
@@ -306,11 +484,27 @@ export function placeNotableFromRootOrbitDrag(
   const wasOnRoot = normalizeRootOrbitTier(data.rootOrbitTier) != null
   const clearlyInside = isClearlyInsideRoot(dist, bodyR)
   const overlaps = overlapsRootArena(dist, bodyR)
+  const pointerAngle = (Math.atan2(cy, cx) * 180) / Math.PI
 
-  // Clear inside → attach to nearest Root orbit tier.
+  // Clear inside → nearest tier + nearest free slot (no free slot → eject).
   if (clearlyInside) {
     const tier = inferRootOrbitTier(dist)
-    const next = placeNotableOnRootOrbit(nodes, satelliteId, tier)
+    const slot = findNearestFreeRootOrbitSlot(nodes, tier, pointerAngle, satelliteId)
+    if (slot == null) {
+      const ejected = ejectCenterOutsideRoot({ x: cx, y: cy }, bodyR)
+      const topLeft = { x: ejected.x - size / 2, y: ejected.y - size / 2 }
+      const base = wasOnRoot ? clearRootOrbitMembership(nodes, satelliteId) : nodes
+      return {
+        kind: 'detached',
+        nodes: base.map((node) =>
+          node.id === satelliteId ? { ...node, position: topLeft } : node,
+        ),
+      }
+    }
+    const withPointer = nodes.map((node) =>
+      node.id === satelliteId ? { ...node, position: pointerTopLeft } : node,
+    )
+    const next = placeNotableOnRootOrbit(withPointer, satelliteId, tier, slot)
     return next ? { kind: 'root', nodes: next } : null
   }
 
@@ -378,4 +572,30 @@ export function stripRootOrbitWhenMasteryBound(nodes: PassiveFlowNode[]): Passiv
     return { ...node, data: withoutRootOrbitTier(data) }
   })
   return changed ? layoutRootOrbit(next) : nodes
+}
+
+/** Ephemeral Root→Notable Start Links (not persisted in document edges). */
+export function buildRootOrbitStartEdges(nodes: PassiveFlowNode[]): Edge[] {
+  const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
+  if (!root) return []
+  const edges: Edge[] = []
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (data.kind !== 'notable') continue
+    if (!isOnRootOrbit(data)) continue
+    edges.push({
+      id: `derived-root-orbit-${node.id}`,
+      type: 'center',
+      source: root.id,
+      target: node.id,
+      sourceHandle: null,
+      targetHandle: 'center-target',
+      selectable: false,
+      deletable: false,
+      focusable: false,
+      interactionWidth: 0,
+      data: { derivedRootOrbitStart: true, active: true },
+    })
+  }
+  return edges
 }

@@ -239,8 +239,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           const slot = slotIndex as 0 | 1 | 2 | 3 | 4 | 5
           const pos = initialSocketOffset(slot)
           const handleStyle = {
-            left: `${pos.left}px`,
-            top: `${pos.top}px`,
+            ['--root-socket-left' as string]: `${pos.left}px`,
+            ['--root-socket-top' as string]: `${pos.top}px`,
+            left: pos.left,
+            top: pos.top,
           } as CSSProperties
           return (
             <span key={slot}>

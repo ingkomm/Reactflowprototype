@@ -31,9 +31,12 @@ function endpointForNode(
   node: NonNullable<ReturnType<typeof useInternalNode>>,
   data: PassiveNodeData,
   handleId: string | null | undefined,
+  allowRootCenter = false,
 ): { x: number; y: number } | null {
   if (data.kind === 'initial') {
-    // Root edges must use a rim socket — never fall back to hub center.
+    // Derived Root Orbit Start Links originate at the exact Root center.
+    if (allowRootCenter) return nodeCenter(node)
+    // Root↔Connect edges must use a rim socket — never fall back to hub center.
     return rootSocketFlowPosition(node.internals.positionAbsolute, handleId)
   }
   return nodeCenter(node)
@@ -47,6 +50,7 @@ export function CenterEdge({
   targetHandleId,
   interactionWidth = 28,
   selected,
+  data: edgeData,
 }: EdgeProps) {
   const powered = usePowerSet()
   const flowMeta = usePowerFlowMeta()
@@ -59,9 +63,22 @@ export function CenterEdge({
 
   const sd = sourceNode.data as PassiveNodeData
   const td = targetNode.data as PassiveNodeData
+  const derivedRootStart = Boolean(
+    (edgeData as { derivedRootOrbitStart?: boolean } | undefined)?.derivedRootOrbitStart,
+  )
 
-  const sourcePt = endpointForNode(sourceNode, sd, sourceHandleId)
-  const targetPt = endpointForNode(targetNode, td, targetHandleId)
+  const sourcePt = endpointForNode(
+    sourceNode,
+    sd,
+    sourceHandleId,
+    derivedRootStart && sd.kind === 'initial',
+  )
+  const targetPt = endpointForNode(
+    targetNode,
+    td,
+    targetHandleId,
+    derivedRootStart && td.kind === 'initial',
+  )
   if (!sourcePt || !targetPt) {
     return null
   }

@@ -1,5 +1,6 @@
 import type { Edge } from '@xyflow/react'
 import { parseRootSocketHandle } from './initialHub'
+import { isOnRootOrbit } from './rootOrbit'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { GraphEdgeData, PassiveNodeData, InitialConnectSlot } from './types'
 import { NODE_SIZE } from './orbit'
@@ -79,9 +80,20 @@ export function computePoweredNodeIds(
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const powered = new Set<string>()
 
+  let rootId: string | null = null
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (isInitial(data)) powered.add(node.id)
+    if (isInitial(data)) {
+      powered.add(node.id)
+      rootId = node.id
+    }
+  }
+  // Derived Start Link: Root center → Root Orbit Notable (membership only, not an edge).
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (data.kind === 'notable' && isOnRootOrbit(data)) {
+      powered.add(node.id)
+    }
   }
 
   let changed = true
@@ -164,11 +176,23 @@ export function computePowerFlowMeta(
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const depth = new Map<string, number>()
   const parent = new Map<string, string>()
+  let rootId: string | null = null
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
     if (isInitial(data)) {
       depth.set(node.id, 0)
+      rootId = node.id
+    }
+  }
+  // Derived Start Link meta: parent=Root, depth=1
+  if (rootId) {
+    for (const node of nodes) {
+      const data = node.data as PassiveNodeData
+      if (data.kind === 'notable' && isOnRootOrbit(data)) {
+        depth.set(node.id, 1)
+        parent.set(node.id, rootId)
+      }
     }
   }
 

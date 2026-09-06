@@ -35,7 +35,6 @@ import {
   snapNodeTopLeft,
 } from './grid'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
-import { connectPositionForInitialHub } from './initialHub'
 import {
   DEFAULT_SELECTED_NODE_ID,
 } from './seedGraph'
@@ -77,6 +76,13 @@ import {
   layoutRootOrbit,
   placeNotableFromRootOrbitDrag,
   stripRootOrbitWhenMasteryBound,
+  buildRootOrbitStartEdges,
+  getRootOrbitCapacity,
+  getRootOrbitStartAngle,
+  setRootOrbitCapacity,
+  setRootOrbitStartAngle,
+  occupiedRootOrbitSlots,
+  ensureRootOrbitSlotsAssigned,
 } from './rootOrbit'
 import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { useGraphHistory } from './useGraphHistory'
@@ -518,6 +524,12 @@ export default function App() {
     [nodes, edges],
   )
 
+  // Derived Root→Orbit Start Links for display only (never persisted).
+  const flowEdges = useMemo(
+    () => [...edges, ...buildRootOrbitStartEdges(nodes)],
+    [edges, nodes],
+  )
+
   // Drop invalid links and anything not reachable from Initial.
   // Skip while a satellite drag preview is active so hover alone cannot prune edges.
   useEffect(() => {
@@ -739,20 +751,16 @@ export default function App() {
             )
             return
           }
-          // Reconnect same Connect onto a different Root socket.
-          setNodes((nds) => {
-            const root = nds.find((n) => n.id === rootId)
-            if (!root) return nds
-            return nds.map((node) => {
+          setNodes((nds) =>
+            nds.map((node) => {
               if (node.id !== connectId) return node
               const data = node.data as PassiveNodeData
               return {
                 ...node,
-                position: connectPositionForInitialHub(root.position, rootConnectSlot!),
                 data: { ...data, initialSlot: rootConnectSlot! },
               }
-            })
-          })
+            }),
+          )
           setEdges((eds) => {
             const without = eds.filter((e) => {
               const pair =
@@ -767,20 +775,17 @@ export default function App() {
           })
           return
         }
-        // Fresh Root↔Connect attach: slot + snap + edge.
-        setNodes((nds) => {
-          const root = nds.find((n) => n.id === rootId)
-          if (!root) return nds
-          return nds.map((node) => {
+        // Fresh Root↔Connect attach: record socket only — do not move Connect.
+        setNodes((nds) =>
+          nds.map((node) => {
             if (node.id !== connectId) return node
             const data = node.data as PassiveNodeData
             return {
               ...node,
-              position: connectPositionForInitialHub(root.position, rootConnectSlot!),
               data: { ...data, initialSlot: rootConnectSlot! },
             }
-          })
-        })
+          }),
+        )
       }
 
       setEdges((eds) => {
@@ -1051,6 +1056,47 @@ export default function App() {
       })
     },
     [commit, nodes, setEdges, setNodes, stack],
+  )
+
+  const changeRootOrbitCapacity = useCallback(
+    (tier: OrbitTier, capacity: number) => {
+      const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
+      if (!root) return
+      const rootData = root.data as PassiveNodeData
+      const occupied = occupiedRootOrbitSlots(nodes, tier)
+      const minCap = occupied.size === 0 ? 1 : Math.max(...occupied) + 1
+      const nextCap = Math.max(minCap, Math.floor(capacity))
+      if (nextCap === getRootOrbitCapacity(rootData, tier)) return
+      commit()
+      setNodes((nds) => {
+        const next = nds.map((node) => {
+          if (node.id !== INITIAL_NODE_ID) return node
+          return {
+            ...node,
+            data: setRootOrbitCapacity(node.data as PassiveNodeData, tier, nextCap),
+          }
+        })
+        return stack(layoutRootOrbit(next))
+      })
+    },
+    [commit, nodes, setNodes, stack],
+  )
+
+  const changeRootOrbitStartAngle = useCallback(
+    (tier: OrbitTier, degrees: number) => {
+      commit()
+      setNodes((nds) => {
+        const next = nds.map((node) => {
+          if (node.id !== INITIAL_NODE_ID) return node
+          return {
+            ...node,
+            data: setRootOrbitStartAngle(node.data as PassiveNodeData, tier, degrees),
+          }
+        })
+        return stack(layoutRootOrbit(next))
+      })
+    },
+    [commit, setNodes, stack],
   )
 
   const changeConnectEnabled = useCallback(
@@ -1917,7 +1963,7 @@ export default function App() {
               inspectorWidth={inspectorWidth}
               onOpenSymbolEditor={setSymbolEditorKind}
               flowNodes={flowNodes}
-              edges={edges}
+              edges={flowEdges}
               poweredIds={poweredIds}
               powerFlowMeta={powerFlowMeta}
               voidHighlightEnabled={voidHighlightEnabled}
@@ -1963,6 +2009,8 @@ export default function App() {
               onChangeOrbitOrder={changeOrbitOrder}
               onChangeOrbitLocked={changeOrbitLocked}
               onChangeOrbitCapacity={changeOrbitCapacity}
+              onChangeRootOrbitCapacity={changeRootOrbitCapacity}
+              onChangeRootOrbitStartAngle={changeRootOrbitStartAngle}
               onDetachFromMastery={detachFromMastery}
               onDeleteNode={deleteNode}
             />

@@ -108,6 +108,8 @@ export type TreeWorkspaceProps = {
   onChangeOrbitOrder: (masteryId: string, satelliteId: string, order1Based: number) => void
   onChangeOrbitLocked: (masteryId: string, locked: boolean) => void
   onChangeOrbitCapacity: (masteryId: string, tier: OrbitTier, capacity: number) => void
+  onChangeRootOrbitCapacity: (tier: OrbitTier, capacity: number) => void
+  onChangeRootOrbitStartAngle: (tier: OrbitTier, degrees: number) => void
   onDetachFromMastery: (nodeId: string) => void
   onDeleteNode: (nodeId: string) => void
 }
@@ -163,6 +165,8 @@ export function TreeWorkspace({
   onChangeOrbitOrder,
   onChangeOrbitLocked,
   onChangeOrbitCapacity,
+  onChangeRootOrbitCapacity,
+  onChangeRootOrbitStartAngle,
   onDetachFromMastery,
   onDeleteNode,
 }: TreeWorkspaceProps) {
@@ -330,6 +334,8 @@ export function TreeWorkspace({
           onChangeOrbitOrder={onChangeOrbitOrder}
           onChangeOrbitLocked={onChangeOrbitLocked}
           onChangeOrbitCapacity={onChangeOrbitCapacity}
+          onChangeRootOrbitCapacity={onChangeRootOrbitCapacity}
+          onChangeRootOrbitStartAngle={onChangeRootOrbitStartAngle}
           onDetachFromMastery={onDetachFromMastery}
           onDeleteNode={onDeleteNode}
         />

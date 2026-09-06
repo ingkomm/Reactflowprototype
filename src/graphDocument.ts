@@ -33,7 +33,11 @@ import {
 import { validateGraphIntegrity } from './graphIntegrity'
 import { pinGraphSoRootCenteredAtOrigin, snapSocketedConnectsToRoot } from './initialHub'
 import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags } from './orbit'
-import { ensureRootFixed, layoutRootOrbit } from './rootOrbit'
+import {
+  ensureRootFixed,
+  ensureRootOrbitSlotsAssigned,
+  layoutRootOrbit,
+} from './rootOrbit'
 
 export type SerializedFlowNode = {
   id: string
@@ -260,6 +264,19 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
     (rootOrbitTier === 1 || rootOrbitTier === 2 || rootOrbitTier === 3)
   ) {
     data.rootOrbitTier = rootOrbitTier
+  }
+  const rootOrbitSlot = optionalNumber('rootOrbitSlot')
+  if (resolvedKind === 'notable' && rootOrbitSlot != null && rootOrbitSlot >= 0) {
+    data.rootOrbitSlot = Math.floor(rootOrbitSlot)
+  }
+  if (resolvedKind === 'initial') {
+    if (isRecord(value.rootOrbitCapacityByTier)) {
+      data.rootOrbitCapacityByTier = value.rootOrbitCapacityByTier as PassiveNodeData['rootOrbitCapacityByTier']
+    }
+    if (isRecord(value.rootOrbitStartAngleByTier)) {
+      data.rootOrbitStartAngleByTier =
+        value.rootOrbitStartAngleByTier as PassiveNodeData['rootOrbitStartAngleByTier']
+    }
   }
   if (value.customIconId === null || typeof value.customIconId === 'string') {
     // Legacy dot icon — ignored.
@@ -506,6 +523,7 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
   nodes = pinGraphSoRootCenteredAtOrigin(nodes)
   nodes = snapSocketedConnectsToRoot(nodes)
   nodes = ensureRootFixed(nodes)
+  nodes = ensureRootOrbitSlotsAssigned(nodes)
   nodes = layoutRootOrbit(nodes)
 
   for (const node of nodes) {

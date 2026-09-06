@@ -166,6 +166,21 @@ export type PassiveNodeData = {
    * Absent = not on Root Orbit. Not Mastery membership; not a power/edge link.
    */
   rootOrbitTier?: 1 | 2 | 3
+  /**
+   * Notable only: fixed slot index on Root orbit tier (0-based).
+   * Position = startAngle + 360 * slot / capacity. Not auto-repacked.
+   */
+  rootOrbitSlot?: number
+  /**
+   * Root only: per-tier orbit capacity (no global hard cap).
+   * Defaults to 6 when absent.
+   */
+  rootOrbitCapacityByTier?: Partial<Record<1 | 2 | 3, number>>
+  /**
+   * Root only: per-tier start angle in degrees (0 = right, -90 = top).
+   * Defaults to -90 when absent.
+   */
+  rootOrbitStartAngleByTier?: Partial<Record<1 | 2 | 3, number>>
   /** Connect only: circuit breaker — when false, blocks power from Root. */
   connectEnabled?: boolean
   /** Optional user SVG symbol id (overrides library icon when set). */

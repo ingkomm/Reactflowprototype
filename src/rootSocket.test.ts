@@ -1,3 +1,4 @@
+import { NODE_SIZE } from './orbit'
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
@@ -17,7 +18,9 @@ import {
   rootSocketFlowPosition,
   parseRootSocketHandle,
   rootSocketSourceHandle,
+  initialSocketOffset,
 } from './initialHub'
+// patched below
 import { buildGraphDocument, documentToFlowState } from './graphDocument'
 import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
@@ -53,11 +56,11 @@ describe('default Connect slots on 6-socket Root', () => {
 })
 
 describe('Root socket connect snap + reload', () => {
-  it('assigns initialSlot and snaps Connect via connectPositionForInitialHub', () => {
+  it('records initialSlot without moving Connect position', () => {
     const root = buildEmptyNodes().find((n) => n.id === INITIAL_NODE_ID)!
-    const connect: PassiveFlowNode = {
+    const connect = {
       id: 'connect-free',
-      type: 'passive',
+      type: 'passive' as const,
       position: { x: 500, y: 400 },
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
@@ -65,17 +68,21 @@ describe('Root socket connect snap + reload', () => {
       }),
     }
     const slot = 1 as const
-    const snapped: PassiveFlowNode = {
+    const linked = {
       ...connect,
-      position: connectPositionForInitialHub(root.position, slot),
       data: { ...connect.data, initialSlot: slot },
     }
-    expect(snapped.data.initialSlot).toBe(1)
-    expect(snapped.position).toEqual(connectPositionForInitialHub(root.position, 1))
+    expect(linked.data.initialSlot).toBe(1)
+    expect(linked.position).toEqual({ x: 500, y: 400 })
+    // rim helper still exists for optional layout, but is not applied on connect/load
+    expect(connectPositionForInitialHub(root.position, 1)).not.toEqual(linked.position)
   })
 
-  it('documentToFlowState reseats Connect on the same socket geometry', () => {
+  it('documentToFlowState keeps Connect positions (initialSlot does not snap)', () => {
     const nodes = buildEmptyNodes()
+    const before = nodes
+      .filter((n) => n.data.kind === 'connect')
+      .map((n) => ({ id: n.id, position: { ...n.position }, slot: n.data.initialSlot }))
     const edges = buildEmptyEdges()
     const doc = buildGraphDocument({
       nodes,
@@ -84,12 +91,10 @@ describe('Root socket connect snap + reload', () => {
       settings: {},
     })
     const restored = documentToFlowState(doc)
-    for (const slot of [0, 2, 4] as const) {
-      const connect = restored.nodes.find(
-        (n) => n.data.kind === 'connect' && n.data.initialSlot === slot,
-      )!
-      const root = restored.nodes.find((n) => n.id === INITIAL_NODE_ID)!
-      expect(connect.position).toEqual(connectPositionForInitialHub(root.position, slot))
+    for (const prev of before) {
+      const connect = restored.nodes.find((n) => n.id === prev.id)!
+      expect(connect.data.initialSlot).toBe(prev.slot)
+      expect(connect.position).toEqual(prev.position)
     }
   })
 
@@ -163,5 +168,26 @@ describe('Root socket endpoints', () => {
     expect(
       isValidRootConnectHandles(root, connect, rootSocketSourceHandle(2), 'center-target'),
     ).toBe(true)
+  })
+})
+
+describe('Root rim socket handle geometry', () => {
+  it('initialSocketOffset places six distinct rim handles (not hub center)', () => {
+    const points = Array.from({ length: 6 }, (_, slot) =>
+      initialSocketOffset(slot as 0 | 1 | 2 | 3 | 4 | 5),
+    )
+    const keys = new Set(points.map((p) => `${p.left.toFixed(3)},${p.top.toFixed(3)}`))
+    expect(keys.size).toBe(6)
+    const cx = NODE_SIZE.initial / 2
+    const cy = NODE_SIZE.initial / 2
+    for (const p of points) {
+      expect(Math.hypot(p.left - cx, p.top - cy)).toBeGreaterThan(NODE_SIZE.initial / 2 - 6)
+    }
+  })
+
+  it('root-socket CSS overrides centered handle left/top via variables', () => {
+    const css = readFileSync('src/components/PassiveNode.css', 'utf8')
+    expect(css).toMatch(/\.passive-node__handle--root-socket[\s\S]*?--root-socket-left/)
+    expect(css).toMatch(/\.passive-node__handle--root-socket[\s\S]*?--root-socket-top/)
   })
 })
