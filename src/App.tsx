@@ -35,6 +35,7 @@ import {
   snapNodeTopLeft,
 } from './grid'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
+import { connectPositionForInitialHub } from './initialHub'
 import {
   DEFAULT_SELECTED_NODE_ID,
 } from './seedGraph'
@@ -686,13 +687,23 @@ export default function App() {
         rootId = sd.kind === 'initial' ? source.id : target.id
         connectId = sd.kind === 'connect' ? source.id : target.id
         if (isRootConnectSlotTaken(nodes, rootConnectSlot, connectId)) return
-        setNodes((nds) =>
-          nds.map((node) => {
-            if (node.id !== connectId) return node
-            const data = node.data as PassiveNodeData
-            return { ...node, data: { ...data, initialSlot: rootConnectSlot! } }
-          }),
-        )
+        const existingRootLink = findLinkEdge(edges, source.id, target.id, 'center')
+        // New connection only: assign slot and snap Connect onto the socket.
+        if (!existingRootLink) {
+          setNodes((nds) => {
+            const root = nds.find((n) => n.id === rootId)
+            if (!root) return nds
+            return nds.map((node) => {
+              if (node.id !== connectId) return node
+              const data = node.data as PassiveNodeData
+              return {
+                ...node,
+                position: connectPositionForInitialHub(root.position, rootConnectSlot!),
+                data: { ...data, initialSlot: rootConnectSlot! },
+              }
+            })
+          })
+        }
       }
 
       setEdges((eds) => {
@@ -716,7 +727,7 @@ export default function App() {
         return sanitizeEdges(nodes, next)
       })
     },
-    [attachSatellite, commit, nodes, setEdges, setNodes],
+    [attachSatellite, commit, edges, nodes, setEdges, setNodes],
   )
 
   const detachFromMastery = useCallback(

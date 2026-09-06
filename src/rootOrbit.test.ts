@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { INITIAL_NODE_ID } from './types'
-import { ROOT_HUB_SIZE, layoutMasteryOrbit } from './orbit'
+import { ROOT_HUB_SIZE, ROOT_ORBIT_TIER_RADIUS, layoutMasteryOrbit } from './orbit'
 import { INITIAL_CONNECT_SLOT_COUNT } from './initialHub'
 import {
   ensureRootFixed,
@@ -11,6 +11,7 @@ import {
   placeNotableOnRootOrbit,
   rootOrbitHasGlobalHardCap,
   rootOrbitRingPercent,
+  ROOT_HUB_RADIUS,
 } from './rootOrbit'
 import { computePoweredNodeIds } from './power'
 
@@ -95,10 +96,16 @@ describe('Root orbit', () => {
     expect(INITIAL_CONNECT_SLOT_COUNT).toBe(6)
   })
 
-  it('draws three internal ring percents inside the hub', () => {
+  it('draws three internal ring percents matching diameter/hub ratio', () => {
     expect(rootOrbitRingPercent(1)).toBeLessThan(rootOrbitRingPercent(2))
     expect(rootOrbitRingPercent(2)).toBeLessThan(rootOrbitRingPercent(3))
-    expect(rootOrbitRingPercent(3)).toBeLessThan(50)
+    expect(rootOrbitRingPercent(3)).toBeLessThan(100)
+    for (const tier of [1, 2, 3] as const) {
+      expect(rootOrbitRingPercent(tier)).toBeCloseTo(
+        (ROOT_ORBIT_TIER_RADIUS[tier] / ROOT_HUB_RADIUS) * 100,
+        5,
+      )
+    }
   })
 
   it('detaches from Root orbit without deleting the Notable', () => {

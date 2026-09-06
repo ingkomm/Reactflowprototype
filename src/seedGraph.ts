@@ -72,22 +72,22 @@ function buildSeedNodes(): PassiveFlowNode[] {
     {
       id: CONNECT_BR_ID,
       type: 'passive',
-      position: connectPositionForInitialHub(INITIAL_POSITION, 1),
+      position: connectPositionForInitialHub(INITIAL_POSITION, 2),
       dragHandle: '.node-drag-handle',
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
-        initialSlot: 1,
+        initialSlot: 2,
         symbolId: 'default',
       }),
     },
     {
       id: CONNECT_BL_ID,
       type: 'passive',
-      position: connectPositionForInitialHub(INITIAL_POSITION, 2),
+      position: connectPositionForInitialHub(INITIAL_POSITION, 4),
       dragHandle: '.node-drag-handle',
       data: createPassiveData('connect', 'Connect', {
         connectEnabled: true,
-        initialSlot: 2,
+        initialSlot: 4,
         symbolId: 'default',
       }),
     },
@@ -187,8 +187,8 @@ export const SEED_NODES = buildSeedNodes()
 /** Root hub → 3 Connect sockets; dance tree branches from top Connect. */
 export const SEED_EDGES: Edge[] = [
   rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_TOP_ID, 0),
-  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID, 1),
-  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID, 2),
+  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BR_ID, 2),
+  rootSocketLinkEdge(INITIAL_NODE_ID, CONNECT_BL_ID, 4),
   passiveLinkEdge(CONNECT_TOP_ID, 'shard-basic'),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[1] ?? [], DANCE_MASTERY_ID),
   ...orbitAdjacentEdges(danceOrbitOrderByTier[2] ?? [], DANCE_MASTERY_ID),

@@ -6,6 +6,8 @@ import { withMasteryDragFlags } from './orbit'
 import { createPassiveData, rootSocketLinkEdge } from './graphFactory'
 
 export const EMPTY_CONNECT_IDS = ['connect-top', 'connect-br', 'connect-bl'] as const
+/** Default Connect sockets keep 120° spacing on the 6-slot rim: top / BR / BL. */
+export const EMPTY_CONNECT_SLOTS = [0, 2, 4] as const
 
 const INITIAL_POSITION = rootTopLeftAtOrigin()
 
@@ -19,25 +21,28 @@ export function buildEmptyNodes(): PassiveFlowNode[] {
       draggable: false,
       data: createPassiveData('initial', 'Root', { stages: [], symbolId: 'default' }),
     },
-    ...EMPTY_CONNECT_IDS.map((id, slot) => ({
-      id,
-      type: 'passive' as const,
-      position: connectPositionForInitialHub(INITIAL_POSITION, slot as 0 | 1 | 2),
-      dragHandle: '.node-drag-handle',
-      draggable: true,
-      data: createPassiveData('connect', 'Connect', {
-        connectEnabled: true,
-        initialSlot: slot as 0 | 1 | 2,
-        symbolId: 'default',
-      }),
-    })),
+    ...EMPTY_CONNECT_IDS.map((id, index) => {
+      const slot = EMPTY_CONNECT_SLOTS[index]!
+      return {
+        id,
+        type: 'passive' as const,
+        position: connectPositionForInitialHub(INITIAL_POSITION, slot),
+        dragHandle: '.node-drag-handle',
+        draggable: true,
+        data: createPassiveData('connect', 'Connect', {
+          connectEnabled: true,
+          initialSlot: slot,
+          symbolId: 'default',
+        }),
+      }
+    }),
   ]
   return withMasteryDragFlags(nodes)
 }
 
 export function buildEmptyEdges(): Edge[] {
-  return EMPTY_CONNECT_IDS.map((connectId, slot) =>
-    rootSocketLinkEdge(INITIAL_NODE_ID, connectId, slot as 0 | 1 | 2),
+  return EMPTY_CONNECT_IDS.map((connectId, index) =>
+    rootSocketLinkEdge(INITIAL_NODE_ID, connectId, EMPTY_CONNECT_SLOTS[index]!),
   )
 }
 

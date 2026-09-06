@@ -255,9 +255,9 @@ export function ensureRootFixed(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
   })
 }
 
-/** CSS percent radius for drawing an internal orbit ring inside the Root hub. */
+/** CSS percent diameter for an internal orbit ring (tier radius / hub radius × 100). */
 export function rootOrbitRingPercent(tier: RootOrbitTier): number {
-  return (ROOT_ORBIT_TIER_RADIUS[tier] / ROOT_HUB_RADIUS) * 50
+  return (ROOT_ORBIT_TIER_RADIUS[tier] / ROOT_HUB_RADIUS) * 100
 }
 
 export function isValidRootOrbitMemberKind(kind: string): boolean {
