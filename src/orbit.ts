@@ -116,8 +116,21 @@ export function orbitTierRadius(_tierCount: OrbitTierCount, tier: OrbitTier): nu
   return DEFAULT_ORBIT_RADIUS + (tier - 1) * ORBIT_TIER_STEP
 }
 
-/** Root hub diameter — roughly Mastery orbit tier-1 ring diameter. */
-export const ROOT_HUB_SIZE = orbitTierRadius(1, 1) * 2
+/**
+ * Root hub arena — large enough for three internal Notable orbit rings.
+ * Sized from base Notable body (not dynamic training bands).
+ */
+const ROOT_ORBIT_BODY = NODE_SIZE.notable
+const ROOT_ORBIT_RING_GAP = ROOT_ORBIT_BODY + 28
+export const ROOT_ORBIT_TIER_RADIUS = {
+  1: Math.round(ROOT_ORBIT_BODY * 1.55),
+  2: Math.round(ROOT_ORBIT_BODY * 1.55 + ROOT_ORBIT_RING_GAP),
+  3: Math.round(ROOT_ORBIT_BODY * 1.55 + ROOT_ORBIT_RING_GAP * 2),
+} as const
+/** Pad from outermost Root-orbit ring center to Root circumference. */
+export const ROOT_HUB_RIM_PAD = Math.round(ROOT_ORBIT_BODY * 0.65)
+/** Root hub diameter (outer circular arena). */
+export const ROOT_HUB_SIZE = (ROOT_ORBIT_TIER_RADIUS[3] + ROOT_HUB_RIM_PAD) * 2
 
 NODE_SIZE.initial = ROOT_HUB_SIZE
 

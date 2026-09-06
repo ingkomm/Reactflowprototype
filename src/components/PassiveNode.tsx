@@ -39,6 +39,7 @@ import {
 } from '../orbitGeometry'
 import { TrainingBands } from './TrainingBands'
 import { INITIAL_CONNECT_SLOT_COUNT, initialSocketOffset, rootSocketSourceHandle, rootSocketTargetHandle } from '../initialHub'
+import { rootOrbitRingPercent } from '../rootOrbit'
 import { useVoidHighlight } from '../voidHighlightContext.shared'
 import './PassiveNode.css'
 
@@ -235,7 +236,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
 
       {isInitialNode &&
         Array.from({ length: INITIAL_CONNECT_SLOT_COUNT }, (_, slotIndex) => {
-          const slot = slotIndex as 0 | 1 | 2
+          const slot = slotIndex as 0 | 1 | 2 | 3 | 4 | 5
           const pos = initialSocketOffset(slot)
           const handleStyle = {
             left: `${pos.left}px`,
@@ -269,7 +270,21 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
         })}
 
       <div className="passive-node__ring" aria-hidden>
-        {isInitialNode && <div className="passive-node__initial-arena" />}
+        {isInitialNode && (
+          <div className="passive-node__initial-arena">
+            {([1, 2, 3] as const).map((tier) => (
+              <span
+                key={tier}
+                className="passive-node__initial-orbit-ring"
+                style={{
+                  width: `${rootOrbitRingPercent(tier)}%`,
+                  height: `${rootOrbitRingPercent(tier)}%`,
+                }}
+                aria-hidden
+              />
+            ))}
+          </div>
+        )}
         {!isStealth && !isConnectNode && !isInitialNode && (
           customSymbol ? (
             <CustomSymbolGlyph

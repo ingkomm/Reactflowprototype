@@ -95,3 +95,17 @@ export function prunePinnedViewers(
   const next = entries.filter((entry) => alive.has(entry.nodeId))
   return next.length === entries.length ? entries : next
 }
+
+/**
+ * Close pinned viewers whose node kind no longer matches the viewer kind.
+ * Shard↔Notable are not auto-converted.
+ */
+export function prunePinnedViewersByKindMismatch(
+  entries: PinnedViewerEntry[],
+  nodeKinds: Iterable<{ id: string; kind: string }>,
+): PinnedViewerEntry[] {
+  const kindById = new Map<string, string>()
+  for (const node of nodeKinds) kindById.set(node.id, node.kind)
+  const next = entries.filter((entry) => kindById.get(entry.nodeId) === entry.kind)
+  return next.length === entries.length ? entries : next
+}

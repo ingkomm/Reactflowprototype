@@ -1,4 +1,4 @@
-export type InitialConnectSlot = 0 | 1 | 2
+export type InitialConnectSlot = 0 | 1 | 2 | 3 | 4 | 5
 
 export type PassiveKind =
   | 'initial'
@@ -159,8 +159,13 @@ export type PassiveNodeData = {
   orbitSlot?: number
   /** Void only: when true, skipped for orbit adjacency (bridges neighbors on the ring). */
   voidPassing?: boolean
-  /** Connect only: socket index on the Root hub (0=top, 1=bottom-right, 2=bottom-left). */
+  /** Connect only: socket index on the Root hub (0–5, 60° spacing from top). */
   initialSlot?: InitialConnectSlot
+  /**
+   * Notable only: spatial tier on the Root internal orbit (1 = innermost).
+   * Absent = not on Root Orbit. Not Mastery membership; not a power/edge link.
+   */
+  rootOrbitTier?: 1 | 2 | 3
   /** Connect only: circuit breaker — when false, blocks power from Root. */
   connectEnabled?: boolean
   /** Optional user SVG symbol id (overrides library icon when set). */

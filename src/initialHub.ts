@@ -2,11 +2,11 @@ import type { InitialConnectSlot } from './types'
 import { INITIAL_NODE_ID } from './types'
 import { NODE_SIZE } from './orbit'
 
-export const INITIAL_CONNECT_SLOT_COUNT = 3
+export const INITIAL_CONNECT_SLOT_COUNT = 6
 
-/** Degrees from center (0° = right, -90° = top). */
+/** Degrees from center (0° = right, -90° = top). Six sockets at 60° spacing. */
 export function initialConnectSlotAngle(slot: InitialConnectSlot): number {
-  return -90 + slot * 120
+  return -90 + slot * 60
 }
 
 export function rootSocketSourceHandle(slot: InitialConnectSlot): string {
@@ -21,7 +21,7 @@ export function parseRootSocketHandle(
   handleId: string | null | undefined,
 ): InitialConnectSlot | null {
   if (!handleId) return null
-  const match = /^socket-([0-2])(?:-target)?$/.exec(handleId)
+  const match = /^socket-([0-5])(?:-target)?$/.exec(handleId)
   if (!match) return null
   return Number(match[1]) as InitialConnectSlot
 }
@@ -104,7 +104,7 @@ export function snapSocketedConnectsToRoot<
   T extends {
     id: string
     position: { x: number; y: number }
-    data?: { kind?: string; initialSlot?: 0 | 1 | 2 }
+    data?: { kind?: string; initialSlot?: InitialConnectSlot }
   },
 >(nodes: T[]): T[] {
   const root = nodes.find((node) => node.id === INITIAL_NODE_ID)
@@ -112,10 +112,10 @@ export function snapSocketedConnectsToRoot<
   return nodes.map((node) => {
     const slot = node.data?.initialSlot
     if (node.data?.kind !== 'connect' || slot == null) return node
-    if (slot < 0 || slot > 2) return node
+    if (slot < 0 || slot > 5) return node
     return {
       ...node,
-      position: connectPositionForInitialHub(root.position, slot as 0 | 1 | 2),
+      position: connectPositionForInitialHub(root.position, slot),
     }
   })
 }

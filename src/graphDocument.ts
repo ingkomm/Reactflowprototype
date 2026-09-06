@@ -33,6 +33,7 @@ import {
 import { validateGraphIntegrity } from './graphIntegrity'
 import { pinGraphSoRootCenteredAtOrigin, snapSocketedConnectsToRoot } from './initialHub'
 import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags } from './orbit'
+import { ensureRootFixed, layoutRootOrbit } from './rootOrbit'
 
 export type SerializedFlowNode = {
   id: string
@@ -251,7 +252,15 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   if (optionalBool('voidPassing') != null) data.voidPassing = optionalBool('voidPassing')
   if (optionalBool('connectEnabled') != null) data.connectEnabled = optionalBool('connectEnabled')
   const slot = optionalNumber('initialSlot')
-  if (slot != null && slot >= 0 && slot <= 2) data.initialSlot = Math.floor(slot) as 0 | 1 | 2
+  if (slot != null && slot >= 0 && slot <= 5) data.initialSlot = Math.floor(slot) as PassiveNodeData['initialSlot']
+  const rootOrbitTier = optionalNumber('rootOrbitTier')
+  if (
+    resolvedKind === 'notable' &&
+    rootOrbitTier != null &&
+    (rootOrbitTier === 1 || rootOrbitTier === 2 || rootOrbitTier === 3)
+  ) {
+    data.rootOrbitTier = rootOrbitTier
+  }
   if (value.customIconId === null || typeof value.customIconId === 'string') {
     // Legacy dot icon — ignored.
   }
@@ -496,6 +505,8 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
 
   nodes = pinGraphSoRootCenteredAtOrigin(nodes)
   nodes = snapSocketedConnectsToRoot(nodes)
+  nodes = ensureRootFixed(nodes)
+  nodes = layoutRootOrbit(nodes)
 
   for (const node of nodes) {
     if (isMasteryKind((node.data as PassiveNodeData).kind)) {

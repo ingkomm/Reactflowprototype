@@ -12,6 +12,7 @@ import {
   nearestPointOnRectEdge,
   pinOrFocusViewer,
   prunePinnedViewers,
+  prunePinnedViewersByKindMismatch,
   type PinnedViewerEntry,
 } from './pinnedViewer'
 import { ShardMarkdownPreview } from './components/ShardMarkdownPreview'
@@ -185,5 +186,17 @@ describe('transient vs pinned viewer chrome', () => {
     expect(pos.x).toBeTypeOf('number')
     expect(pos.y).toBeTypeOf('number')
     view.unmount()
+  })
+})
+
+describe('pinned viewer kind mismatch', () => {
+  it('closes only the mismatched pinned viewer (no shard↔notable auto-convert)', () => {
+    let entries = pinOrFocusViewer([], { nodeId: 'a', kind: 'shard', x: 0, y: 0 }, 1)
+    entries = pinOrFocusViewer(entries, { nodeId: 'b', kind: 'notable', x: 1, y: 1 }, 2)
+    entries = prunePinnedViewersByKindMismatch(entries, [
+      { id: 'a', kind: 'notable' },
+      { id: 'b', kind: 'notable' },
+    ])
+    expect(entries.map((e) => e.nodeId)).toEqual(['b'])
   })
 })

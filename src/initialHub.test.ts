@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NODE_SIZE, ROOT_HUB_SIZE, orbitTierRadius } from './orbit'
+import { NODE_SIZE, ROOT_HUB_SIZE } from './orbit'
 import {
   connectPositionForInitialHub,
   pinGraphSoRootCenteredAtOrigin,
@@ -9,9 +9,9 @@ import {
 import { INITIAL_NODE_ID } from './types'
 
 describe('Root hub sizing', () => {
-  it('matches Mastery orbit tier-1 diameter', () => {
-    expect(ROOT_HUB_SIZE).toBe(orbitTierRadius(1, 1) * 2)
+  it('is sized for three internal Notable orbit rings', () => {
     expect(NODE_SIZE.initial).toBe(ROOT_HUB_SIZE)
+    expect(ROOT_HUB_SIZE).toBeGreaterThan(NODE_SIZE.notable * 6)
   })
 })
 

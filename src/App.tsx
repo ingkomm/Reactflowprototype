@@ -70,6 +70,12 @@ import {
   type SatelliteDragOrigin,
   withMasteryDragFlags,
 } from './orbit'
+import {
+  ensureRootFixed,
+  layoutRootOrbit,
+  placeNotableFromRootOrbitDrag,
+  stripRootOrbitWhenMasteryBound,
+} from './rootOrbit'
 import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
 import { useGraphHistory } from './useGraphHistory'
 import { FirstRunDialog } from './components/FirstRunDialog'
@@ -83,6 +89,7 @@ import {
   findPinnedViewer,
   pinOrFocusViewer,
   prunePinnedViewers,
+  prunePinnedViewersByKindMismatch,
   type PinnedViewerEntry,
   type PinnedViewerKind,
   type ViewerPanelBounds,
@@ -1105,6 +1112,22 @@ export default function App() {
           return linkKind === 'center'
         }),
       )
+
+      const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
+      setPinnedViewers((cur) => {
+        const next = prunePinnedViewersByKindMismatch(cur, [{ id: nodeId, kind: resolvedKind }])
+        if (next !== cur) {
+          const closed = new Set(cur.map((e) => e.nodeId).filter((id) => !next.some((e) => e.nodeId === id)))
+          if (closed.size) {
+            setPinnedViewerBounds((bounds) => {
+              const copy = { ...bounds }
+              for (const id of closed) delete copy[id]
+              return copy
+            })
+          }
+        }
+        return next
+      })
     },
     [commit, nodes, setEdges, setNodes, customSymbols, stack],
   )
@@ -1193,10 +1216,6 @@ export default function App() {
     })
     downloadGraphDocument(document)
     setImportError(null)
-      setContextMenu(null)
-      setPinnedViewers([])
-      setPinnedViewerBounds({})
-      setPinnedVideoNodeIds([])
   }, [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled])
 
   const handleImportJson = useCallback(
@@ -1229,6 +1248,10 @@ export default function App() {
       setSelectedId(imported.nodes[0]?.id ?? null)
       setImportError(null)
       setStorageCorrupt(false)
+      setContextMenu(null)
+      setPinnedViewers([])
+      setPinnedViewerBounds({})
+      setPinnedVideoNodeIds([])
     },
     [
       customSymbols,
@@ -1478,6 +1501,32 @@ export default function App() {
         : { kind: 'external', position: session.originPosition }
 
       // Preview only — committed nodes/edges stay until drop.
+      if (data.kind === 'notable') {
+        const rootResult = placeNotableFromRootOrbitDrag(
+          session.snapshotNodes,
+          node.id,
+          node.position,
+        )
+        if (rootResult?.kind === 'root') {
+          setDragPreviewNodes(stack(ensureRootFixed(rootResult.nodes)))
+          return
+        }
+        const baseNodes =
+          rootResult?.kind === 'detached' ? rootResult.nodes : session.snapshotNodes
+        const dragOrigin: SatelliteDragOrigin =
+          rootResult?.kind === 'detached'
+            ? { kind: 'external', position: session.originPosition }
+            : origin
+        setDragPreviewNodes(
+          stack(
+            stripRootOrbitWhenMasteryBound(
+              placeSatelliteFromDrag(baseNodes, node.id, node.position, dragOrigin),
+            ),
+          ),
+        )
+        return
+      }
+
       setDragPreviewNodes(
         stack(
           placeSatelliteFromDrag(
@@ -1561,6 +1610,34 @@ export default function App() {
         if (!attach) {
           finalPosition = snapNodeTopLeft(node.position, gridSnapScale)
         }
+      }
+
+      if (data.kind === 'notable') {
+        const rootResult = placeNotableFromRootOrbitDrag(
+          dragSession.snapshotNodes,
+          node.id,
+          finalPosition,
+        )
+        if (rootResult?.kind === 'root') {
+          setNodes(() => stack(ensureRootFixed(rootResult.nodes)))
+          return
+        }
+        const baseNodes =
+          rootResult?.kind === 'detached' ? rootResult.nodes : dragSession.snapshotNodes
+        const dragOrigin: SatelliteDragOrigin =
+          rootResult?.kind === 'detached'
+            ? { kind: 'external', position: dragSession.originPosition }
+            : origin
+        setNodes(() =>
+          stack(
+            layoutRootOrbit(
+              stripRootOrbitWhenMasteryBound(
+                placeSatelliteFromDrag(baseNodes, node.id, finalPosition, dragOrigin),
+              ),
+            ),
+          ),
+        )
+        return
       }
 
       setNodes(() =>
@@ -1768,7 +1845,7 @@ export default function App() {
             <PinnedViewerTetherOverlay
               entries={pinnedViewers}
               boundsByNodeId={pinnedViewerBounds}
-              nodes={nodes}
+              nodes={flowNodes}
             />
 
             {pinnedViewers.map((entry) => {
