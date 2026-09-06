@@ -332,17 +332,130 @@ describe('Root orbit capacity/slot layout', () => {
     expect(b.position.y + size / 2).toBeCloseTo(Math.sin(angle1) * r, 5)
   })
 
-  it('assigns deterministic slots when missing on load', () => {
+  it('assigns missing slots by nearest world angle (not id order)', () => {
+    const size = NODE_SIZE.notable
+    // capacity 4, startAngle -90 → slots: 0=-90°, 1=0°, 2=90°, 3=180°
+    let root = {
+      ...rootNode(),
+      data: setRootOrbitStartAngle(
+        setRootOrbitCapacity(rootNode().data as never, 1, 4),
+        1,
+        -90,
+      ),
+    }
+    // A at right (0°) → nearest slot 1; B at bottom (90°) → nearest slot 2
+    const r = 120
     let nodes = [
-      rootNode(),
-      notable('b', 0, 0, { rootOrbitTier: 1 }),
-      notable('a', 0, 0, { rootOrbitTier: 1 }),
+      root,
+      notable('a', r - size / 2, -size / 2, { rootOrbitTier: 1 }),
+      notable('b', -size / 2, r - size / 2, { rootOrbitTier: 1 }),
     ]
     nodes = ensureRootOrbitSlotsAssigned(nodes)
     const a = nodes.find((n) => n.id === 'a')!
     const b = nodes.find((n) => n.id === 'b')!
-    expect(a.data.rootOrbitSlot).toBe(0)
-    expect(b.data.rootOrbitSlot).toBe(1)
+    expect(a.data.rootOrbitSlot).toBe(1)
+    expect(b.data.rootOrbitSlot).toBe(2)
+
+    const laid = layoutRootOrbit(nodes)
+    const la = laid.find((n) => n.id === 'a')!
+    const lb = laid.find((n) => n.id === 'b')!
+    const acx = la.position.x + size / 2
+    const acy = la.position.y + size / 2
+    const bcx = lb.position.x + size / 2
+    const bcy = lb.position.y + size / 2
+    expect(Math.hypot(acx - bcx, acy - bcy)).toBeGreaterThan(1)
+  })
+
+  it('expands capacity when legacy unslotted members overflow', () => {
+    let root = {
+      ...rootNode(),
+      data: setRootOrbitCapacity(rootNode().data as never, 1, 6),
+    }
+    const size = NODE_SIZE.notable
+    const members = Array.from({ length: 8 }, (_, i) => {
+      const ang = ((-90 + i * 45) * Math.PI) / 180
+      const r = 140
+      return notable(
+        `m${i}`,
+        r * Math.cos(ang) - size / 2,
+        r * Math.sin(ang) - size / 2,
+        { rootOrbitTier: 1 },
+      )
+    })
+    let nodes = [root, ...members]
+    nodes = ensureRootOrbitSlotsAssigned(nodes)
+    const rootData = nodes.find((n) => n.id === INITIAL_NODE_ID)!.data
+    expect(getRootOrbitCapacity(rootData as never, 1)).toBeGreaterThanOrEqual(8)
+    const capacity = getRootOrbitCapacity(rootData as never, 1)
+    const slots = members.map((m) => {
+      const n = nodes.find((x) => x.id === m.id)!
+      const slot = n.data.rootOrbitSlot
+      expect(slot).toBeTypeOf('number')
+      expect(slot!).toBeGreaterThanOrEqual(0)
+      expect(slot!).toBeLessThan(capacity)
+      return slot
+    })
+    expect(new Set(slots).size).toBe(8)
+
+    const laid = layoutRootOrbit(nodes)
+    const centers = members.map((m) => {
+      const n = laid.find((x) => x.id === m.id)!
+      return {
+        x: n.position.x + size / 2,
+        y: n.position.y + size / 2,
+      }
+    })
+    for (let i = 0; i < centers.length; i++) {
+      for (let j = i + 1; j < centers.length; j++) {
+        expect(
+          Math.hypot(centers[i]!.x - centers[j]!.x, centers[i]!.y - centers[j]!.y),
+        ).toBeGreaterThan(1)
+      }
+    }
+  })
+
+  it('keeps existing valid slots and fills only unslotted members', () => {
+    const size = NODE_SIZE.notable
+    let root = {
+      ...rootNode(),
+      data: setRootOrbitStartAngle(
+        setRootOrbitCapacity(rootNode().data as never, 1, 4),
+        1,
+        -90,
+      ),
+    }
+    // Preserved slot 1 (0°). Unslotted C near bottom (90°) → slot 2.
+    const r = 120
+    let nodes = [
+      root,
+      notable('kept', r - size / 2, -size / 2, {
+        rootOrbitTier: 1,
+        rootOrbitSlot: 1,
+      }),
+      notable('c', -size / 2, r - size / 2, { rootOrbitTier: 1 }),
+      shard('s', -r - size / 2, -size / 2, { rootOrbitTier: 1 }), // ~180° → slot 3
+    ]
+    nodes = ensureRootOrbitSlotsAssigned(nodes)
+    expect(nodes.find((n) => n.id === 'kept')!.data.rootOrbitSlot).toBe(1)
+    expect(nodes.find((n) => n.id === 'c')!.data.rootOrbitSlot).toBe(2)
+    expect(nodes.find((n) => n.id === 's')!.data.rootOrbitSlot).toBe(3)
+  })
+
+  it('does not rearrange modern documents that already have unique valid slots', () => {
+    let root = {
+      ...rootNode(),
+      data: setRootOrbitCapacity(rootNode().data as never, 1, 4),
+    }
+    let nodes = [
+      root,
+      notable('n0', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 2 }),
+      notable('n1', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
+      shard('s0', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 1 }),
+    ]
+    nodes = ensureRootOrbitSlotsAssigned(nodes)
+    expect(nodes.find((n) => n.id === 'n0')!.data.rootOrbitSlot).toBe(2)
+    expect(nodes.find((n) => n.id === 'n1')!.data.rootOrbitSlot).toBe(0)
+    expect(nodes.find((n) => n.id === 's0')!.data.rootOrbitSlot).toBe(1)
   })
 
   it('fails attach when tier has no free slot then ejects on drag', () => {

@@ -204,41 +204,114 @@ export function findNearestFreeRootOrbitSlot(
   return best
 }
 
-/** Assign missing rootOrbitSlot values deterministically (stable by id). */
+/** World-space angle (degrees) of a Root Orbit member center about Root at (0,0). */
+export function rootOrbitMemberWorldAngleDeg(node: PassiveFlowNode): number {
+  const data = node.data as PassiveNodeData
+  const size = NODE_SIZE[data.kind] ?? NODE_SIZE.notable
+  const cx = node.position.x + size / 2
+  const cy = node.position.y + size / 2
+  return (Math.atan2(cy, cx) * 180) / Math.PI
+}
+
+/**
+ * Load/migration: preserve valid unique slots; assign missing slots by nearest
+ * world angle to free slot angles. Expands tier capacity when members overflow
+ * so slots stay in `0 .. capacity-1` (never invents out-of-range slots).
+ * Does not rearrange already-valid modern documents.
+ */
 export function ensureRootOrbitSlotsAssigned(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
-  const rootData = rootNodeData(nodes)
   let next = nodes
   for (const tier of [1, 2, 3] as const) {
-    const capacity = getRootOrbitCapacity(rootData, tier)
     const members = getRootOrbitMembers(next, tier)
-      .slice()
-      .sort((a, b) => a.id.localeCompare(b.id))
-    const occupied = occupiedRootOrbitSlots(next, tier)
+    if (members.length === 0) continue
+
+    const rootIndex = next.findIndex((n) => n.id === INITIAL_NODE_ID)
+    if (rootIndex < 0) continue
+    let rootData = next[rootIndex]!.data as PassiveNodeData
+    let capacity = getRootOrbitCapacity(rootData, tier)
+
+    if (members.length > capacity) {
+      const expanded = Math.min(MAX_ROOT_ORBIT_CAPACITY, members.length)
+      rootData = setRootOrbitCapacity(rootData, tier, expanded)
+      capacity = getRootOrbitCapacity(rootData, tier)
+      next = next.map((node, i) =>
+        i === rootIndex ? { ...node, data: rootData } : node,
+      )
+    }
+
+    const start = getRootOrbitStartAngle(rootData, tier)
+    const assigned = new Map<string, number>()
+    const occupied = new Set<number>()
+    const needing: PassiveFlowNode[] = []
+
+    type SlotClaim = { id: string; slot: number; err: number }
+    const claims: SlotClaim[] = []
+
     for (const member of members) {
       const data = member.data as PassiveNodeData
       const existing = normalizeRootOrbitSlot(data.rootOrbitSlot)
       if (existing != null && existing < capacity) {
-        occupied.add(existing)
-        continue
+        const world = rootOrbitMemberWorldAngleDeg(member)
+        const slotAngle = rootOrbitAngleDegrees(start, existing, capacity)
+        claims.push({
+          id: member.id,
+          slot: existing,
+          err: angularDistanceDeg(world, slotAngle),
+        })
+      } else {
+        needing.push(member)
       }
-      let slot: number | null = null
-      for (let s = 0; s < capacity; s++) {
-        if (!occupied.has(s)) {
-          slot = s
-          break
-        }
-      }
-      if (slot == null) slot = members.findIndex((m) => m.id === member.id)
-      occupied.add(slot)
-      next = next.map((node) =>
-        node.id === member.id
-          ? {
-              ...node,
-              data: { ...(node.data as PassiveNodeData), rootOrbitSlot: slot! },
-            }
-          : node,
-      )
     }
+
+    const claimsBySlot = new Map<number, SlotClaim[]>()
+    for (const claim of claims) {
+      const list = claimsBySlot.get(claim.slot) ?? []
+      list.push(claim)
+      claimsBySlot.set(claim.slot, list)
+    }
+    for (const [slot, list] of claimsBySlot) {
+      list.sort((a, b) => a.err - b.err || a.id.localeCompare(b.id))
+      const winner = list[0]!
+      assigned.set(winner.id, slot)
+      occupied.add(slot)
+      for (let i = 1; i < list.length; i++) {
+        const loser = members.find((m) => m.id === list[i]!.id)
+        if (loser) needing.push(loser)
+      }
+    }
+
+    type Candidate = { id: string; slot: number; err: number }
+    const candidates: Candidate[] = []
+    for (const member of needing) {
+      const world = rootOrbitMemberWorldAngleDeg(member)
+      for (let slot = 0; slot < capacity; slot++) {
+        if (occupied.has(slot)) continue
+        const slotAngle = rootOrbitAngleDegrees(start, slot, capacity)
+        candidates.push({
+          id: member.id,
+          slot,
+          err: angularDistanceDeg(world, slotAngle),
+        })
+      }
+    }
+    candidates.sort(
+      (a, b) => a.err - b.err || a.id.localeCompare(b.id) || a.slot - b.slot,
+    )
+    const filled = new Set<string>()
+    for (const candidate of candidates) {
+      if (filled.has(candidate.id) || occupied.has(candidate.slot)) continue
+      assigned.set(candidate.id, candidate.slot)
+      occupied.add(candidate.slot)
+      filled.add(candidate.id)
+    }
+
+    next = next.map((node) => {
+      const slot = assigned.get(node.id)
+      if (slot == null) return node
+      const data = node.data as PassiveNodeData
+      if (data.rootOrbitSlot === slot) return node
+      return { ...node, data: { ...data, rootOrbitSlot: slot } }
+    })
   }
   return next
 }
