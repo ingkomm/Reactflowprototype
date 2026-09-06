@@ -33,6 +33,8 @@ export function createPassiveData(
       | 'symbolId'
       | 'stages'
       | 'markdown'
+      | 'rootOrbitTier'
+      | 'rootOrbitSlot'
     >
   > = {},
 ): PassiveNodeData {
@@ -72,6 +74,12 @@ export function createPassiveData(
                 masteryId: extras.masteryId ?? null,
                 orbitTier: extras.orbitTier ?? 1,
                 orbitSlot: extras.orbitSlot,
+                ...(extras.rootOrbitTier != null
+                  ? { rootOrbitTier: extras.rootOrbitTier }
+                  : {}),
+                ...(extras.rootOrbitSlot != null
+                  ? { rootOrbitSlot: extras.rootOrbitSlot }
+                  : {}),
               }),
   }
 }

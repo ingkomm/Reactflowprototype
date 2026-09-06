@@ -7,7 +7,7 @@ import {
   syncEdgesReachableFromInitial,
 } from './power'
 import type { PassiveFlowNode } from './components/PassiveNode'
-import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge } from './graphFactory'
+import { createPassiveData, passiveLinkEdge, notableLinkEdge, rootSocketLinkEdge } from './graphFactory'
 import { INITIAL_NODE_ID } from './types'
 import { createNotableStages, ensureNotableStages } from './stage'
 import { createDailyLog } from './dailyLog'
@@ -158,5 +158,26 @@ describe('power', () => {
     const powered = computePoweredNodeIds(nodes, edges)
     expect(powered.has('connect-off')).toBe(true)
     expect(powered.has('shard-b')).toBe(false)
+  })
+
+
+  it('propagates power along Notable↔Notable direct links', () => {
+    const nodes = [
+      node(INITIAL_NODE_ID, 'initial'),
+      node('na', 'notable', { rootOrbitTier: 1, rootOrbitSlot: 0 }),
+      node('nb', 'notable'),
+      node('nc', 'notable'),
+    ]
+    const edges = [
+      notableLinkEdge('na', 'nb'),
+      notableLinkEdge('nb', 'nc'),
+    ]
+    const powered = computePoweredNodeIds(nodes, edges)
+    expect(powered.has('na')).toBe(true)
+    expect(powered.has('nb')).toBe(true)
+    expect(powered.has('nc')).toBe(true)
+    const reachable = getNodesReachableFromInitial(nodes, edges)
+    expect(reachable.has('nb')).toBe(true)
+    expect(reachable.has('nc')).toBe(true)
   })
 })

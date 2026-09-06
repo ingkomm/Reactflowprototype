@@ -162,12 +162,12 @@ export type PassiveNodeData = {
   /** Connect only: socket index on the Root hub (0–5, 60° spacing from top). */
   initialSlot?: InitialConnectSlot
   /**
-   * Notable only: spatial tier on the Root internal orbit (1 = innermost).
+   * Shard/Notable: spatial tier on the Root internal orbit (1 = innermost).
    * Absent = not on Root Orbit. Not Mastery membership; not a power/edge link.
    */
   rootOrbitTier?: 1 | 2 | 3
   /**
-   * Notable only: fixed slot index on Root orbit tier (0-based).
+   * Shard/Notable: fixed slot index on Root orbit tier (0-based).
    * Position = startAngle + 360 * slot / capacity. Not auto-repacked.
    */
   rootOrbitSlot?: number

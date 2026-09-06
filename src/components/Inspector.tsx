@@ -175,15 +175,14 @@ export function Inspector({
           value={data.label}
           onChange={(e) => onRename(nodeId, e.target.value)}
           placeholder="Passive name"
-          disabled={isFixedInitial}
         />
       </label>
 
       {isFixedInitial ? (
         <>
           <p className="inspector__empty">
-            Root Node — 전원 소스. 생성·삭제·종류 변경 불가. rim socket → Connect 회로, center →
-            Root Orbit Notable 파생 Start Link.
+            Root Node — 전원 소스. 이름 수정 가능. 삭제·종류 변경 불가. rim socket → Connect 회로, center →
+            Root Orbit Shard/Notable 파생 Start Link.
           </p>
           <h3 className="inspector__subtitle">Root Orbit (3단 고정)</h3>
           {([1, 2, 3] as const).map((tier) => {

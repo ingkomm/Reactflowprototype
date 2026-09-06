@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react'
 import { parseRootSocketHandle } from './initialHub'
-import { isOnRootOrbit } from './rootOrbit'
+import { isOnRootOrbit, isValidRootOrbitMemberKind } from './rootOrbit'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { GraphEdgeData, PassiveNodeData, InitialConnectSlot } from './types'
 import { NODE_SIZE } from './orbit'
@@ -89,7 +89,7 @@ export function computePoweredNodeIds(
   // Derived Start Link: Root center → Root Orbit Notable (membership only, not an edge).
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (data.kind === 'notable' && isOnRootOrbit(data)) {
+    if (isValidRootOrbitMemberKind(data.kind) && isOnRootOrbit(data)) {
       powered.add(node.id)
     }
   }
@@ -100,7 +100,7 @@ export function computePoweredNodeIds(
     for (const edge of edges) {
       if (!isEdgeActive(edge)) continue
       const kind = edgeLinkKind(edge)
-      if (kind !== 'center' && kind !== 'orbit') continue
+      if (kind !== 'center' && kind !== 'orbit' && kind !== 'notable') continue
 
       const source = byId.get(edge.source)
       const target = byId.get(edge.target)
@@ -187,7 +187,7 @@ export function computePowerFlowMeta(
   if (rootId) {
     for (const node of nodes) {
       const data = node.data as PassiveNodeData
-      if (data.kind === 'notable' && isOnRootOrbit(data)) {
+      if (isValidRootOrbitMemberKind(data.kind) && isOnRootOrbit(data)) {
         depth.set(node.id, 1)
         parent.set(node.id, rootId)
       }
@@ -200,7 +200,7 @@ export function computePowerFlowMeta(
     for (const edge of edges) {
       if (!isEdgeActive(edge)) continue
       const kind = edgeLinkKind(edge)
-      if (kind !== 'center' && kind !== 'orbit') continue
+      if (kind !== 'center' && kind !== 'orbit' && kind !== 'notable') continue
 
       const source = byId.get(edge.source)
       const target = byId.get(edge.target)
@@ -329,10 +329,20 @@ export function getNodesReachableFromInitial(
       queue.push(node.id)
     }
   }
+  // Derived Start Link also seeds reachability for Root Orbit members.
+  for (const node of nodes) {
+    const data = node.data as PassiveNodeData
+    if (isValidRootOrbitMemberKind(data.kind) && isOnRootOrbit(data)) {
+      if (!reachable.has(node.id)) {
+        reachable.add(node.id)
+        queue.push(node.id)
+      }
+    }
+  }
 
   const adj = new Map<string, Set<string>>()
   for (const edge of edges) {
-    if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type) continue
+    if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type !== 'notable' && edge.type) continue
     for (const [a, b] of [
       [edge.source, edge.target],
       [edge.target, edge.source],

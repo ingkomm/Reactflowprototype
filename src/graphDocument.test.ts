@@ -267,4 +267,26 @@ describe('graphDocument', () => {
     expect(out?.stages?.[0]?.logs?.[0]?.media?.[0]?.url).toContain('youtu.be')
   })
 
+
+
+  it('persists Root rename (label only) across save/load', () => {
+    const nodes = SEED_NODES.map((n) =>
+      n.id === INITIAL_NODE_ID
+        ? { ...n, data: { ...n.data, label: 'Renamed Root' } }
+        : n,
+    )
+    const doc = buildGraphDocument({
+      nodes,
+      edges: SEED_EDGES,
+      customSymbols: [],
+      settings: {},
+    })
+    const parsed = parseGraphDocumentJson(serializeGraphDocument(doc))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const root = parsed.document.nodes.find((n) => n.id === INITIAL_NODE_ID)
+    expect(root?.data.label).toBe('Renamed Root')
+    expect(root?.id).toBe(INITIAL_NODE_ID)
+    expect(root?.data.kind).toBe('initial')
+  })
 })

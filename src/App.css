@@ -201,13 +201,12 @@ body.is-resizing-inspector .react-flow {
   overflow: visible !important;
 }
 
-/* Links stay under nodes so titles are never covered by edges. */
-.canvas-pane .react-flow__edges {
-  z-index: 1 !important;
-}
-
+/* Allow per-edge/node z-index to interleave.
+   Root hub is zIndex 0; derived Root Start Links use zIndex 1;
+   content nodes stay at 6+ so links render above Root disk but under bodies. */
+.canvas-pane .react-flow__edges,
 .canvas-pane .react-flow__nodes {
-  z-index: 3 !important;
+  z-index: auto !important;
 }
 
 .canvas-pane .react-flow__pane.is-orbit-hover {

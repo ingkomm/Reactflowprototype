@@ -1660,7 +1660,7 @@ export default function App() {
         : { kind: 'external', position: session.originPosition }
 
       // Preview only — committed nodes/edges stay until drop.
-      if (data.kind === 'notable') {
+      if (data.kind === 'notable' || data.kind === 'shard') {
         const rootResult = placeNotableFromRootOrbitDrag(
           session.snapshotNodes,
           node.id,
@@ -1770,7 +1770,7 @@ export default function App() {
         }
       }
 
-      if (data.kind === 'notable') {
+      if (data.kind === 'notable' || data.kind === 'shard') {
         const rootResult = placeNotableFromRootOrbitDrag(
           dragSession.snapshotNodes,
           node.id,
@@ -1825,7 +1825,6 @@ export default function App() {
 
   const onRenameNode = useCallback(
     (nodeId: string, label: string) => {
-      if (nodeId === INITIAL_NODE_ID) return
       updateNodeData(nodeId, (d) => ({ ...d, label }))
     },
     [updateNodeData],

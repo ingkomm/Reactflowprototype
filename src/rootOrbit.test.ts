@@ -9,6 +9,7 @@ import {
   NODE_SIZE,
   masteryOuterOrbitRadius,
 } from './orbit'
+import { outermostBandRadius, BAND_STROKE } from './orbitGeometry'
 import { INITIAL_CONNECT_SLOT_COUNT } from './initialHub'
 import {
   ensureRootFixed,
@@ -48,6 +49,21 @@ function notable(id: string, x: number, y: number, extra: Record<string, unknown
   } as PassiveFlowNode
 }
 
+function shard(id: string, x: number, y: number, extra: Record<string, unknown> = {}): PassiveFlowNode {
+  return {
+    id,
+    type: 'passive',
+    position: { x, y },
+    data: {
+      label: id,
+      kind: 'shard',
+      stages: [],
+      symbolId: 'default',
+      ...extra,
+    },
+  } as PassiveFlowNode
+}
+
 function rootNode(): PassiveFlowNode {
   const half = ROOT_HUB_SIZE / 2
   return {
@@ -60,9 +76,9 @@ function rootNode(): PassiveFlowNode {
 }
 
 describe('Root orbit', () => {
-  it('accepts only Notable members', () => {
+  it('accepts Notable and Shard members only', () => {
     expect(isValidRootOrbitMemberKind('notable')).toBe(true)
-    expect(isValidRootOrbitMemberKind('shard')).toBe(false)
+    expect(isValidRootOrbitMemberKind('shard')).toBe(true)
     expect(isValidRootOrbitMemberKind('mastery')).toBe(false)
     expect(isValidRootOrbitMemberKind('connect')).toBe(false)
   })
@@ -370,5 +386,83 @@ describe('Root orbit derived Start Link / power', () => {
     const meta = computePowerFlowMeta(nodes, [])
     expect(meta.parent.get('n1')).toBe(INITIAL_NODE_ID)
     expect(meta.depth.get('n1')).toBe(1)
+  })
+})
+
+describe('Root Orbit Shard + hub clearance + Connect eject', () => {
+  it('attaches Shard with rootOrbitTier/slot and powers via derived Start Link', () => {
+    let nodes = [rootNode(), shard('s1', 40, 0)]
+    const next = placeNotableOnRootOrbit(nodes, 's1', 2, 1)
+    expect(next).not.toBeNull()
+    nodes = next!
+    const s = nodes.find((n) => n.id === 's1')!
+    expect(s.data.rootOrbitTier).toBe(2)
+    expect(s.data.rootOrbitSlot).toBe(1)
+    const powered = computePoweredNodeIds(nodes, [])
+    expect(powered.has('s1')).toBe(true)
+    const derived = buildRootOrbitStartEdges(nodes)
+    expect(derived.some((e) => e.target === 's1')).toBe(true)
+    expect(derived[0]!.zIndex).toBe(1)
+  })
+
+  it('rejects Mastery/Connect Root Orbit attach', () => {
+    const nodes = [
+      rootNode(),
+      {
+        id: 'm1',
+        type: 'passive',
+        position: { x: 0, y: 0 },
+        data: { label: 'M', kind: 'mastery', stages: [], symbolId: 'default' },
+      } as PassiveFlowNode,
+      {
+        id: 'c1',
+        type: 'passive',
+        position: { x: 10, y: 10 },
+        data: {
+          label: 'C',
+          kind: 'connect',
+          stages: [],
+          symbolId: 'default',
+          connectEnabled: true,
+        },
+      } as PassiveFlowNode,
+    ]
+    expect(placeNotableOnRootOrbit(nodes, 'm1', 1, 0)).toBeNull()
+    expect(placeNotableOnRootOrbit(nodes, 'c1', 1, 0)).toBeNull()
+  })
+
+  it('keeps Tier3 Notable + default 3 bands inside enlarged Root rim', () => {
+    const bandOuter = outermostBandRadius(3, NODE_SIZE.notable) + BAND_STROKE / 2
+    expect(ROOT_HUB_RADIUS).toBeGreaterThanOrEqual(ROOT_ORBIT_TIER_RADIUS[3] + bandOuter)
+    expect(ROOT_HUB_SIZE).toBeGreaterThanOrEqual(600)
+    expect(ROOT_HUB_SIZE).toBeLessThanOrEqual(630)
+  })
+
+  it('ejects Connect with initialSlot overlapping Root arena', () => {
+    const size = NODE_SIZE.connect
+    const bodyR = size / 2
+    const nodes = [
+      rootNode(),
+      {
+        id: 'c-in',
+        type: 'passive',
+        position: { x: -bodyR, y: -bodyR },
+        data: {
+          label: 'C',
+          kind: 'connect',
+          stages: [],
+          symbolId: 'default',
+          connectEnabled: true,
+          initialSlot: 0,
+        },
+      } as PassiveFlowNode,
+    ]
+    const next = applyRootBoundaryEject(nodes)
+    const c = next.find((n) => n.id === 'c-in')!
+    const cx = c.position.x + bodyR
+    const cy = c.position.y + bodyR
+    expect(Math.hypot(cx, cy)).toBeGreaterThanOrEqual(
+      ROOT_HUB_RADIUS + bodyR + ROOT_BOUNDARY_GAP - 1e-6,
+    )
   })
 })

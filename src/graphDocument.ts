@@ -259,14 +259,18 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   if (slot != null && slot >= 0 && slot <= 5) data.initialSlot = Math.floor(slot) as PassiveNodeData['initialSlot']
   const rootOrbitTier = optionalNumber('rootOrbitTier')
   if (
-    resolvedKind === 'notable' &&
+    (resolvedKind === 'notable' || resolvedKind === 'shard') &&
     rootOrbitTier != null &&
     (rootOrbitTier === 1 || rootOrbitTier === 2 || rootOrbitTier === 3)
   ) {
     data.rootOrbitTier = rootOrbitTier
   }
   const rootOrbitSlot = optionalNumber('rootOrbitSlot')
-  if (resolvedKind === 'notable' && rootOrbitSlot != null && rootOrbitSlot >= 0) {
+  if (
+    (resolvedKind === 'notable' || resolvedKind === 'shard') &&
+    rootOrbitSlot != null &&
+    rootOrbitSlot >= 0
+  ) {
     data.rootOrbitSlot = Math.floor(rootOrbitSlot)
   }
   if (resolvedKind === 'initial') {

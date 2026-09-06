@@ -117,8 +117,7 @@ export function orbitTierRadius(_tierCount: OrbitTierCount, tier: OrbitTier): nu
 }
 
 /**
- * Root hub arena — large enough for three internal Notable orbit rings.
- * Sized from base Notable body (not dynamic training bands).
+ * Root hub arena — Tier radii unchanged; rim pad clears Tier3 Notable + default 3 bands.
  */
 const ROOT_ORBIT_BODY = NODE_SIZE.notable
 const ROOT_ORBIT_RING_GAP = ROOT_ORBIT_BODY + 28
@@ -127,8 +126,16 @@ export const ROOT_ORBIT_TIER_RADIUS = {
   2: Math.round(ROOT_ORBIT_BODY * 1.55 + ROOT_ORBIT_RING_GAP),
   3: Math.round(ROOT_ORBIT_BODY * 1.55 + ROOT_ORBIT_RING_GAP * 2),
 } as const
-/** Pad from outermost Root-orbit ring center to Root circumference. */
-export const ROOT_HUB_RIM_PAD = Math.round(ROOT_ORBIT_BODY * 0.65)
+/** Default Notable training bands assumed when sizing Root rim clearance. */
+const ROOT_ORBIT_DEFAULT_BANDS = 3
+/** Extra pad beyond Tier3 member outer band so rim does not clip bands. */
+const ROOT_HUB_BAND_CLEARANCE_PAD = 14
+/** Pad = Tier3 member (Notable + 3 bands) outer radius + clearance. */
+export const ROOT_HUB_RIM_PAD = Math.round(
+  outermostBandRadius(ROOT_ORBIT_DEFAULT_BANDS, NODE_SIZE.notable) +
+    BAND_STROKE / 2 +
+    ROOT_HUB_BAND_CLEARANCE_PAD,
+)
 /** Root hub diameter (outer circular arena). */
 export const ROOT_HUB_SIZE = (ROOT_ORBIT_TIER_RADIUS[3] + ROOT_HUB_RIM_PAD) * 2
 

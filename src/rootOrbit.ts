@@ -57,7 +57,7 @@ export function getRootOrbitMembers(
 ): PassiveFlowNode[] {
   return nodes.filter((node) => {
     const data = node.data as PassiveNodeData
-    if (data.kind !== 'notable') return false
+    if (!isValidRootOrbitMemberKind(data.kind)) return false
     const t = normalizeRootOrbitTier(data.rootOrbitTier)
     if (t == null) return false
     return tier == null ? true : t === tier
@@ -159,7 +159,7 @@ export function occupiedRootOrbitSlots(
   for (const node of nodes) {
     if (exceptId && node.id === exceptId) continue
     const data = node.data as PassiveNodeData
-    if (data.kind !== 'notable') continue
+    if (!isValidRootOrbitMemberKind(data.kind)) continue
     if (normalizeRootOrbitTier(data.rootOrbitTier) !== tier) continue
     const slot = normalizeRootOrbitSlot(data.rootOrbitSlot)
     if (slot != null) occupied.add(slot)
@@ -260,7 +260,7 @@ export function layoutRootOrbit(nodes: PassiveFlowNode[]): PassiveFlowNode[] {
       if (slot == null) continue
       const angleDeg = rootOrbitAngleDegrees(start, slot, capacity)
       const rad = (angleDeg * Math.PI) / 180
-      const size = NODE_SIZE.notable
+      const size = NODE_SIZE[data.kind as 'notable' | 'shard']
       positions.set(
         member.id,
         topLeftFromCenter(Math.cos(rad) * radius, Math.sin(rad) * radius, size),
@@ -323,10 +323,10 @@ export function placeNotableOnRootOrbit(
   const satellite = nodes.find((n) => n.id === satelliteId)
   if (!satellite) return null
   const data = satellite.data as PassiveNodeData
-  if (data.kind !== 'notable') return null
+  if (!isValidRootOrbitMemberKind(data.kind)) return null
 
   const tier = preferredTier ?? 1
-  const size = NODE_SIZE.notable
+  const size = NODE_SIZE[data.kind as 'notable' | 'shard']
   const cx = satellite.position.x + size / 2
   const cy = satellite.position.y + size / 2
   const pointerAngle = (Math.atan2(cy, cx) * 180) / Math.PI
@@ -415,10 +415,14 @@ export function ejectCenterOutsideRoot(
 
 function shouldExemptFromRootEject(data: PassiveNodeData): boolean {
   if (data.kind === 'initial') return true
-  // Root-orbit Notables are allowed inside the arena.
-  if (data.kind === 'notable' && normalizeRootOrbitTier(data.rootOrbitTier) != null) return true
-  // Socketed Connects sit on the rim by design.
-  if (data.kind === 'connect' && data.initialSlot != null) return true
+  // Root-orbit Shard/Notable members are allowed inside the arena.
+  if (
+    isValidRootOrbitMemberKind(data.kind) &&
+    normalizeRootOrbitTier(data.rootOrbitTier) != null
+  ) {
+    return true
+  }
+  // Connected Connects are NOT exempt — eject like any external node.
   // Mastery satellites are kept clear via the parent Mastery hub eject.
   if (data.masteryId) return true
   return false
@@ -474,9 +478,9 @@ export function placeNotableFromRootOrbitDrag(
   const satellite = nodes.find((n) => n.id === satelliteId)
   if (!satellite) return null
   const data = satellite.data as PassiveNodeData
-  if (data.kind !== 'notable') return null
+  if (!isValidRootOrbitMemberKind(data.kind)) return null
 
-  const size = NODE_SIZE.notable
+  const size = NODE_SIZE[data.kind as 'notable' | 'shard']
   const bodyR = size / 2
   const cx = pointerTopLeft.x + size / 2
   const cy = pointerTopLeft.y + size / 2
@@ -554,7 +558,7 @@ export function rootOrbitRingPercent(tier: RootOrbitTier): number {
 }
 
 export function isValidRootOrbitMemberKind(kind: string): boolean {
-  return kind === 'notable'
+  return kind === 'notable' || kind === 'shard'
 }
 
 /** No global Root-orbit Notable hard cap — only spacing/tier geometry. */
@@ -574,14 +578,14 @@ export function stripRootOrbitWhenMasteryBound(nodes: PassiveFlowNode[]): Passiv
   return changed ? layoutRootOrbit(next) : nodes
 }
 
-/** Ephemeral Root→Notable Start Links (not persisted in document edges). */
+/** Ephemeral Root→orbit-member Start Links (not persisted in document edges). */
 export function buildRootOrbitStartEdges(nodes: PassiveFlowNode[]): Edge[] {
   const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
   if (!root) return []
   const edges: Edge[] = []
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
-    if (data.kind !== 'notable') continue
+    if (!isValidRootOrbitMemberKind(data.kind)) continue
     if (!isOnRootOrbit(data)) continue
     edges.push({
       id: `derived-root-orbit-${node.id}`,
@@ -594,6 +598,7 @@ export function buildRootOrbitStartEdges(nodes: PassiveFlowNode[]): Edge[] {
       deletable: false,
       focusable: false,
       interactionWidth: 0,
+      zIndex: 1,
       data: { derivedRootOrbitStart: true, active: true },
     })
   }
