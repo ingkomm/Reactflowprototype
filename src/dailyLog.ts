@@ -1,10 +1,8 @@
 import type { StageData, TrainingLog, VideoMedia } from './types'
+import { createLogId } from './ids'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-function uid(prefix: string) {
-  return `${prefix}-${crypto.randomUUID().slice(0, 8)}`
-}
 
 export function formatPracticeDate(date = new Date()): string {
   const y = date.getFullYear()
@@ -23,7 +21,7 @@ export function createDailyLog(
   media?: VideoMedia[],
 ): TrainingLog {
   const log: TrainingLog = {
-    id: uid('log'),
+    id: createLogId(),
     date: date.trim(),
   }
   const trimmedNote = note?.trim()
@@ -78,7 +76,7 @@ export function migrateLegacyTrainingLogs(value: unknown): TrainingLog[] {
     day.setDate(day.getDate() - (count - 1 - i))
     const dayStr = formatPracticeDate(day)
     logs.push({
-      id: i === count - 1 ? raw.id.trim() : uid('log'),
+      id: i === count - 1 ? raw.id.trim() : createLogId(),
       date: dayStr,
       ...(i === count - 1 && note ? { note } : {}),
       ...(i === count - 1 && media?.length ? { media } : {}),

@@ -81,23 +81,39 @@ describe('ShardMarkdownPreview', () => {
 })
 
 describe('NotableLogViewer interactions', () => {
-  it('defaults to newest log in Note mode and switches content on log/mode changes', () => {
+  it('shows Summary markdown and timeline newest-first with short notes (not log markdown viewer)', () => {
     const view = mount(
       <NotableLogViewer
         open
         x={40}
         y={40}
         nodeLabel="Drill"
+        markdown={'## Current understanding\n\nOverview body'}
         logs={sampleLogs}
         onClose={() => undefined}
       />,
     )
 
     expect(view.host.querySelector('[data-testid="notable-log-viewer"]')).toBeTruthy()
-    expect(view.host.textContent).toContain('2026-09-05')
-    expect(view.host.querySelector('[data-testid="notable-note-pane"]')?.textContent).toContain(
+    expect(view.host.querySelector('[data-testid="notable-summary"]')?.textContent).toContain(
+      'Current understanding',
+    )
+    expect(view.host.querySelector('[data-testid="notable-mode-note"]')).toBeNull()
+    expect(view.host.querySelector('[data-testid="notable-mode-video"]')).toBeNull()
+
+    const items = [
+      ...view.host.querySelectorAll('[data-testid^="notable-log-item-"]'),
+    ] as HTMLElement[]
+    expect(items[0]?.textContent).toContain('2026-09-05')
+    expect(items[0]?.textContent).toContain('newest')
+
+    expect(view.host.querySelector('[data-testid="notable-short-note"]')?.textContent).toContain(
       'newest',
     )
+    // Daily Log note is plain text, not rendered as markdown headings from the log body.
+    expect(
+      view.host.querySelector('[data-testid="notable-log-detail"] h2'),
+    ).toBeNull()
 
     const older = view.host.querySelector(
       '[data-testid="notable-log-item-' + sampleLogs[0]!.id + '"]',
@@ -105,14 +121,10 @@ describe('NotableLogViewer interactions', () => {
     act(() => {
       older.click()
     })
-    expect(view.host.querySelector('[data-testid="notable-note-pane"]')?.textContent).toContain(
+    expect(view.host.querySelector('[data-testid="notable-short-note"]')?.textContent).toContain(
       'older note',
     )
-
-    act(() => {
-      ;(view.host.querySelector('[data-testid="notable-mode-video"]') as HTMLButtonElement).click()
-    })
-    expect(view.host.querySelector('[data-testid="notable-video-pane"]')?.textContent).toContain(
+    expect(view.host.querySelector('[data-testid="notable-log-detail"]')?.textContent).toContain(
       'No video',
     )
 
@@ -150,6 +162,7 @@ describe('NotableLogViewer interactions', () => {
         x={10}
         y={10}
         nodeLabel="A"
+        markdown={'summary A'}
         logs={sampleLogs}
         onClose={() => {
           closed += 1
@@ -158,11 +171,9 @@ describe('NotableLogViewer interactions', () => {
     )
     expect(view.host.querySelector('textarea')).toBeNull()
     expect(view.host.querySelector('input')).toBeNull()
-
-    act(() => {
-      ;(view.host.querySelector('[data-testid="notable-mode-video"]') as HTMLButtonElement).click()
-    })
-    expect(view.host.querySelector('[data-testid="notable-video-pane"]')).toBeTruthy()
+    expect(view.host.querySelector('[data-testid="notable-summary"]')?.textContent).toContain(
+      'summary A',
+    )
 
     view.rerender(
       <NotableLogViewer
@@ -171,20 +182,21 @@ describe('NotableLogViewer interactions', () => {
         x={10}
         y={10}
         nodeLabel="B"
+        markdown={'summary B'}
         logs={sampleLogs}
         onClose={() => {
           closed += 1
         }}
       />,
     )
-    // Remount resets to Note mode
-    expect(view.host.querySelector('[data-testid="notable-note-pane"]')).toBeTruthy()
-    expect(view.host.querySelector('[data-testid="notable-video-pane"]')).toBeNull()
+    expect(view.host.querySelector('[data-testid="notable-summary"]')?.textContent).toContain(
+      'summary B',
+    )
     expect(closed).toBe(0)
     view.unmount()
   })
 
-  it('moves on header drag, ignores close button, and resizes video player', () => {
+  it('moves on header drag, ignores close button, resizes video, and reclamps after grow', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
 
@@ -194,6 +206,7 @@ describe('NotableLogViewer interactions', () => {
         x={40}
         y={50}
         nodeLabel="Drill"
+        markdown={'## Sum'}
         logs={sampleLogs}
         onClose={() => undefined}
       />,
@@ -258,9 +271,6 @@ describe('NotableLogViewer interactions', () => {
     expect(panel.style.left).not.toBe(leftBefore)
     expect(panel.style.top).not.toBe(topBefore)
 
-    act(() => {
-      ;(view.host.querySelector('[data-testid="notable-mode-video"]') as HTMLButtonElement).click()
-    })
     const newest = view.host.querySelector(
       '[data-testid="notable-log-item-' + sampleLogs[1]!.id + '"]',
     ) as HTMLButtonElement
@@ -275,6 +285,36 @@ describe('NotableLogViewer interactions', () => {
     expect(player.style.width).toBe('480px')
     expect(player.style.height).toBe('270px')
 
+    // Place panel near the right edge, then grow player so ResizeObserver reclamps.
+    act(() => {
+      head.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 1200,
+          clientY: 100,
+          button: 0,
+          pointerId: 4,
+        }),
+      )
+      head.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 1300,
+          clientY: 100,
+          pointerId: 4,
+        }),
+      )
+      head.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 1300,
+          clientY: 100,
+          pointerId: 4,
+        }),
+      )
+    })
+    const leftNearEdge = parseFloat(panel.style.left)
+
     act(() => {
       resize.dispatchEvent(
         new PointerEvent('pointerdown', {
@@ -288,22 +328,27 @@ describe('NotableLogViewer interactions', () => {
       window.dispatchEvent(
         new PointerEvent('pointermove', {
           bubbles: true,
-          clientX: 580,
-          clientY: 360,
+          clientX: 900,
+          clientY: 500,
           pointerId: 3,
         }),
       )
       window.dispatchEvent(
         new PointerEvent('pointerup', {
           bubbles: true,
-          clientX: 580,
-          clientY: 360,
+          clientX: 900,
+          clientY: 500,
           pointerId: 3,
         }),
       )
     })
-    expect(player.style.width).toBe('560px')
-    expect(player.style.height).toBe('330px')
+    expect(parseFloat(player.style.width)).toBeGreaterThan(480)
+    expect(parseFloat(player.style.height)).toBeGreaterThan(270)
+    // After growth, panel should remain within viewport (clamped).
+    const leftAfterGrow = parseFloat(panel.style.left)
+    const width = panel.offsetWidth || 600
+    expect(leftAfterGrow + width).toBeLessThanOrEqual(window.innerWidth - 8 + 1)
+    expect(leftAfterGrow).toBeLessThanOrEqual(leftNearEdge + 1)
 
     view.unmount()
   })

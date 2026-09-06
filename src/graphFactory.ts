@@ -8,6 +8,7 @@ import {
   isMasteryKind,
 } from './orbit'
 import { rootSocketSourceHandle } from './initialHub'
+import { createEdgeId } from './ids'
 
 /** Build default `PassiveNodeData` for a new node. */
 export function createPassiveData(
@@ -77,7 +78,7 @@ export function createPassiveData(
 
 export function passiveLinkEdge(sourceId: string, targetId: string): Edge {
   return {
-    id: `link-${sourceId}-${targetId}`,
+    id: createEdgeId(),
     type: 'center',
     source: sourceId,
     target: targetId,
@@ -94,7 +95,7 @@ export function rootSocketLinkEdge(
   slot: InitialConnectSlot,
 ): Edge {
   return {
-    id: `link-${rootId}-${connectId}`,
+    id: createEdgeId(),
     type: 'center',
     source: rootId,
     target: connectId,
@@ -106,7 +107,7 @@ export function rootSocketLinkEdge(
 
 export function notableLinkEdge(sourceId: string, targetId: string): Edge {
   return {
-    id: `notable-${sourceId}-${targetId}`,
+    id: createEdgeId(),
     type: 'notable',
     source: sourceId,
     target: targetId,
@@ -118,7 +119,7 @@ export function notableLinkEdge(sourceId: string, targetId: string): Edge {
 
 export function orbitLinkEdge(sourceId: string, targetId: string, masteryId: string): Edge {
   return {
-    id: `orbit-${sourceId}-${targetId}`,
+    id: createEdgeId(),
     type: 'orbit',
     source: sourceId,
     target: targetId,

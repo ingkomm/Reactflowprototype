@@ -5,12 +5,13 @@ import {
   createDailyLog,
   normalizeDailyLogs,
 } from './dailyLog'
+import { createStageId } from './ids'
 
 export { formatPracticeDate } from './dailyLog'
 export { createDailyLog, countPracticeDaysInStages } from './dailyLog'
 
-export function uid(prefix: string) {
-  return `${prefix}-${crypto.randomUUID().slice(0, 8)}`
+export function uid(_prefix?: string) {
+  return createStageId()
 }
 
 export function kindUsesPracticeLogs(kind: PassiveKind): boolean {
@@ -39,7 +40,7 @@ export function createStage(
   logs: TrainingLog[] = [],
 ): StageData {
   return {
-    id: uid('stage'),
+    id: createStageId(),
     index,
     label: label ?? `단계 ${index}`,
     goal: Math.max(1, Math.floor(goal)),

@@ -26,7 +26,8 @@ import {
 } from './graphDocument'
 import { createVideoMediaId, canPinNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
-import { stagesForKind, uid as stageUid } from './stage'
+import { stagesForKind } from './stage'
+import { createLogId, createNodeId, createStageId } from './ids'
 import {
   DEFAULT_GRID_SNAP_SCALE,
   GRID_SNAP_SCALE_OPTIONS,
@@ -93,9 +94,6 @@ function dailyLogsForNode(data: PassiveNodeData): TrainingLog[] {
   return extractDailyLogsFromNodeData(data)
 }
 
-function uid(prefix: string) {
-  return stageUid(prefix)
-}
 
 type NodeClipboard = {
   data: PassiveNodeData
@@ -110,10 +108,10 @@ function cloneMediaList(media?: VideoMedia[]): VideoMedia[] | undefined {
 function cloneStagesWithNewIds(stages: StageData[]): StageData[] {
   return stages.map((stage) => ({
     ...stage,
-    id: uid('stage'),
+    id: createStageId(),
     logs: stage.logs.map((log) => ({
       ...log,
-      id: uid('log'),
+      id: createLogId(),
       media: cloneMediaList(log.media),
     })),
   }))
@@ -146,6 +144,9 @@ function buildPastedNode(
     symbolId: source.symbolId,
     customSymbolId: source.customSymbolId ?? null,
     media: cloneMediaList(source.media),
+    ...(source.markdown && source.markdown.trim()
+      ? { markdown: source.markdown }
+      : {}),
     ...(isMasteryKind(kind)
       ? {
           orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
@@ -162,7 +163,7 @@ function buildPastedNode(
   })
 
   return {
-    id: uid(kind),
+    id: createNodeId(),
     type: 'passive',
     position: {
       x: clipboard.position.x + offsetIndex * 36,
@@ -1015,7 +1016,9 @@ export default function App() {
             }
             if (resolvedKind === 'shard') {
               nextData.stages = []
-              if (prev.kind === 'shard' && data.markdown) nextData.markdown = data.markdown
+              if (data.markdown) nextData.markdown = data.markdown
+            } else if (resolvedKind === 'notable') {
+              if (data.markdown) nextData.markdown = data.markdown
             } else {
               delete nextData.markdown
             }
@@ -1135,7 +1138,7 @@ export default function App() {
       let position = flowPosition
       if (gridSnapEnabled) position = snapNodeTopLeft(position, gridSnapScale)
       commit()
-      const id = uid(kind)
+      const id = createNodeId()
       const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`, {
         symbolId: template.symbolId,
       })
@@ -1681,6 +1684,7 @@ export default function App() {
                       x={contextMenu.x}
                       y={contextMenu.y}
                       nodeLabel={data.label}
+                      markdown={data.markdown}
                       logs={dailyLogsForNode(data)}
                       onClose={closeMenu}
                     />

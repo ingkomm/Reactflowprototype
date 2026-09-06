@@ -30,11 +30,12 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
   const [editDate, setEditDate] = useState(log.date)
   const [editNote, setEditNote] = useState(log.note ?? '')
   const [editVideoUrl, setEditVideoUrl] = useState(videoUrlFromLog(log))
+  const [editMediaNote, setEditMediaNote] = useState(log.media?.[0]?.note ?? '')
   const [editError, setEditError] = useState<string | null>(null)
 
   const handleSave = () => {
     const trimmedUrl = editVideoUrl.trim()
-    const media = trimmedUrl ? createVideoMedia(trimmedUrl) : null
+    const media = trimmedUrl ? createVideoMedia(trimmedUrl, { note: editMediaNote }) : null
     if (trimmedUrl && !media) {
       setEditError('유효한 http(s) 동영상 URL을 입력하세요.')
       return
@@ -72,6 +73,14 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
           placeholder="https://..."
         />
       </label>
+      <label className="field">
+        <span>영상 짧은 메모 (선택)</span>
+        <input
+          value={editMediaNote}
+          onChange={(e) => setEditMediaNote(e.target.value)}
+          placeholder="media caption"
+        />
+      </label>
       {editError && (
         <p className="daily-log-panel__error" role="alert">
           {editError}
@@ -93,6 +102,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
   const [draftDate, setDraftDate] = useState(formatPracticeDate())
   const [draftNote, setDraftNote] = useState('')
   const [draftVideoUrl, setDraftVideoUrl] = useState('')
+  const [draftMediaNote, setDraftMediaNote] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -100,9 +110,9 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
   const practiceDays = new Set(logs.map((log) => log.date)).size
   const orderedLogs = sortedDailyLogs(logs)
 
-  const buildLog = (id: string | undefined, date: string, note: string, videoUrl: string): TrainingLog | null => {
+  const buildLog = (id: string | undefined, date: string, note: string, videoUrl: string, mediaNote?: string): TrainingLog | null => {
     const trimmedUrl = videoUrl.trim()
-    const media = trimmedUrl ? createVideoMedia(trimmedUrl) : null
+    const media = trimmedUrl ? createVideoMedia(trimmedUrl, { note: mediaNote }) : null
     if (trimmedUrl && !media) return null
     const log = createDailyLog(date, note, media ? [media] : undefined)
     if (id) log.id = id
@@ -110,7 +120,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
   }
 
   const handleAdd = () => {
-    const log = buildLog(undefined, draftDate, draftNote, draftVideoUrl)
+    const log = buildLog(undefined, draftDate, draftNote, draftVideoUrl, draftMediaNote)
     if (!log) {
       setFormError('유효한 http(s) 동영상 URL을 입력하세요.')
       return
@@ -124,6 +134,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
     setDraftDate(formatPracticeDate())
     setDraftNote('')
     setDraftVideoUrl('')
+    setDraftMediaNote('')
     setFormError(null)
   }
 
@@ -181,6 +192,14 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
             placeholder="https://..."
           />
         </label>
+      <label className="field">
+        <span>영상 짧은 메모 (선택)</span>
+        <input
+          value={draftMediaNote}
+          onChange={(e) => setDraftMediaNote(e.target.value)}
+          placeholder="media caption"
+        />
+      </label>
         {formError && (
           <p className="daily-log-panel__error" role="alert">
             {formError}

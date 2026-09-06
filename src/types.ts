@@ -124,7 +124,7 @@ export type PassiveNodeData = {
   kind: PassiveKind
   /** Ordered stages; Notable uses cumulative bands. Mastery/Shard typically empty. */
   stages: StageData[]
-  /** Shard only: freeform markdown note (no training logs). */
+  /** Shard document, or Notable current summary (not a Daily Log). */
   markdown?: string
   /** Library symbol id — icon + color come from the built-in catalog. */
   symbolId: string

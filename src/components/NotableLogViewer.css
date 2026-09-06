@@ -280,3 +280,36 @@ body.is-notable-player-resizing .notable-log-viewer__player .video-embed iframe 
     grid-template-rows: minmax(120px, 160px) minmax(180px, 1fr);
   }
 }
+
+
+.notable-log-viewer__summary,
+.notable-log-viewer__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notable-log-viewer__section-title {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9eb0bf;
+}
+
+.notable-log-viewer__short-note,
+.notable-log-viewer__media-note {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #eef3f7;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.notable-log-viewer__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}

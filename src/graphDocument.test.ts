@@ -178,4 +178,93 @@ describe('graphDocument', () => {
     expect(again?.stages?.[0]?.logs?.[0]?.note).toBe('legacy note')
     expect(again?.media?.[0]?.url).toBe(media.url)
   })
+
+  it('preserves Notable summary markdown and Daily Log note/media through parse/export', () => {
+    const media = {
+      id: createVideoMediaId(),
+      url: 'https://youtu.be/dQw4w9WgXcQ',
+      title: 'Clip',
+      note: 'media caption',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'notable-keep',
+          type: 'passive',
+          position: { x: 40, y: 40 },
+          data: {
+            label: 'Drill',
+            kind: 'notable',
+            symbolId: DEFAULT_SYMBOL_ID,
+            markdown: '## Summary\n\nstays',
+            stages: [
+              {
+                id: 'stage-keep',
+                index: 1,
+                label: '연습',
+                goal: 3,
+                completedManually: false,
+                logs: [
+                  {
+                    id: 'log-keep',
+                    date: '2026-09-01',
+                    note: 'short note',
+                    media: [media],
+                  },
+                ],
+              },
+              {
+                id: 'stage-keep-2',
+                index: 2,
+                label: '숙련',
+                goal: 5,
+                completedManually: false,
+                logs: [],
+              },
+              {
+                id: 'stage-keep-3',
+                index: 3,
+                label: '완성',
+                goal: 7,
+                completedManually: false,
+                logs: [],
+              },
+            ],
+          },
+        },
+      ],
+      edges: [],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const loaded = parsed.document.nodes.find((n) => n.id === 'notable-keep')?.data
+    expect(loaded?.markdown).toContain('Summary')
+    expect(loaded?.stages?.[0]?.logs?.[0]?.id).toBe('log-keep')
+    expect(loaded?.stages?.[0]?.logs?.[0]?.note).toBe('short note')
+    expect(loaded?.stages?.[0]?.logs?.[0]?.media?.[0]?.note).toBe('media caption')
+    expect(loaded?.stages?.map((s) => s.goal)).toEqual([3, 5, 7])
+
+    const exported = buildGraphDocument({
+      nodes: parsed.document.nodes,
+      edges: parsed.document.edges,
+      customSymbols: [],
+    })
+    expect(exported.schemaVersion).toBe('0.1')
+    const out = exported.nodes.find((n) => n.id === 'notable-keep')?.data
+    expect(out?.markdown).toContain('stays')
+    expect(out?.stages?.[0]?.logs?.[0]?.id).toBe('log-keep')
+    expect(out?.stages?.[0]?.logs?.[0]?.media?.[0]?.url).toContain('youtu.be')
+  })
+
 })

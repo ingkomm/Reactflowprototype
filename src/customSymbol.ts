@@ -1,5 +1,6 @@
 import type { CustomSymbol } from './types'
 import { MAX_IMAGE_BYTES } from './limits'
+import { createSymbolId } from './ids'
 
 const BLOCKED_TAG = /<\/?(script|foreignObject|iframe|object|embed)\b[^>]*>/gi
 const EVENT_ATTR = /\s(on[a-z]+|formaction)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi
@@ -21,7 +22,7 @@ export function normalizeSymbolScale(value: unknown): number {
 }
 
 export function createCustomSymbolId() {
-  return `cs-${crypto.randomUUID().slice(0, 8)}`
+  return createSymbolId()
 }
 
 export type SanitizeSvgResult =

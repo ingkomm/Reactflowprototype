@@ -1,4 +1,5 @@
 import type { VideoMedia } from './types'
+import { createMediaId } from './ids'
 
 const YOUTUBE_PATTERNS = [
   /(?:youtube\.com\/watch\?v=|youtube\.com\/watch\?.*&v=)([\w-]{11})/i,
@@ -21,7 +22,7 @@ export function classifyVideoUrl(url: string): 'youtube' | 'external' {
 }
 
 export function createVideoMediaId() {
-  return `vid-${crypto.randomUUID().slice(0, 8)}`
+  return createMediaId()
 }
 
 export function createVideoMedia(

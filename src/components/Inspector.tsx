@@ -483,6 +483,18 @@ export function Inspector({
         </label>
       )}
 
+      {data.kind === 'notable' && (
+        <label className="field">
+          <span>Summary (Markdown)</span>
+          <textarea
+            rows={8}
+            value={data.markdown ?? ''}
+            onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
+            placeholder="이 Notable에 대한 현재 종합 설명"
+          />
+        </label>
+      )}
+
 
 
       {kindUsesDailyLogs(data.kind) && (

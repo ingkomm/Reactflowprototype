@@ -69,7 +69,9 @@ export function useFloatingPanelDrag(
   }, [initialX, initialY])
 
   useLayoutEffect(() => {
-    const onResize = () => {
+    const reclampToViewport = () => {
+      // Do not fight an in-progress header drag.
+      if (dragRef.current) return
       const el = panelRef.current
       if (!el) return
       const rect = el.getBoundingClientRect()
@@ -77,8 +79,21 @@ export function useFloatingPanelDrag(
         clampFloatingPanelPosition(prev.x, prev.y, rect.width, rect.height),
       )
     }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    window.addEventListener('resize', reclampToViewport)
+
+    const el = panelRef.current
+    let observer: ResizeObserver | null = null
+    if (el && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        reclampToViewport()
+      })
+      observer.observe(el)
+    }
+
+    return () => {
+      window.removeEventListener('resize', reclampToViewport)
+      observer?.disconnect()
+    }
   }, [])
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
