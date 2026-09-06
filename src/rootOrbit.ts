@@ -7,6 +7,8 @@ import {
   ROOT_HUB_RIM_PAD,
   ROOT_ORBIT_TIER_RADIUS,
   layoutMasteryOrbit,
+  masteryOuterOrbitRadius,
+  isMasteryKind,
 } from './orbit'
 
 /** Spatial-only Root orbit tier (no Active/Standby/Archive meaning). */
@@ -198,6 +200,94 @@ export type RootOrbitDragResult =
  * Drag settle against Root arena (center at world 0,0).
  * Notable only. Returns null when Root orbit should not handle this drop.
  */
+
+/** Gap kept between Root rim and an ejected node's collision radius. */
+export const ROOT_BOUNDARY_GAP = 8
+
+export function isClearlyInsideRoot(dist: number, bodyRadius: number): boolean {
+  return dist + bodyRadius <= ROOT_HUB_RADIUS
+}
+
+export function overlapsRootArena(dist: number, collisionRadius: number): boolean {
+  return dist < ROOT_HUB_RADIUS + collisionRadius
+}
+
+/** Collision radius used when pushing a node fully outside Root. */
+export function rootEjectCollisionRadius(node: PassiveFlowNode): number {
+  const data = node.data as PassiveNodeData
+  if (isMasteryKind(data.kind)) {
+    return masteryOuterOrbitRadius(data) + NODE_SIZE.notable / 2
+  }
+  return NODE_SIZE[data.kind] / 2
+}
+
+/** Radial push-out so center sits at Root radius + collision + gap. */
+export function ejectCenterOutsideRoot(
+  center: { x: number; y: number },
+  collisionRadius: number,
+  gap = ROOT_BOUNDARY_GAP,
+): { x: number; y: number } {
+  const minDist = ROOT_HUB_RADIUS + collisionRadius + gap
+  const dist = Math.hypot(center.x, center.y)
+  if (dist >= minDist - 1e-6) return center
+  if (dist < 1e-6) return { x: minDist, y: 0 }
+  const scale = minDist / dist
+  return { x: center.x * scale, y: center.y * scale }
+}
+
+function shouldExemptFromRootEject(data: PassiveNodeData): boolean {
+  if (data.kind === 'initial') return true
+  // Root-orbit Notables are allowed inside the arena.
+  if (data.kind === 'notable' && normalizeRootOrbitTier(data.rootOrbitTier) != null) return true
+  // Socketed Connects sit on the rim by design.
+  if (data.kind === 'connect' && data.initialSlot != null) return true
+  // Mastery satellites are kept clear via the parent Mastery hub eject.
+  if (data.masteryId) return true
+  return false
+}
+
+/**
+ * Push nodes that partially overlap Root fully outside.
+ * When onlyId is set, only that node (plus Mastery orbit relayout) is considered.
+ */
+export function applyRootBoundaryEject(
+  nodes: PassiveFlowNode[],
+  onlyId?: string,
+): PassiveFlowNode[] {
+  let next = nodes
+  const affectedMasteries: string[] = []
+  for (const node of nodes) {
+    if (onlyId && node.id !== onlyId) continue
+    const data = node.data as PassiveNodeData
+    if (shouldExemptFromRootEject(data)) continue
+    const size = NODE_SIZE[data.kind]
+    const center = {
+      x: node.position.x + size / 2,
+      y: node.position.y + size / 2,
+    }
+    const radius = rootEjectCollisionRadius(node)
+    if (!overlapsRootArena(Math.hypot(center.x, center.y), radius)) continue
+    const ejected = ejectCenterOutsideRoot(center, radius)
+    if (ejected.x === center.x && ejected.y === center.y) continue
+    next = next.map((n) =>
+      n.id === node.id
+        ? {
+            ...n,
+            position: {
+              x: ejected.x - size / 2,
+              y: ejected.y - size / 2,
+            },
+          }
+        : n,
+    )
+    if (isMasteryKind(data.kind)) affectedMasteries.push(node.id)
+  }
+  for (const masteryId of affectedMasteries) {
+    next = layoutMasteryOrbit(next, masteryId)
+  }
+  return next
+}
+
 export function placeNotableFromRootOrbitDrag(
   nodes: PassiveFlowNode[],
   satelliteId: string,
@@ -209,18 +299,36 @@ export function placeNotableFromRootOrbitDrag(
   if (data.kind !== 'notable') return null
 
   const size = NODE_SIZE.notable
+  const bodyR = size / 2
   const cx = pointerTopLeft.x + size / 2
   const cy = pointerTopLeft.y + size / 2
   const dist = Math.hypot(cx, cy)
   const wasOnRoot = normalizeRootOrbitTier(data.rootOrbitTier) != null
+  const clearlyInside = isClearlyInsideRoot(dist, bodyR)
+  const overlaps = overlapsRootArena(dist, bodyR)
 
-  if (dist <= ROOT_HUB_RADIUS + ROOT_ORBIT_ATTACH_SLACK) {
+  // Clear inside → attach to nearest Root orbit tier.
+  if (clearlyInside) {
     const tier = inferRootOrbitTier(dist)
     const next = placeNotableOnRootOrbit(nodes, satelliteId, tier)
     return next ? { kind: 'root', nodes: next } : null
   }
 
-  if (wasOnRoot && dist > ROOT_HUB_RADIUS + ROOT_ORBIT_DETACH_SLACK) {
+  // Ambiguous rim overlap → eject fully outside (never auto-attach).
+  if (overlaps) {
+    const ejected = ejectCenterOutsideRoot({ x: cx, y: cy }, bodyR)
+    const topLeft = { x: ejected.x - size / 2, y: ejected.y - size / 2 }
+    const base = wasOnRoot ? clearRootOrbitMembership(nodes, satelliteId) : nodes
+    return {
+      kind: 'detached',
+      nodes: base.map((node) =>
+        node.id === satelliteId ? { ...node, position: topLeft } : node,
+      ),
+    }
+  }
+
+  // Clearly outside: detach if it was on Root, otherwise leave to other handlers.
+  if (wasOnRoot) {
     const cleared = clearRootOrbitMembership(nodes, satelliteId)
     return {
       kind: 'detached',
@@ -228,15 +336,6 @@ export function placeNotableFromRootOrbitDrag(
         node.id === satelliteId ? { ...node, position: pointerTopLeft } : node,
       ),
     }
-  }
-
-  if (wasOnRoot) {
-    const next = placeNotableOnRootOrbit(
-      nodes,
-      satelliteId,
-      normalizeRootOrbitTier(data.rootOrbitTier) ?? 1,
-    )
-    return next ? { kind: 'root', nodes: next } : null
   }
 
   return null

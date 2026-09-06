@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { INITIAL_NODE_ID } from './types'
-import { ROOT_HUB_SIZE, ROOT_ORBIT_TIER_RADIUS, layoutMasteryOrbit } from './orbit'
+import {
+  ROOT_HUB_SIZE,
+  ROOT_ORBIT_TIER_RADIUS,
+  layoutMasteryOrbit,
+  withMasteryDragFlags,
+  NODE_SIZE,
+  masteryOuterOrbitRadius,
+} from './orbit'
 import { INITIAL_CONNECT_SLOT_COUNT } from './initialHub'
 import {
   ensureRootFixed,
@@ -12,6 +19,10 @@ import {
   rootOrbitHasGlobalHardCap,
   rootOrbitRingPercent,
   ROOT_HUB_RADIUS,
+  applyRootBoundaryEject,
+  isClearlyInsideRoot,
+  overlapsRootArena,
+  ROOT_BOUNDARY_GAP,
 } from './rootOrbit'
 import { computePoweredNodeIds } from './power'
 
@@ -139,5 +150,100 @@ describe('Root orbit', () => {
     const nodes = layoutMasteryOrbit([rootNode(), mastery, sat], 'm1')
     const after = layoutRootOrbit(nodes)
     expect(after.find((n) => n.id === 's1')!.data.masteryId).toBe('m1')
+  })
+})
+
+
+describe('Root stacking and boundary eject', () => {
+  it('keeps Root z-index below Notables even when Root is selected', () => {
+    const nodes = [
+      rootNode(),
+      notable('n1', 0, 0, { rootOrbitTier: 1 }),
+    ]
+    const stacked = withMasteryDragFlags(nodes, INITIAL_NODE_ID)
+    const root = stacked.find((n) => n.id === INITIAL_NODE_ID)!
+    const n1 = stacked.find((n) => n.id === 'n1')!
+    expect(root.zIndex).toBe(0)
+    expect(n1.zIndex).toBeGreaterThan(root.zIndex!)
+  })
+
+  it('attaches clearly-inside Notable and ejects ambiguous rim overlap without attach', () => {
+    const size = NODE_SIZE.notable
+    const bodyR = size / 2
+
+    const insideTL = { x: -bodyR, y: -bodyR }
+    const attached = placeNotableFromRootOrbitDrag(
+      [rootNode(), notable('n-in', insideTL.x, insideTL.y)],
+      'n-in',
+      insideTL,
+    )
+    expect(attached?.kind).toBe('root')
+    expect(attached!.nodes.find((n) => n.id === 'n-in')!.data.rootOrbitTier).toBeTruthy()
+
+    const ambiguousDist = ROOT_HUB_RADIUS - bodyR / 2
+    expect(isClearlyInsideRoot(ambiguousDist, bodyR)).toBe(false)
+    expect(overlapsRootArena(ambiguousDist, bodyR)).toBe(true)
+    const ambTL = { x: ambiguousDist - bodyR, y: -bodyR }
+    const ejected = placeNotableFromRootOrbitDrag(
+      [rootNode(), notable('n-amb', ambTL.x, ambTL.y)],
+      'n-amb',
+      ambTL,
+    )
+    expect(ejected?.kind).toBe('detached')
+    const amb = ejected!.nodes.find((n) => n.id === 'n-amb')!
+    expect(amb.data.rootOrbitTier).toBeUndefined()
+    const cx = amb.position.x + bodyR
+    const cy = amb.position.y + bodyR
+    expect(Math.hypot(cx, cy)).toBeGreaterThanOrEqual(
+      ROOT_HUB_RADIUS + bodyR + ROOT_BOUNDARY_GAP - 1e-6,
+    )
+  })
+
+  it('ejects external Shard fully outside Root on boundary overlap', () => {
+    const size = NODE_SIZE.shard
+    const bodyR = size / 2
+    const nodes: PassiveFlowNode[] = [
+      rootNode(),
+      {
+        id: 's1',
+        type: 'passive',
+        position: { x: ROOT_HUB_RADIUS - bodyR, y: -bodyR },
+        data: { label: 'S', kind: 'shard', stages: [], symbolId: 'default' },
+      } as PassiveFlowNode,
+    ]
+    const next = applyRootBoundaryEject(nodes, 's1')
+    const shard = next.find((n) => n.id === 's1')!
+    const cx = shard.position.x + bodyR
+    const cy = shard.position.y + bodyR
+    expect(Math.hypot(cx, cy)).toBeGreaterThanOrEqual(
+      ROOT_HUB_RADIUS + bodyR + ROOT_BOUNDARY_GAP - 1e-6,
+    )
+  })
+
+  it('ejects Mastery hub using outer orbit + satellite body margin', () => {
+    const mastery = {
+      id: 'm1',
+      type: 'passive',
+      position: { x: 40, y: -NODE_SIZE.mastery / 2 },
+      data: {
+        label: 'M',
+        kind: 'mastery',
+        stages: [],
+        symbolId: 'default',
+        orbitTierCount: 1,
+        orbitCapacityByTier: { 1: 6 },
+        orbitOrder: ['sat'],
+        orbitOrderByTier: { 1: ['sat'] },
+      },
+    } as PassiveFlowNode
+    const sat = notable('sat', 40, 180, { masteryId: 'm1', orbitTier: 1, orbitSlot: 0 })
+    const laid = layoutMasteryOrbit([rootNode(), mastery, sat], 'm1')
+    const outer = masteryOuterOrbitRadius(mastery.data as never)
+    const next = applyRootBoundaryEject(laid, 'm1')
+    const m = next.find((n) => n.id === 'm1')!
+    const cx = m.position.x + NODE_SIZE.mastery / 2
+    const cy = m.position.y + NODE_SIZE.mastery / 2
+    const need = ROOT_HUB_RADIUS + outer + NODE_SIZE.notable / 2 + ROOT_BOUNDARY_GAP
+    expect(Math.hypot(cx, cy)).toBeGreaterThanOrEqual(need - 1e-6)
   })
 })

@@ -14,13 +14,19 @@ import {
 import {
   INITIAL_CONNECT_SLOT_COUNT,
   connectPositionForInitialHub,
+  rootSocketFlowPosition,
+  parseRootSocketHandle,
+  rootSocketSourceHandle,
 } from './initialHub'
 import { buildGraphDocument, documentToFlowState } from './graphDocument'
 import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { createPassiveData } from './graphFactory'
-import { ensureRootFixed } from './rootOrbit'
-import { computePoweredNodeIds } from './power'
+import {
+  ensureRootFixed,
+  ROOT_HUB_RADIUS,
+} from './rootOrbit'
+import { computePoweredNodeIds, isValidRootConnectHandles } from './power'
 
 describe('default Connect slots on 6-socket Root', () => {
   it('empty graph uses slots 0 / 2 / 4', () => {
@@ -113,5 +119,49 @@ describe('Root socket layering class', () => {
     const css = readFileSync('src/components/PassiveNode.css', 'utf8')
     expect(css).toMatch(/\.passive-node__handle--root-socket[\s\S]*?z-index:\s*6/)
     expect(css).toMatch(/\.passive-node__hit[\s\S]*?z-index:\s*5/)
+    expect(css).toMatch(/.passive-node--initial .passive-node__hit[\s\S]*?z-index:\s*1/)
+  })
+})
+
+describe('Root socket endpoints', () => {
+  it('maps each socket handle id to a unique rim endpoint (not hub center)', () => {
+    const topLeft = { x: -ROOT_HUB_RADIUS, y: -ROOT_HUB_RADIUS }
+    const points: { x: number; y: number }[] = []
+    for (let slot = 0; slot < 6; slot++) {
+      const handle = rootSocketSourceHandle(slot as 0 | 1 | 2 | 3 | 4 | 5)
+      expect(parseRootSocketHandle(handle)).toBe(slot)
+      const pt = rootSocketFlowPosition(topLeft, handle)
+      expect(pt).not.toBeNull()
+      points.push(pt!)
+      expect(Math.hypot(pt!.x, pt!.y)).toBeGreaterThan(ROOT_HUB_RADIUS - 4)
+    }
+    expect(rootSocketFlowPosition(topLeft, 'center')).toBeNull()
+    const keys = new Set(points.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`))
+    expect(keys.size).toBe(6)
+  })
+
+  it('rejects Root center handles for Root↔Connect validation', () => {
+    const root = {
+      id: INITIAL_NODE_ID,
+      type: 'passive',
+      position: { x: -ROOT_HUB_RADIUS, y: -ROOT_HUB_RADIUS },
+      data: { label: 'Root', kind: 'initial', stages: [], symbolId: 'default' },
+    } as import('./components/PassiveNode').PassiveFlowNode
+    const connect = {
+      id: 'c1',
+      type: 'passive',
+      position: { x: 200, y: 0 },
+      data: {
+        label: 'C',
+        kind: 'connect',
+        stages: [],
+        symbolId: 'default',
+        connectEnabled: true,
+      },
+    } as import('./components/PassiveNode').PassiveFlowNode
+    expect(isValidRootConnectHandles(root, connect, 'center', 'center-target')).toBe(false)
+    expect(
+      isValidRootConnectHandles(root, connect, rootSocketSourceHandle(2), 'center-target'),
+    ).toBe(true)
   })
 })

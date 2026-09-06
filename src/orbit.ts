@@ -1396,11 +1396,13 @@ export function withMasteryDragFlags(
 ): PassiveFlowNode[] {
   return nodes.map((node) => {
     const data = node.data as PassiveNodeData
+    // Root is a background hub arena — never elevate above inner Notables / sockets.
+    const isRoot = data.kind === 'initial'
     // Mastery orbits are large; keep them under satellite titles/links visually.
     // Selected mastery must NOT jump above satellites — orbits are children of the mastery node.
     const isMastery = isMasteryKind(data.kind)
-    const baseZ = isMastery ? 1 : 6
-    const selectedZ = isMastery ? 2 : 40
+    const baseZ = isRoot ? 0 : isMastery ? 1 : 6
+    const selectedZ = isRoot ? 0 : isMastery ? 2 : 40
     return {
       ...node,
       dragHandle: '.node-drag-handle',

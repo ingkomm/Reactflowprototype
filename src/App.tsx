@@ -72,6 +72,7 @@ import {
   withMasteryDragFlags,
 } from './orbit'
 import {
+  applyRootBoundaryEject,
   ensureRootFixed,
   layoutRootOrbit,
   placeNotableFromRootOrbitDrag,
@@ -475,12 +476,36 @@ export default function App() {
 
   const handleEdgesChange = useCallback(
     (changes: Parameters<typeof onEdgesChange>[0]) => {
-      if (changes.some((c) => c.type === 'remove')) {
+      const removals = changes.filter((c) => c.type === 'remove')
+      if (removals.length > 0) {
         commit()
+        const removedIds = new Set(removals.map((c) => c.id))
+        const removedEdges = edges.filter((e) => removedIds.has(e.id))
+        const connectIds = new Set<string>()
+        for (const e of removedEdges) {
+          const s = nodes.find((n) => n.id === e.source)
+          const t = nodes.find((n) => n.id === e.target)
+          if (!s || !t) continue
+          const sd = s.data as PassiveNodeData
+          const td = t.data as PassiveNodeData
+          if (sd.kind === 'initial' && td.kind === 'connect') connectIds.add(t.id)
+          if (td.kind === 'initial' && sd.kind === 'connect') connectIds.add(s.id)
+        }
+        if (connectIds.size > 0) {
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (!connectIds.has(node.id)) return node
+              const data = node.data as PassiveNodeData
+              if (data.initialSlot == null) return node
+              const { initialSlot: _slot, ...rest } = data
+              return { ...node, data: rest }
+            }),
+          )
+        }
       }
       onEdgesChange(changes)
     },
-    [commit, onEdgesChange],
+    [commit, edges, nodes, onEdgesChange, setNodes],
   )
 
   const poweredIds = useMemo(
@@ -688,8 +713,33 @@ export default function App() {
         connectId = sd.kind === 'connect' ? source.id : target.id
         if (isRootConnectSlotTaken(nodes, rootConnectSlot, connectId)) return
         const existingRootLink = findLinkEdge(edges, source.id, target.id, 'center')
-        // New connection only: assign slot and snap Connect onto the socket.
-        if (!existingRootLink) {
+        if (existingRootLink) {
+          const prevSlot = resolveRootConnectSlot(
+            source,
+            target,
+            existingRootLink.sourceHandle,
+            existingRootLink.targetHandle,
+          )
+          if (prevSlot === rootConnectSlot) {
+            // Toggle off: remove edge + clear initialSlot atomically.
+            setNodes((nds) =>
+              nds.map((node) => {
+                if (node.id !== connectId) return node
+                const data = node.data as PassiveNodeData
+                if (data.initialSlot == null) return node
+                const { initialSlot: _slot, ...rest } = data
+                return { ...node, data: rest }
+              }),
+            )
+            setEdges((eds) =>
+              sanitizeEdges(
+                nodes,
+                eds.filter((e) => e.id !== existingRootLink.id),
+              ),
+            )
+            return
+          }
+          // Reconnect same Connect onto a different Root socket.
           setNodes((nds) => {
             const root = nds.find((n) => n.id === rootId)
             if (!root) return nds
@@ -703,7 +753,34 @@ export default function App() {
               }
             })
           })
+          setEdges((eds) => {
+            const without = eds.filter((e) => {
+              const pair =
+                (e.source === rootId && e.target === connectId) ||
+                (e.source === connectId && e.target === rootId)
+              return !pair
+            })
+            return sanitizeEdges(nodes, [
+              ...without,
+              rootSocketLinkEdge(rootId!, connectId!, rootConnectSlot!),
+            ])
+          })
+          return
         }
+        // Fresh Root↔Connect attach: slot + snap + edge.
+        setNodes((nds) => {
+          const root = nds.find((n) => n.id === rootId)
+          if (!root) return nds
+          return nds.map((node) => {
+            if (node.id !== connectId) return node
+            const data = node.data as PassiveNodeData
+            return {
+              ...node,
+              position: connectPositionForInitialHub(root.position, rootConnectSlot!),
+              data: { ...data, initialSlot: rootConnectSlot! },
+            }
+          })
+        })
       }
 
       setEdges((eds) => {
@@ -720,7 +797,13 @@ export default function App() {
         } else if (linkKind === 'notable') {
           next = [...eds, notableLinkEdge(source.id, target.id)]
         } else if (isRootConnect && rootConnectSlot !== null && rootId && connectId) {
-          next = [...eds, rootSocketLinkEdge(rootId, connectId, rootConnectSlot)]
+          const withoutRoot = eds.filter((e) => {
+            const pair =
+              (e.source === rootId && e.target === connectId) ||
+              (e.source === connectId && e.target === rootId)
+            return !pair
+          })
+          next = [...withoutRoot, rootSocketLinkEdge(rootId, connectId, rootConnectSlot)]
         } else {
           next = [...eds, passiveLinkEdge(source.id, target.id)]
         }
@@ -1480,9 +1563,30 @@ export default function App() {
     (_event: ReactMouseEvent, edge: Edge) => {
       commit()
       const edgeId = edge.id.replace(/-hit$/, '')
+      const removed = edges.find((e) => e.id === edgeId)
       setEdges((eds) => eds.filter((e) => e.id !== edgeId))
+      if (removed) {
+        const s = nodes.find((n) => n.id === removed.source)
+        const t = nodes.find((n) => n.id === removed.target)
+        const sd = s?.data as PassiveNodeData | undefined
+        const td = t?.data as PassiveNodeData | undefined
+        let connectId: string | null = null
+        if (sd?.kind === 'initial' && td?.kind === 'connect') connectId = t!.id
+        if (td?.kind === 'initial' && sd?.kind === 'connect') connectId = s!.id
+        if (connectId) {
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.id !== connectId) return node
+              const data = node.data as PassiveNodeData
+              if (data.initialSlot == null) return node
+              const { initialSlot: _slot, ...rest } = data
+              return { ...node, data: rest }
+            }),
+          )
+        }
+      }
     },
-    [commit, setEdges],
+    [commit, edges, nodes, setEdges, setNodes],
   )
 
   const onNodeDrag = useCallback(
@@ -1563,34 +1667,33 @@ export default function App() {
         setNodes((nds) => {
           const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
           const synced = nds.map((n) => (n.id === node.id ? { ...n, position } : n))
-          return stack(layoutMasteryOrbit(synced, node.id))
+          const laid = layoutMasteryOrbit(synced, node.id)
+          return stack(applyRootBoundaryEject(laid, node.id))
         })
         return
       }
 
       if (!isOrbitMemberKind(data.kind)) {
-        if (gridSnapEnabled) {
-          setNodes((nds) =>
-            stack(
-              nds.map((n) =>
-                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position, gridSnapScale) } : n,
-              ),
-            ),
-          )
-        }
+        setNodes((nds) => {
+          let next = nds.map((n) => {
+            if (n.id !== node.id) return n
+            const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
+            return { ...n, position }
+          })
+          return stack(applyRootBoundaryEject(next, node.id))
+        })
         return
       }
 
       if (!dragSession || dragSession.nodeId !== node.id) {
-        if (gridSnapEnabled) {
-          setNodes((nds) =>
-            stack(
-              nds.map((n) =>
-                n.id === node.id ? { ...n, position: snapNodeTopLeft(node.position, gridSnapScale) } : n,
-              ),
-            ),
-          )
-        }
+        setNodes((nds) => {
+          let next = nds.map((n) => {
+            if (n.id !== node.id) return n
+            const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
+            return { ...n, position }
+          })
+          return stack(applyRootBoundaryEject(next, node.id))
+        })
         return
       }
 
@@ -1635,16 +1738,24 @@ export default function App() {
         }
         const baseNodes =
           rootResult?.kind === 'detached' ? rootResult.nodes : dragSession.snapshotNodes
+        let dropPosition = finalPosition
+        if (rootResult?.kind === 'detached') {
+          const ejectedNode = rootResult.nodes.find((n) => n.id === node.id)
+          if (ejectedNode) dropPosition = ejectedNode.position
+        }
         const dragOrigin: SatelliteDragOrigin =
           rootResult?.kind === 'detached'
             ? { kind: 'external', position: dragSession.originPosition }
             : origin
         setNodes(() =>
           stack(
-            layoutRootOrbit(
-              stripRootOrbitWhenMasteryBound(
-                placeSatelliteFromDrag(baseNodes, node.id, finalPosition, dragOrigin),
+            applyRootBoundaryEject(
+              layoutRootOrbit(
+                stripRootOrbitWhenMasteryBound(
+                  placeSatelliteFromDrag(baseNodes, node.id, dropPosition, dragOrigin),
+                ),
               ),
+              node.id,
             ),
           ),
         )
@@ -1653,11 +1764,14 @@ export default function App() {
 
       setNodes(() =>
         stack(
-          placeSatelliteFromDrag(
-            dragSession.snapshotNodes,
+          applyRootBoundaryEject(
+            placeSatelliteFromDrag(
+              dragSession.snapshotNodes,
+              node.id,
+              finalPosition,
+              origin,
+            ),
             node.id,
-            finalPosition,
-            origin,
           ),
         ),
       )

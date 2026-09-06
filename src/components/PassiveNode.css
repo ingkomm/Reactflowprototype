@@ -213,6 +213,27 @@
   box-sizing: border-box;
 }
 
+/* Root selection = rim / glow / orbit emphasis only (stacking stays background). */
+.passive-node--initial.is-selected .passive-node__ring {
+  box-shadow:
+    0 0 0 2px #ffe066,
+    0 0 0 6px color-mix(in srgb, #ffe066 28%, transparent),
+    0 0 28px color-mix(in srgb, #ffe066 45%, transparent),
+    0 0 56px color-mix(in srgb, #ffe066 18%, transparent),
+    inset 0 0 40px rgba(0, 0, 0, 0.55);
+}
+
+.passive-node--initial.is-selected .passive-node__initial-orbit-ring {
+  border-color: color-mix(in srgb, #ffe066 72%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, #ffe066 35%, transparent);
+}
+
+.passive-node--initial.is-selected .passive-node__initial-arena {
+  border-color: color-mix(in srgb, #ffe066 48%, transparent);
+  background: radial-gradient(circle at 50% 45%, rgba(255, 224, 102, 0.1), transparent 70%);
+}
+
+
 .passive-node__initial-socket {
   position: absolute;
   width: clamp(18px, 3.5%, 32px);
@@ -593,6 +614,11 @@
   border-radius: 50%;
   z-index: 5;
   cursor: grab;
+}
+
+/* Root arena hit stays behind sockets and does not steal child node clicks. */
+.passive-node--initial .passive-node__hit {
+  z-index: 1;
 }
 
 .passive-node__hit:active {

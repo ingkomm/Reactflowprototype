@@ -31,10 +31,10 @@ function endpointForNode(
   node: NonNullable<ReturnType<typeof useInternalNode>>,
   data: PassiveNodeData,
   handleId: string | null | undefined,
-) {
+): { x: number; y: number } | null {
   if (data.kind === 'initial') {
-    const socket = rootSocketFlowPosition(node.internals.positionAbsolute, handleId)
-    if (socket) return socket
+    // Root edges must use a rim socket — never fall back to hub center.
+    return rootSocketFlowPosition(node.internals.positionAbsolute, handleId)
   }
   return nodeCenter(node)
 }
@@ -62,6 +62,9 @@ export function CenterEdge({
 
   const sourcePt = endpointForNode(sourceNode, sd, sourceHandleId)
   const targetPt = endpointForNode(targetNode, td, targetHandleId)
+  if (!sourcePt || !targetPt) {
+    return null
+  }
 
   const sourceLit = powered.has(source)
   const targetLit = powered.has(target)
