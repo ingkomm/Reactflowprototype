@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computePoweredNodeIds,
+  canTransmitPower,
   getNodesReachableFromInitial,
   isEdgeActive,
   syncEdgesReachableFromInitial,
@@ -8,6 +9,8 @@ import {
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge } from './graphFactory'
 import { INITIAL_NODE_ID } from './types'
+import { createNotableStages, ensureNotableStages } from './stage'
+import { createDailyLog } from './dailyLog'
 
 function node(id: string, kind: Parameters<typeof createPassiveData>[0], extras = {}): PassiveFlowNode {
   return {
@@ -86,5 +89,74 @@ describe('power', () => {
     expect(powered.has('connect-a')).toBe(true)
     expect(powered.has('connect-b')).toBe(true)
     expect(powered.has('shard-x')).toBe(true)
+  })
+
+  it('relays Notable power independent of practice day count', () => {
+    const make = (id: string, practiceDays: number) =>
+      node(id, 'notable', {
+        stages: createNotableStages(practiceDays),
+      })
+
+    for (const days of [0, 1, 3, 30]) {
+      const nodes = [
+        node(INITIAL_NODE_ID, 'initial'),
+        node('connect-a', 'connect', { connectEnabled: true, initialSlot: 0 }),
+        make('notable-a', days),
+        node('shard-b', 'shard'),
+      ]
+      const edges = [
+        rootSocketLinkEdge(INITIAL_NODE_ID, 'connect-a', 0),
+        passiveLinkEdge('connect-a', 'notable-a'),
+        passiveLinkEdge('notable-a', 'shard-b'),
+      ]
+      expect(canTransmitPower(nodes[2]!.data)).toBe(true)
+      const powered = computePoweredNodeIds(nodes, edges)
+      expect(powered.has('notable-a')).toBe(true)
+      expect(powered.has('shard-b')).toBe(true)
+    }
+  })
+
+  it('does not let duplicate-date logs or band progress change Notable relay', () => {
+    const logs = [
+      createDailyLog('2026-01-01', 'a'),
+      createDailyLog('2026-01-01', 'b'),
+      createDailyLog('2026-01-02', 'c'),
+    ]
+    const stages = ensureNotableStages(createNotableStages(0, logs))
+    const notable = node('notable-dup', 'notable', { stages })
+    expect(canTransmitPower(notable.data)).toBe(true)
+
+    const nodes = [
+      node(INITIAL_NODE_ID, 'initial'),
+      node('connect-a', 'connect', { connectEnabled: true, initialSlot: 0 }),
+      notable,
+      node('shard-b', 'shard'),
+    ]
+    const edges = [
+      rootSocketLinkEdge(INITIAL_NODE_ID, 'connect-a', 0),
+      passiveLinkEdge('connect-a', 'notable-dup'),
+      passiveLinkEdge('notable-dup', 'shard-b'),
+    ]
+    const powered = computePoweredNodeIds(nodes, edges)
+    expect(powered.has('notable-dup')).toBe(true)
+    expect(powered.has('shard-b')).toBe(true)
+  })
+
+  it('keeps Connect Off and Mastery non-transmit rules unchanged', () => {
+    const nodes = [
+      node(INITIAL_NODE_ID, 'initial'),
+      node('connect-off', 'connect', { connectEnabled: false, initialSlot: 0 }),
+      node('shard-b', 'shard'),
+      node('mastery-m', 'mastery'),
+    ]
+    expect(canTransmitPower(nodes[1]!.data)).toBe(false)
+    expect(canTransmitPower(nodes[3]!.data)).toBe(false)
+    const edges = [
+      rootSocketLinkEdge(INITIAL_NODE_ID, 'connect-off', 0),
+      passiveLinkEdge('connect-off', 'shard-b'),
+    ]
+    const powered = computePoweredNodeIds(nodes, edges)
+    expect(powered.has('connect-off')).toBe(true)
+    expect(powered.has('shard-b')).toBe(false)
   })
 })

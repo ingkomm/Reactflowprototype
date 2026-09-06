@@ -49,14 +49,14 @@ export function createStage(
   }
 }
 
-/** Notable cumulative band sizes (inner → outer): 3 → 5 → 7. */
+/** Persisted Notable band scaffold (inner → outer). Runtime may show 9,11,... as UI-only rings. */
 export const NOTABLE_BAND_GOALS = [3, 5, 7] as const
 
 export function kindUsesTrainingBands(kind: PassiveKind): boolean {
   return kind === 'notable'
 }
 
-/** Practice days logged in this stage (one log per date). */
+/** Log entries in this stage (not unique practice days). */
 export function stageRawLoggedCount(stage: StageData): number {
   return stage.logs.length
 }
@@ -140,35 +140,76 @@ export function ensureNotableStages(stages: StageData[]): StageData[] {
   return createNotableStages(total, poolLogs)
 }
 
-/** Per-band filled segment counts from cumulative total (never a solid ring). */
-export function notableBandFills(totalLogged: number): number[] {
-  let remaining = Math.max(0, totalLogged)
-  return NOTABLE_BAND_GOALS.map((goal) => {
+/** Persisted Notable scaffold goals remain [3,5,7]. Runtime/UI may extend 9,11,13,... */
+export function notableBandGoalAt(index: number): number {
+  return 3 + 2 * index
+}
+
+export type DynamicNotableBands = {
+  goals: number[]
+  fills: number[]
+}
+
+/**
+ * Dynamic Notable bands from unique practice days.
+ * Persisted StageData stays [3,5,7]; extended rings are UI-only.
+ * Next ring appears only after previous rings are full and progress continues.
+ */
+export function computeDynamicNotableBands(practiceDays: number): DynamicNotableBands {
+  let remaining = Math.max(0, Math.floor(practiceDays))
+  const goals: number[] = []
+  const fills: number[] = []
+  let i = 0
+  while (true) {
+    const goal = notableBandGoalAt(i)
     const fill = Math.min(goal, remaining)
-    remaining = Math.max(0, remaining - goal)
-    return fill
-  })
+    remaining -= fill
+    if (i < NOTABLE_BAND_GOALS.length) {
+      goals.push(goal)
+      fills.push(fill)
+      i += 1
+      continue
+    }
+    if (fill <= 0) break
+    goals.push(goal)
+    fills.push(fill)
+    i += 1
+    if (fill < goal) break
+  }
+  return { goals, fills }
+}
+
+/** Per-band filled segment counts from cumulative practice days (never a solid ring). */
+export function notableBandFills(totalLogged: number): number[] {
+  return computeDynamicNotableBands(totalLogged).fills
+}
+
+export function notableBandGoalsForDays(totalLogged: number): number[] {
+  return computeDynamicNotableBands(totalLogged).goals
 }
 
 /** How many Notable band rings to render (hide outer until inner is full). */
 export function visibleNotableBandCount(totalLogged: number): number {
-  const fills = notableBandFills(totalLogged)
-  for (let i = 0; i < NOTABLE_BAND_GOALS.length; i++) {
-    if (fills[i]! < NOTABLE_BAND_GOALS[i]!) return i + 1
+  const { goals, fills } = computeDynamicNotableBands(totalLogged)
+  for (let i = 0; i < fills.length; i++) {
+    if (fills[i]! < goals[i]!) return i + 1
   }
-  return NOTABLE_BAND_GOALS.length
+  return fills.length
 }
 
 export function isNotableBandComplete(totalLogged: number, bandIndex0: number): boolean {
-  const fills = notableBandFills(totalLogged)
-  const goal = NOTABLE_BAND_GOALS[bandIndex0]
+  const { goals, fills } = computeDynamicNotableBands(totalLogged)
+  const goal = goals[bandIndex0]
   if (goal == null) return false
   return fills[bandIndex0]! >= goal
 }
 
-/** First Notable band (3) complete → can relay power. */
-export function canNotableTransmit(stages: StageData[]): boolean {
-  return totalRawLoggedAcrossStages(stages) >= NOTABLE_BAND_GOALS[0]!
+/**
+ * Notable power relay is independent of practice history.
+ * Kept for call-site compatibility; always true.
+ */
+export function canNotableTransmit(_stages?: StageData[]): boolean {
+  return true
 }
 
 /** Fractional glow level from stage completion + in-progress fill. */
@@ -176,8 +217,8 @@ export function stageBandLevel(stages: StageData[]): number {
   if (stages.length === 0) return 0
   const total = totalRawLoggedAcrossStages(stages)
   if (stages.length === NOTABLE_BAND_GOALS.length && stages.every((s, i) => s.goal === NOTABLE_BAND_GOALS[i])) {
-    const fills = notableBandFills(total)
-    return fills.reduce((sum, fill, i) => sum + fill / NOTABLE_BAND_GOALS[i]!, 0)
+    const { goals, fills } = computeDynamicNotableBands(total)
+    return fills.reduce((sum, fill, i) => sum + fill / goals[i]!, 0)
   }
   let level = 0
   for (const stage of stages) {

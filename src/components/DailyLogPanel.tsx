@@ -20,13 +20,38 @@ function videoUrlFromLog(log: TrainingLog): string {
   return log.media?.[0]?.url ?? ''
 }
 
-/** Build media for save: never write a new media.note; preserve legacy note when URL unchanged. */
-function mediaFromUrl(url: string, previous?: VideoMedia): VideoMedia[] | null {
+/**
+ * Edit only the first video slot. Preserve media[1...] always.
+ * - empty URL → drop media[0] only
+ * - same URL → keep media[0] (id/note/title) + rest
+ * - new URL → replace media[0] without writing a new note; keep rest
+ */
+export function resolveDailyLogMediaEdit(
+  existing: VideoMedia[] | undefined,
+  nextUrl: string,
+): VideoMedia[] | null {
+  const previous = existing ?? []
+  const rest = previous.slice(1)
+  const trimmedUrl = nextUrl.trim()
+
+  if (!trimmedUrl) {
+    return rest
+  }
+
+  const first = previous[0]
+  if (first?.url === trimmedUrl) {
+    return [{ ...first, url: trimmedUrl }, ...rest]
+  }
+
+  const created = createVideoMedia(trimmedUrl)
+  if (!created) return null
+  return [created, ...rest]
+}
+
+/** New Daily Log: optional single video, never writes media.note. */
+function mediaFromUrl(url: string): VideoMedia[] | null {
   const trimmedUrl = url.trim()
   if (!trimmedUrl) return []
-  if (previous?.url === trimmedUrl) {
-    return [{ ...previous, url: trimmedUrl }]
-  }
   const created = createVideoMedia(trimmedUrl)
   if (!created) return null
   return [created]
@@ -45,7 +70,7 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
   const [editError, setEditError] = useState<string | null>(null)
 
   const handleSave = () => {
-    const media = mediaFromUrl(editVideoUrl, log.media?.[0])
+    const media = resolveDailyLogMediaEdit(log.media, editVideoUrl)
     if (media === null) {
       setEditError('유효한 http(s) 동영상 URL을 입력하세요.')
       return
@@ -67,20 +92,20 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
         <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
       </label>
       <label className="field">
+        <span>동영상 URL (선택)</span>
+        <input
+          value={editVideoUrl}
+          onChange={(e) => setEditVideoUrl(e.target.value)}
+          placeholder="https://..."
+        />
+      </label>
+      <label className="field">
         <span>Simple Memo (선택)</span>
         <textarea
           className="daily-log-panel__memo"
           value={editNote}
           onChange={(e) => setEditNote(e.target.value)}
           rows={2}
-        />
-      </label>
-      <label className="field">
-        <span>동영상 URL (선택)</span>
-        <input
-          value={editVideoUrl}
-          onChange={(e) => setEditVideoUrl(e.target.value)}
-          placeholder="https://..."
         />
       </label>
       {editError && (
@@ -179,6 +204,14 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
           <input type="date" value={draftDate} onChange={(e) => setDraftDate(e.target.value)} />
         </label>
         <label className="field">
+          <span>동영상 URL (선택)</span>
+          <input
+            value={draftVideoUrl}
+            onChange={(e) => setDraftVideoUrl(e.target.value)}
+            placeholder="https://..."
+          />
+        </label>
+        <label className="field">
           <span>Simple Memo (선택)</span>
           <textarea
             className="daily-log-panel__memo"
@@ -186,14 +219,6 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
             onChange={(e) => setDraftNote(e.target.value)}
             placeholder="짧은 생각, 메모, 연습 메모 모두 OK"
             rows={2}
-          />
-        </label>
-        <label className="field">
-          <span>동영상 URL (선택)</span>
-          <input
-            value={draftVideoUrl}
-            onChange={(e) => setDraftVideoUrl(e.target.value)}
-            placeholder="https://..."
           />
         </label>
         {formError && (

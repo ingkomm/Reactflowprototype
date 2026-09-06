@@ -2,6 +2,7 @@ import type { StageData } from '../types'
 import {
   isStageComplete,
   notableBandFills,
+  notableBandGoalsForDays,
   NOTABLE_BAND_GOALS,
   sortedStages,
   stageLoggedCount,
@@ -42,37 +43,34 @@ function segmentPath(
 }
 
 type RingProps = {
-  stage: StageData
+  ringKey: string
+  goal: number
+  filled: number
   cx: number
   cy: number
   r: number
 }
 
-function StageRing({ stage, cx, cy, r, filledOverride }: RingProps & { filledOverride?: number }) {
-  const goal = Math.max(1, stage.goal)
-  const filled =
-    filledOverride != null
-      ? Math.min(goal, Math.max(0, filledOverride))
-      : isStageComplete(stage)
-        ? goal
-        : stageLoggedCount(stage)
+function StageRing({ ringKey, goal, filled, cx, cy, r }: RingProps) {
+  const safeGoal = Math.max(1, goal)
+  const safeFilled = Math.min(safeGoal, Math.max(0, filled))
   const circumferenceAngle = Math.PI * 2
-  const usable = circumferenceAngle - goal * SEGMENT_GAP
-  const segSpan = usable / goal
+  const usable = circumferenceAngle - safeGoal * SEGMENT_GAP
+  const segSpan = usable / safeGoal
   // Start at top (-90°)
   const origin = -Math.PI / 2
 
   // Always segmented cells — never a solid completed circle.
   return (
     <g className="training-bands__stage">
-      {Array.from({ length: goal }, (_, i) => {
+      {Array.from({ length: safeGoal }, (_, i) => {
         const start = origin + i * (segSpan + SEGMENT_GAP)
         const end = start + segSpan
         const d = segmentPath(cx, cy, r, start, end)
-        const isFilled = i < filled
+        const isFilled = i < safeFilled
         return (
           <path
-            key={`${stage.id}-${i}`}
+            key={`${ringKey}-${i}`}
             className={
               isFilled ? 'training-bands__cell is-filled' : 'training-bands__cell'
             }
@@ -87,7 +85,10 @@ function StageRing({ stage, cx, cy, r, filledOverride }: RingProps & { filledOve
   )
 }
 
-/** One segmented ring per stage: stage 1 innermost → outer. Notable uses cumulative 3/5/7 fills. */
+/**
+ * One segmented ring per band: stage 1 innermost → outer.
+ * Notable uses dynamic goals 3,5,7,9,… from unique practice days (9+ UI-only).
+ */
 export function TrainingBands({ stages, nodeSize }: Props) {
   const ordered = sortedStages(stages)
   if (ordered.length === 0) return null
@@ -96,11 +97,28 @@ export function TrainingBands({ stages, nodeSize }: Props) {
     ordered.length === NOTABLE_BAND_GOALS.length &&
     ordered.every((s, i) => s.goal === NOTABLE_BAND_GOALS[i])
   const totalLogged = totalRawLoggedAcrossStages(ordered)
-  const fills = isNotableBands ? notableBandFills(totalLogged) : null
-  const visibleCount = isNotableBands ? visibleNotableBandCount(totalLogged) : ordered.length
-  const visibleStages = ordered.slice(0, visibleCount)
 
-  const bandCount = visibleStages.length
+  let rings: { key: string; goal: number; filled: number }[]
+  if (isNotableBands) {
+    const goals = notableBandGoalsForDays(totalLogged)
+    const fills = notableBandFills(totalLogged)
+    const visibleCount = visibleNotableBandCount(totalLogged)
+    rings = goals.slice(0, visibleCount).map((goal, i) => ({
+      key: `band-${goal}`,
+      goal,
+      filled: fills[i] ?? 0,
+    }))
+  } else {
+    rings = ordered.map((stage) => ({
+      key: stage.id,
+      goal: stage.goal,
+      filled: isStageComplete(stage) ? stage.goal : stageLoggedCount(stage),
+    }))
+  }
+
+  if (rings.length === 0) return null
+
+  const bandCount = rings.length
   const padding = BAND_GAP * bandCount + BAND_STROKE * 2 + 2
   const svgSize = nodeSize + padding * 2
   const cx = svgSize / 2
@@ -115,14 +133,15 @@ export function TrainingBands({ stages, nodeSize }: Props) {
       viewBox={`0 0 ${svgSize} ${svgSize}`}
       aria-hidden
     >
-      {visibleStages.map((stage, i) => (
+      {rings.map((ring, i) => (
         <StageRing
-          key={stage.id}
-          stage={stage}
+          key={ring.key}
+          ringKey={ring.key}
+          goal={ring.goal}
+          filled={ring.filled}
           cx={cx}
           cy={cy}
           r={baseR + i * BAND_GAP}
-          filledOverride={fills?.[i]}
         />
       ))}
     </svg>

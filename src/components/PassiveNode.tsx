@@ -5,7 +5,7 @@ import { PASSIVE_KIND_LABEL } from '../types'
 import {
   kindUsesTrainingBands,
   notableBandFills,
-  NOTABLE_BAND_GOALS,
+  notableBandGoalsForDays,
   stageBandLevel,
   totalRawLoggedAcrossStages,
   visibleNotableBandCount,
@@ -27,7 +27,6 @@ import {
 import type { OrbitTier } from '../types'
 import { isDefaultSymbolId, resolveSymbolLabel } from '../librarySymbols'
 import { useNodePowered } from '../powerContext.shared'
-import { canTransmitPower } from '../power'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { useCustomSymbols } from '../customSymbolContext.shared'
@@ -70,7 +69,6 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
   const nodePowered = useNodePowered(id)
   const powered = !isStealth && (nodePowered || isInitialNode)
   const showOrbitHighlight = voidHighlight && data.kind === 'mastery' && !powered
-  const canRelay = powered && canTransmitPower(data)
   const symbolLabel = resolveSymbolLabel(data.symbolId, customSymbols)
   const symbolColor = resolveSymbolColor(data.symbolId, data.kind)
   const useDefaultShape = isDefaultSymbolId(data.symbolId)
@@ -114,9 +112,12 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       ? Math.min(0.5, 0.14 + bandLevel * 0.1)
       : 0
 
+  const bandGoals = kindUsesTrainingBands(data.kind)
+    ? notableBandGoalsForDays(totalLogged)
+    : []
   const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
-  const done = fills.filter((f, i) => f >= (NOTABLE_BAND_GOALS[i] ?? 0)).length
-  const activeFill = fills.findIndex((f, i) => f < (NOTABLE_BAND_GOALS[i] ?? 1))
+  const done = fills.filter((f, i) => f >= (bandGoals[i] ?? 0)).length
+  const activeFill = fills.findIndex((f, i) => f < (bandGoals[i] ?? 1))
 
   const connectGlowClass = isConnectNode
     ? powered
@@ -301,17 +302,14 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           {isConnectNode && powered && !connectOn && (
             <p className="passive-node__tooltip-meta">Connect Off — 회로 차단</p>
           )}
-          {powered && !canRelay && data.kind === 'notable' && (
-            <p className="passive-node__tooltip-meta">1밴드(3) 미완료 — 파워 전달 불가</p>
-          )}
           {!isInitialNode && !isConnectNode && (
             <p className="passive-node__tooltip-meta">Symbol · {symbolLabel}</p>
           )}
           {showBands && (
             <p className="passive-node__tooltip-meta">
-              로그 {totalLogged} · 밴드 {done}/{visibleBandCount}
+              연습 {totalLogged}일 · 밴드 {done}/{visibleBandCount}
               {activeFill >= 0 && activeFill < visibleBandCount
-                ? ` · ${fills[activeFill]}/${NOTABLE_BAND_GOALS[activeFill]}`
+                ? ` · ${fills[activeFill]}/${bandGoals[activeFill]}`
                 : ''}
             </p>
           )}

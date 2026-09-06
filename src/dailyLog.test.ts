@@ -60,7 +60,7 @@ describe('dailyLog duplicate dates', () => {
     expect(sorted.map((log) => log.note)).toEqual(['first', 'second', 'older'])
   })
 
-  it('counts practice days by unique date for power threshold', () => {
+  it('counts practice days by unique date (not log count)', () => {
     const base = [
       createDailyLog('2026-09-01', 'd1'),
       createDailyLog('2026-09-02', 'd2'),

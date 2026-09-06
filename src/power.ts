@@ -3,7 +3,7 @@ import { parseRootSocketHandle } from './initialHub'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { GraphEdgeData, PassiveNodeData, InitialConnectSlot } from './types'
 import { NODE_SIZE } from './orbit'
-import { canNotableTransmit, kindUsesTrainingBands } from './stage'
+import { kindUsesTrainingBands } from './stage'
 import {
   getOrderedOrbitSatellites,
   canOrbitLink,
@@ -60,14 +60,14 @@ function isStealth(data: PassiveNodeData) {
  * - Initial: always (root source)
  * - Connect: when On
  * - Shard: when powered
- * - Notable: first cumulative band (3) complete
+ * - Notable: when powered (practice history does not gate relay)
  */
 export function canTransmitPower(data: PassiveNodeData): boolean {
   if (isInitial(data)) return true
   if (isConnect(data)) return isConnectEnabled(data)
   if (data.kind === 'shard') return true
   if (isStealth(data) || isMastery(data)) return false
-  if (kindUsesTrainingBands(data.kind)) return canNotableTransmit(data.stages ?? [])
+  if (kindUsesTrainingBands(data.kind)) return true
   return false
 }
 
