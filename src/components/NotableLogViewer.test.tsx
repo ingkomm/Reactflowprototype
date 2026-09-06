@@ -124,9 +124,8 @@ describe('NotableLogViewer interactions', () => {
     expect(view.host.querySelector('[data-testid="notable-short-note"]')?.textContent).toContain(
       'older note',
     )
-    expect(view.host.querySelector('[data-testid="notable-log-detail"]')?.textContent).toContain(
-      'No video',
-    )
+    expect(view.host.querySelector('[data-testid="notable-video-pane"]')).toBeNull()
+    expect(view.host.textContent).not.toContain('No video')
 
     const newest = view.host.querySelector(
       '[data-testid="notable-log-item-' + sampleLogs[1]!.id + '"]',
@@ -134,6 +133,17 @@ describe('NotableLogViewer interactions', () => {
     act(() => {
       newest.click()
     })
+    const detail = view.host.querySelector('[data-testid="notable-log-detail"]') as HTMLElement
+    const videoPane = detail.querySelector('[data-testid="notable-video-pane"]') as HTMLElement
+    const shortNote = detail.querySelector('[data-testid="notable-short-note"]') as HTMLElement
+    expect(videoPane).toBeTruthy()
+    expect(shortNote).toBeTruthy()
+    // Video must render above Simple Memo.
+    expect(
+      Boolean(
+        videoPane.compareDocumentPosition(shortNote) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true)
     expect(view.host.querySelector('[data-testid="notable-video-player"]')).toBeTruthy()
     expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeTruthy()
 
@@ -149,6 +159,10 @@ describe('NotableLogViewer interactions', () => {
         .querySelector('[data-testid="notable-video-item-vid-b"]')
         ?.className.includes('is-active'),
     ).toBe(true)
+
+    // No new media.note input UI in the viewer.
+    expect(view.host.textContent).not.toContain('영상 짧은 메모')
+    expect(view.host.querySelector('textarea')).toBeNull()
 
     view.unmount()
   })

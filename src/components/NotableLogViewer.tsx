@@ -212,17 +212,8 @@ export function NotableLogViewer({
 
               <div className="notable-log-viewer__detail" data-testid="notable-log-detail">
                 <p className="notable-log-viewer__note-date">{selectedLog?.date}</p>
-                {selectedLog?.note?.trim() ? (
-                  <p className="notable-log-viewer__short-note" data-testid="notable-short-note">
-                    {selectedLog.note}
-                  </p>
-                ) : (
-                  <p className="notable-log-viewer__empty">짧은 메모가 없습니다.</p>
-                )}
 
-                {videos.length === 0 ? (
-                  <p className="notable-log-viewer__empty">No video</p>
-                ) : (
+                {videos.length > 0 ? (
                   <div className="notable-log-viewer__video" data-testid="notable-video-pane">
                     {videos.length > 1 ? (
                       <ul className="notable-log-viewer__video-list" aria-label="Video playlist">
@@ -236,7 +227,7 @@ export function NotableLogViewer({
                               }`}
                               onClick={() => setSelectedVideoId(item.id)}
                             >
-                              {item.title?.trim() || item.note?.trim() || item.url}
+                              {item.title?.trim() || item.url}
                             </button>
                           </li>
                         ))}
@@ -245,7 +236,12 @@ export function NotableLogViewer({
                     {activeVideo ? (
                       <>
                         {activeVideo.note?.trim() ? (
-                          <p className="notable-log-viewer__media-note">{activeVideo.note}</p>
+                          <p
+                            className="notable-log-viewer__media-note"
+                            data-testid="notable-legacy-media-note"
+                          >
+                            {activeVideo.note}
+                          </p>
                         ) : null}
                         <div
                           className="notable-log-viewer__player"
@@ -269,6 +265,16 @@ export function NotableLogViewer({
                       </>
                     ) : null}
                   </div>
+                ) : null}
+
+                {selectedLog?.note?.trim() ? (
+                  <p className="notable-log-viewer__short-note" data-testid="notable-short-note">
+                    {selectedLog.note}
+                  </p>
+                ) : (
+                  <p className="notable-log-viewer__empty" data-testid="notable-short-note-empty">
+                    짧은 메모가 없습니다.
+                  </p>
                 )}
               </div>
             </div>

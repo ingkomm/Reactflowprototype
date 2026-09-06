@@ -90,39 +90,44 @@ export function migrateLegacyTrainingLog(value: unknown): TrainingLog | null {
   return migrateLegacyTrainingLogs(value)[0] ?? null
 }
 
-function mergeTwoLogs(a: TrainingLog, b: TrainingLog): TrainingLog {
-  const notes = [a.note, b.note].filter(Boolean) as string[]
-  const mergedNote = notes.length > 0 ? [...new Set(notes)].join('\n') : undefined
-  const media = [...(a.media ?? []), ...(b.media ?? [])]
-  const seen = new Set<string>()
-  const mergedMedia = media.filter((item) => {
-    const key = item.url
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  return {
-    id: a.id,
-    date: a.date,
-    ...(mergedNote ? { note: mergedNote } : {}),
-    ...(mergedMedia.length > 0 ? { media: mergedMedia } : {}),
-  }
-}
-
-/** One log per date; later entries merge memo/media into the first. */
+/**
+ * @deprecated Same-date logs are kept as separate entries. Do not use for normalize/import.
+ * Kept only for older call sites/tests that explicitly request merge behavior.
+ */
 export function mergeLogsByDate(logs: TrainingLog[]): TrainingLog[] {
   const byDate = new Map<string, TrainingLog>()
   for (const log of logs) {
     const existing = byDate.get(log.date)
-    byDate.set(log.date, existing ? mergeTwoLogs(existing, log) : log)
+    if (!existing) {
+      byDate.set(log.date, log)
+      continue
+    }
+    const notes = [existing.note, log.note].filter(Boolean) as string[]
+    const mergedNote = notes.length > 0 ? [...new Set(notes)].join('\n') : undefined
+    const media = [...(existing.media ?? []), ...(log.media ?? [])]
+    const seen = new Set<string>()
+    const mergedMedia = media.filter((item) => {
+      const key = item.url
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    byDate.set(log.date, {
+      id: existing.id,
+      date: existing.date,
+      ...(mergedNote ? { note: mergedNote } : {}),
+      ...(mergedMedia.length > 0 ? { media: mergedMedia } : {}),
+    })
   }
   return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date))
 }
 
+/** Trim dates and sort; never merges same-date logs. */
 export function normalizeDailyLogs(logs: TrainingLog[]): TrainingLog[] {
-  return mergeLogsByDate(logs.map((log) => ({ ...log, date: log.date.trim() })))
+  return sortedDailyLogs(logs.map((log) => ({ ...log, date: log.date.trim() })))
 }
 
+/** Practice days = unique calendar dates (not log count). */
 export function countPracticeDays(logs: TrainingLog[]): number {
   return new Set(logs.map((log) => log.date)).size
 }
@@ -131,13 +136,24 @@ export function countPracticeDaysInStages(stages: StageData[]): number {
   return countPracticeDays(stages.flatMap((stage) => stage.logs))
 }
 
-export function hasDateConflict(logs: TrainingLog[], date: string, excludeId?: string): boolean {
-  const target = date.trim()
-  return logs.some((log) => log.date === target && log.id !== excludeId)
+/** @deprecated Same-date logs are allowed; always returns false. */
+export function hasDateConflict(
+  _logs: TrainingLog[],
+  _date: string,
+  _excludeId?: string,
+): boolean {
+  return false
 }
 
+/** Newest date first; same-date entries keep their relative input order. */
 export function sortedDailyLogs(logs: TrainingLog[]): TrainingLog[] {
-  return [...logs].sort((a, b) => b.date.localeCompare(a.date))
+  return logs
+    .map((log, index) => ({ log, index }))
+    .sort((a, b) => {
+      const byDate = b.log.date.localeCompare(a.log.date)
+      return byDate !== 0 ? byDate : a.index - b.index
+    })
+    .map(({ log }) => log)
 }
 
 export function upsertDailyLog(
@@ -146,9 +162,6 @@ export function upsertDailyLog(
 ): { logs: TrainingLog[]; error?: string } {
   if (!isValidPracticeDate(entry.date)) {
     return { logs, error: '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).' }
-  }
-  if (hasDateConflict(logs, entry.date, entry.id)) {
-    return { logs, error: '같은 날짜의 기록이 이미 있습니다.' }
   }
   const next = logs.some((log) => log.id === entry.id)
     ? logs.map((log) => (log.id === entry.id ? entry : log))
