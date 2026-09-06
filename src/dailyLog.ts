@@ -82,10 +82,6 @@ export function migrateLegacyTrainingLogs(value: unknown): TrainingLog[] {
   return logs
 }
 
-/** @deprecated Use migrateLegacyTrainingLogs */
-export function migrateLegacyTrainingLog(value: unknown): TrainingLog | null {
-  return migrateLegacyTrainingLogs(value)[0] ?? null
-}
 
 /** Trim dates and sort; never merges same-date logs. */
 export function normalizeDailyLogs(logs: TrainingLog[]): TrainingLog[] {
@@ -139,10 +135,6 @@ export function recentDailyLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
   return sortedDailyLogs(logs).slice(0, limit)
 }
 
-/** @deprecated Use recentDailyLogs */
-export function recentPracticeLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
-  return recentDailyLogs(logs, limit)
-}
 
 export function dailyLogSummary(log: TrainingLog): string {
   if (log.note?.trim()) return memoPreview(log.note)

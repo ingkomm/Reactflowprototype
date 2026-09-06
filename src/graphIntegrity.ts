@@ -7,7 +7,7 @@ import {
 } from './limits'
 import { normalizeOrbitTier, normalizeOrbitTierCount } from './orbit'
 
-const ALLOWED_EDGE_TYPES = new Set(['center', 'orbit', 'notable', undefined])
+const ALLOWED_EDGE_TYPES = new Set(['center', 'orbit', undefined])
 
 export type IntegrityIssue = { message: string }
 
@@ -80,7 +80,7 @@ export function validateGraphIntegrity(
   }
 
   for (const edge of edges) {
-    if (!ALLOWED_EDGE_TYPES.has(edge.type as 'center' | 'orbit' | 'notable' | undefined)) {
+    if (!ALLOWED_EDGE_TYPES.has(edge.type as 'center' | 'orbit' | undefined)) {
       return { message: `지원하지 않는 edge type: ${edge.type ?? '(default)'}` }
     }
     if (edge.type === 'orbit') {

@@ -399,7 +399,7 @@ function clearMasteryOrbitFields(
   return { nodes: next, prevMasteryId }
 }
 
-/** Attach Notable to Root orbit tier, or null when not allowed. */
+/** Attach a Root Orbit member (Shard|Notable) to a tier/slot, or null when not allowed. */
 export function placeNotableOnRootOrbit(
   nodes: PassiveFlowNode[],
   satelliteId: string,
@@ -459,11 +459,6 @@ export function clearRootOrbitMembership(
 export type RootOrbitDragResult =
   | { kind: 'root'; nodes: PassiveFlowNode[] }
   | { kind: 'detached'; nodes: PassiveFlowNode[] }
-
-/**
- * Drag settle against Root arena (center at world 0,0).
- * Notable only. Returns null when Root orbit should not handle this drop.
- */
 
 /** Gap kept between Root rim and an ejected node's collision radius. */
 export const ROOT_BOUNDARY_GAP = 8
@@ -556,6 +551,7 @@ export function applyRootBoundaryEject(
   return next
 }
 
+/** Place or eject a Root Orbit Shard|Notable after drag. */
 export function placeNotableFromRootOrbitDrag(
   nodes: PassiveFlowNode[],
   satelliteId: string,

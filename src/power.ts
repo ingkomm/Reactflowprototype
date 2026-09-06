@@ -20,7 +20,6 @@ export type LinkKind = 'center' | 'orbit'
 
 export function edgeLinkKind(edge: Edge): LinkKind {
   if (edge.type === 'orbit') return 'orbit'
-  // Legacy type:'notable' is treated as ordinary center.
   return 'center'
 }
 
@@ -333,7 +332,7 @@ export function getNodesReachableFromInitial(
 
   const adj = new Map<string, Set<string>>()
   for (const edge of edges) {
-    if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type !== 'notable' && edge.type) continue
+    if (edge.type !== 'center' && edge.type !== 'orbit' && edge.type) continue
     for (const [a, b] of [
       [edge.source, edge.target],
       [edge.target, edge.source],
@@ -371,13 +370,6 @@ export function syncEdgesReachableFromInitial(
   })
 }
 
-/** @deprecated Use syncEdgesReachableFromInitial — links are deactivated, not deleted. */
-export function pruneEdgesReachableFromInitial(
-  nodes: PassiveFlowNode[],
-  edges: Edge[],
-): Edge[] {
-  return syncEdgesReachableFromInitial(nodes, edges)
-}
 
 /** Whether a new center/orbit link is allowed between two nodes. */
 export function classifyPassiveConnection(

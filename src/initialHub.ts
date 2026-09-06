@@ -119,14 +119,4 @@ export function pinGraphSoRootCenteredAtOrigin<
   }))
 }
 
-/** initialSlot only records which Root socket is linked — never moves Connect. */
-export function snapSocketedConnectsToRoot<
-  T extends {
-    id: string
-    position: { x: number; y: number }
-    data?: { kind?: string; initialSlot?: InitialConnectSlot }
-  },
->(nodes: T[]): T[] {
-  return nodes
-}
 

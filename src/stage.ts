@@ -22,16 +22,6 @@ function normalizeStageLogs(logs: TrainingLog[]): TrainingLog[] {
   return normalizeDailyLogs(logs)
 }
 
-/** @deprecated Small→Shard no longer uses practice stages. */
-export function ensureSmallPracticeStages(stages: StageData[]): StageData[] {
-  if (stages.length > 0) {
-    return stages.map((stage) => ({
-      ...withNormalizedStage(stage),
-      logs: normalizeStageLogs(stage.logs),
-    }))
-  }
-  return [createStage(1, '연습', 9999, [])]
-}
 
 export function createStage(
   index: number,
@@ -56,7 +46,7 @@ export function kindUsesTrainingBands(kind: PassiveKind): boolean {
   return kind === 'notable'
 }
 
-/** Log entries in this stage (not unique practice days). */
+/** Log entries in this stage (not log entry counts). */
 export function stageRawLoggedCount(stage: StageData): number {
   return stage.logs.length
 }
@@ -80,10 +70,6 @@ export function withNormalizedStage(stage: StageData): StageData {
   }
 }
 
-/** @deprecated Use withNormalizedStage — logs are no longer clamped away. */
-export function withClampedStage(stage: StageData): StageData {
-  return withNormalizedStage(stage)
-}
 
 export function sortedStages(stages: StageData[]): StageData[] {
   return [...stages].sort((a, b) => a.index - b.index)
@@ -204,13 +190,6 @@ export function isNotableBandComplete(totalLogged: number, bandIndex0: number): 
   return fills[bandIndex0]! >= goal
 }
 
-/**
- * Notable power relay is independent of practice history.
- * Kept for call-site compatibility; always true.
- */
-export function canNotableTransmit(_stages?: StageData[]): boolean {
-  return true
-}
 
 /** Fractional glow level from stage completion + in-progress fill. */
 export function stageBandLevel(stages: StageData[]): number {
@@ -242,7 +221,7 @@ export function defaultStagesForSeed(
   })
 }
 
-/** Seed helper: practice-day total → Notable 3/5/7 bands. */
+/** Seed helper: practice entry total → Notable 3/5/7 bands. */
 export function notableStagesFromTotal(totalLogged: number): StageData[] {
   return createNotableStages(totalLogged)
 }
@@ -261,7 +240,3 @@ export function nodeHasVisibleBands(data: PassiveNodeData, nodePowered: boolean)
   return (data.stages?.length ?? 0) > 0
 }
 
-/** @deprecated Legacy alias — use createDailyLog */
-export function createTrainingLog(date: string, _count = 1, explicitDate?: string): TrainingLog {
-  return createDailyLog(explicitDate ?? date)
-}

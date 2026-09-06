@@ -214,7 +214,7 @@ function resolveMasteryPair(
   return null
 }
 
-function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit' | 'notable') {
+function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit') {
   return edges.find((e) => {
     if (type && e.type !== type) return false
     return (e.source === a && e.target === b) || (e.source === b && e.target === a)

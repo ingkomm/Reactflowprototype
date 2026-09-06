@@ -33,7 +33,6 @@ import {
 import { validateGraphIntegrity } from './graphIntegrity'
 import {
   pinGraphSoRootCenteredAtOrigin,
-  snapSocketedConnectsToRoot,
   ROOT_POWER_HANDLE_ID,
   rootSocketSourceHandle,
   parseRootSocketHandle,
@@ -611,7 +610,6 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
   }))
 
   nodes = pinGraphSoRootCenteredAtOrigin(nodes)
-  nodes = snapSocketedConnectsToRoot(nodes)
   nodes = ensureRootFixed(nodes)
   nodes = ensureRootOrbitSlotsAssigned(nodes)
   nodes = layoutRootOrbit(nodes)

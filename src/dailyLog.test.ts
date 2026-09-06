@@ -10,7 +10,7 @@ import {
   sortedDailyLogs,
   upsertDailyLog,
 } from './dailyLog'
-import { canNotableTransmit, createNotableStages, ensureNotableStages } from './stage'
+import { createNotableStages, ensureNotableStages } from './stage'
 import {
   buildGraphDocument,
   parseGraphDocumentJson,
@@ -72,7 +72,6 @@ describe('dailyLog duplicate dates', () => {
     expect(countPracticeEntries(withDupes)).toBe(5)
 
     const stages = ensureNotableStages(createNotableStages(0, withDupes))
-    expect(canNotableTransmit(stages)).toBe(true)
     expect(stages[0]?.logs).toHaveLength(5)
   })
 })

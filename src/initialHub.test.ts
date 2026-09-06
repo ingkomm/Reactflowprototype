@@ -4,9 +4,7 @@ import {
   isRootPowerHandle,
   ROOT_POWER_HANDLE_ID,
   rootPowerFlowPosition,
-  snapSocketedConnectsToRoot,
 } from './initialHub'
-import { INITIAL_NODE_ID } from './types'
 
 describe('Root hub sizing', () => {
   it('is sized for three internal Notable orbit rings', () => {
@@ -30,24 +28,3 @@ describe('Root Power Core helpers', () => {
   })
 })
 
-describe('snapSocketedConnectsToRoot', () => {
-  it('does not move Connect nodes that declare initialSlot', () => {
-    const root = {
-      id: INITIAL_NODE_ID,
-      position: { x: -100, y: -100 },
-      data: { kind: 'initial' as const },
-    }
-    const freePos = { x: 420, y: 310 }
-    const nodes = [
-      root,
-      {
-        id: 'c1',
-        position: { ...freePos },
-        data: { kind: 'connect' as const, initialSlot: 0 as const },
-      },
-    ]
-    const snapped = snapSocketedConnectsToRoot(nodes)
-    const connect = snapped.find((n) => n.id === 'c1')!
-    expect(connect.position).toEqual(freePos)
-  })
-})
