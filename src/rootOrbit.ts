@@ -34,6 +34,18 @@ export function isOnRootOrbit(data: PassiveNodeData): boolean {
   return normalizeRootOrbitTier(data.rootOrbitTier) != null
 }
 
+/**
+ * Read-only Inspector label for Root Orbit membership.
+ * Slot is stored 0-based and shown 1-based.
+ */
+export function formatRootOrbitMembership(data: PassiveNodeData): string {
+  const tier = normalizeRootOrbitTier(data.rootOrbitTier)
+  if (tier == null) return 'Not on Root Orbit.'
+  const slot = normalizeRootOrbitSlot(data.rootOrbitSlot)
+  const slotText = slot != null ? `슬롯 ${slot + 1}` : '슬롯 —'
+  return `${tier}단 · ${slotText}`
+}
+
 export function rootOrbitTierRadius(tier: RootOrbitTier): number {
   return ROOT_ORBIT_TIER_RADIUS[tier]
 }

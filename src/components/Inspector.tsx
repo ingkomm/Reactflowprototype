@@ -22,8 +22,10 @@ import {
   orbitAngleOptions,
 } from '../orbit'
 import {
+  formatRootOrbitMembership,
   getRootOrbitCapacity,
   getRootOrbitStartAngle,
+  isOnRootOrbit,
 } from '../rootOrbit'
 import {
   DEFAULT_SYMBOL_ID,
@@ -476,7 +478,18 @@ export function Inspector({
         <>
           <div className="inspector__section">
             <div className="inspector__section-head">
-              <h3>Mastery orbit</h3>
+              <h3>Root Orbit</h3>
+            </div>
+            <p className="inspector__empty">
+              {isOnRootOrbit(data)
+                ? formatRootOrbitMembership(data)
+                : 'Not on Root Orbit.'}
+            </p>
+          </div>
+
+          <div className="inspector__section">
+            <div className="inspector__section-head">
+              <h3>Mastery Orbit</h3>
               {data.masteryId && (
                 <button
                   type="button"
@@ -490,7 +503,7 @@ export function Inspector({
             <p className="inspector__empty">
               {data.masteryId
                 ? `Orbit of: ${masteryLabel ?? data.masteryId}`
-                : 'Not on an orbit. Connect to a Mastery (membership only).'}
+                : 'Not on a Mastery Orbit.'}
             </p>
             {data.masteryId && masteryTierCount !== null && masteryTierCount > 1 && (
               <label className="field">

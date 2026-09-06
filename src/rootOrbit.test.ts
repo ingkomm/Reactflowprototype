@@ -31,6 +31,7 @@ import {
   ensureRootOrbitSlotsAssigned,
   rootOrbitAngleDegrees,
   stripInvalidRootPowerEdges,
+  formatRootOrbitMembership,
 } from './rootOrbit'
 import { computePoweredNodeIds, computePowerFlowMeta } from './power'
 import { rootPowerLinkEdge } from './graphFactory'
@@ -477,5 +478,54 @@ describe('Root Orbit Shard + hub clearance + Connect eject', () => {
     expect(Math.hypot(cx, cy)).toBeGreaterThanOrEqual(
       ROOT_HUB_RADIUS + bodyR + ROOT_BOUNDARY_GAP - 1e-6,
     )
+  })
+})
+
+describe('Root Orbit Inspector membership label', () => {
+  it('formats Root Orbit Notable tier/slot with 1-based slot', () => {
+    expect(
+      formatRootOrbitMembership({
+        label: 'N',
+        kind: 'notable',
+        stages: [],
+        symbolId: 'default',
+        rootOrbitTier: 2,
+        rootOrbitSlot: 0,
+      }),
+    ).toBe('2단 · 슬롯 1')
+  })
+
+  it('formats Root Orbit Shard the same way', () => {
+    expect(
+      formatRootOrbitMembership({
+        label: 'S',
+        kind: 'shard',
+        stages: [],
+        symbolId: 'default',
+        rootOrbitTier: 2,
+        rootOrbitSlot: 0,
+      }),
+    ).toBe('2단 · 슬롯 1')
+  })
+
+  it('reports Not on Root Orbit when tier is missing', () => {
+    expect(
+      formatRootOrbitMembership({
+        label: 'X',
+        kind: 'notable',
+        stages: [],
+        symbolId: 'default',
+        masteryId: 'm1',
+        orbitTier: 1,
+      }),
+    ).toBe('Not on Root Orbit.')
+    expect(
+      formatRootOrbitMembership({
+        label: 'Y',
+        kind: 'shard',
+        stages: [],
+        symbolId: 'default',
+      }),
+    ).toBe('Not on Root Orbit.')
   })
 })
