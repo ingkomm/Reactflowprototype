@@ -10,13 +10,22 @@ import {
   rootPowerFlowPosition,
   rootSocketFlowPosition,
 } from './initialHub'
-import { NODE_SIZE } from './orbit'
+import { NODE_SIZE, nodeLinkTrimRadius } from './orbit'
 import {
+  computeOrbitRingLinkSpec,
+  orbitEndpointAngularTrim,
+  type OrbitRingLinkSpec,
+} from './orbitLinkGeometry'
+import {
+  getRootOrbitCapacity,
+  getRootOrbitMembers,
+  getRootOrbitStartAngle,
   isOnRootOrbit,
   isValidRootOrbitMemberKind,
+  normalizeRootOrbitSlot,
   normalizeRootOrbitTier,
+  rootOrbitAngleDegrees,
   rootOrbitTierRadius,
-  type RootOrbitTier,
 } from './rootOrbit'
 import type { PassiveNodeData } from './types'
 import { INITIAL_NODE_ID } from './types'
@@ -32,44 +41,6 @@ export function nodeFlowCenter(
   size: number,
 ): FlowPoint {
   return { x: topLeft.x + size / 2, y: topLeft.y + size / 2 }
-}
-
-export function flowPointAngleRad(center: FlowPoint, point: FlowPoint): number {
-  return Math.atan2(point.y - center.y, point.x - center.x)
-}
-
-export function polarFlowPoint(center: FlowPoint, radius: number, angleRad: number): FlowPoint {
-  return {
-    x: center.x + radius * Math.cos(angleRad),
-    y: center.y + radius * Math.sin(angleRad),
-  }
-}
-
-/** Normalize delta into (-π, π]. */
-export function shortestAngleDelta(fromRad: number, toRad: number): number {
-  let d = toRad - fromRad
-  while (d <= -Math.PI) d += Math.PI * 2
-  while (d > Math.PI) d -= Math.PI * 2
-  return d
-}
-
-export function svgArcPath(
-  center: FlowPoint,
-  radius: number,
-  a0: number,
-  a1: number,
-): string {
-  const delta = shortestAngleDelta(a0, a1)
-  const end = a0 + delta
-  const large = Math.abs(delta) > Math.PI ? 1 : 0
-  const sweep = delta >= 0 ? 1 : 0
-  const p0 = polarFlowPoint(center, radius, a0)
-  const p1 = polarFlowPoint(center, radius, end)
-  return `M ${p0.x} ${p0.y} A ${radius} ${radius} 0 ${large} ${sweep} ${p1.x} ${p1.y}`
-}
-
-export function svgStraightPath(a: FlowPoint, b: FlowPoint): string {
-  return `M ${a.x} ${a.y} L ${b.x} ${b.y}`
 }
 
 /**
@@ -112,97 +83,78 @@ export function isRootOrbitMemberLink(
   return isRootOrbitMemberData(sourceData) && isRootOrbitMemberData(targetData)
 }
 
-export type RootLinkPathResult = {
-  pathD: string
-  start: FlowPoint
-  end: FlowPoint
-  mode: 'straight' | 'same-tier-arc' | 'cross-tier'
-}
-
-const ARC_ENDPOINT_TRIM_RAD = 0.12
-
-export function buildSameTierRootOrbitArcPath(
-  rootCenter: FlowPoint,
-  tier: RootOrbitTier,
-  sourceCenter: FlowPoint,
-  targetCenter: FlowPoint,
-): RootLinkPathResult {
-  const radius = rootOrbitTierRadius(tier)
-  let a0 = flowPointAngleRad(rootCenter, sourceCenter)
-  let a1 = flowPointAngleRad(rootCenter, targetCenter)
-  const delta = shortestAngleDelta(a0, a1)
-  const trim = Math.min(ARC_ENDPOINT_TRIM_RAD, Math.abs(delta) / 3)
-  if (delta >= 0) {
-    a0 += trim
-    a1 = a0 + (delta - trim * 2)
-  } else {
-    a0 -= trim
-    a1 = a0 + (delta + trim * 2)
-  }
-  const start = polarFlowPoint(rootCenter, radius, a0)
-  const end = polarFlowPoint(rootCenter, radius, a1)
-  return {
-    pathD: svgArcPath(rootCenter, radius, a0, a1),
-    start,
-    end,
-    mode: 'same-tier-arc',
-  }
-}
-
 /**
- * Cross-tier Root Orbit path: radial to mid radius → short arc → radial to target tier.
- * Avoids a bare chord through Root center.
+ * Root Orbit member↔member link geometry — same rules as Mastery `orbitLinkSpec`
+ * (same tier → arc, cross tier → chord). Only data sources differ.
  */
-export function buildCrossTierRootOrbitPath(
-  rootCenter: FlowPoint,
-  sourceTier: RootOrbitTier,
-  targetTier: RootOrbitTier,
-  sourceCenter: FlowPoint,
-  targetCenter: FlowPoint,
-): RootLinkPathResult {
-  const r0 = rootOrbitTierRadius(sourceTier)
-  const r1 = rootOrbitTierRadius(targetTier)
-  const rMid = (r0 + r1) / 2
-  const a0 = flowPointAngleRad(rootCenter, sourceCenter)
-  const a1 = flowPointAngleRad(rootCenter, targetCenter)
-  const p0 = polarFlowPoint(rootCenter, r0, a0)
-  const mid0 = polarFlowPoint(rootCenter, rMid, a0)
-  const p1 = polarFlowPoint(rootCenter, r1, a1)
-  const arc = svgArcPath(rootCenter, rMid, a0, a1).replace(/^M[^A]+/, '')
-  const pathD = `M ${p0.x} ${p0.y} L ${mid0.x} ${mid0.y} ${arc} L ${p1.x} ${p1.y}`
-  return {
-    pathD,
-    start: p0,
-    end: p1,
-    mode: 'cross-tier',
-  }
-}
+export function rootOrbitLinkSpec(
+  nodes: PassiveFlowNode[],
+  sourceId: string,
+  targetId: string,
+  options?: {
+    sourcePowered?: boolean
+    targetPowered?: boolean
+    sourceHandle?: string | null
+    targetHandle?: string | null
+  },
+): OrbitRingLinkSpec | null {
+  const source = nodes.find((n) => n.id === sourceId)
+  const target = nodes.find((n) => n.id === targetId)
+  if (!source || !target) return null
 
-export function buildRootOrbitMemberLinkPath(args: {
-  rootCenter: FlowPoint
-  sourceData: PassiveNodeData
-  targetData: PassiveNodeData
-  sourceCenter: FlowPoint
-  targetCenter: FlowPoint
-}): RootLinkPathResult | null {
-  const tierA = normalizeRootOrbitTier(args.sourceData.rootOrbitTier)
-  const tierB = normalizeRootOrbitTier(args.targetData.rootOrbitTier)
-  if (tierA == null || tierB == null) return null
-  if (tierA === tierB) {
-    return buildSameTierRootOrbitArcPath(
-      args.rootCenter,
-      tierA,
-      args.sourceCenter,
-      args.targetCenter,
-    )
+  const sd = source.data as PassiveNodeData
+  const td = target.data as PassiveNodeData
+  if (!isRootOrbitMemberLink(sd, td, options?.sourceHandle, options?.targetHandle)) {
+    return null
   }
-  return buildCrossTierRootOrbitPath(
-    args.rootCenter,
-    tierA,
-    tierB,
-    args.sourceCenter,
-    args.targetCenter,
+
+  const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
+  if (!root) return null
+  const rootData = root.data as PassiveNodeData
+
+  const tierA = normalizeRootOrbitTier(sd.rootOrbitTier)
+  const tierB = normalizeRootOrbitTier(td.rootOrbitTier)
+  if (tierA == null || tierB == null) return null
+
+  if (tierA !== tierB) return { kind: 'chord' }
+
+  const capacity = getRootOrbitCapacity(rootData, tierA)
+  const slotA = normalizeRootOrbitSlot(sd.rootOrbitSlot)
+  const slotB = normalizeRootOrbitSlot(td.rootOrbitSlot)
+  if (slotA == null || slotB == null || slotA === slotB) return { kind: 'chord' }
+
+  const occupied = new Set<number>()
+  for (const member of getRootOrbitMembers(nodes, tierA)) {
+    if (member.id === sourceId || member.id === targetId) continue
+    const slot = normalizeRootOrbitSlot((member.data as PassiveNodeData).rootOrbitSlot)
+    if (slot != null) occupied.add(slot)
+  }
+
+  const startDeg = getRootOrbitStartAngle(rootData, tierA)
+  const orbitR = rootOrbitTierRadius(tierA)
+  const angleARad = (rootOrbitAngleDegrees(startDeg, slotA, capacity) * Math.PI) / 180
+  const angleBRad = (rootOrbitAngleDegrees(startDeg, slotB, capacity) * Math.PI) / 180
+  const trimARad = orbitEndpointAngularTrim(
+    nodeLinkTrimRadius(sd, options?.sourcePowered ?? false) + 2,
+    orbitR,
   )
+  const trimBRad = orbitEndpointAngularTrim(
+    nodeLinkTrimRadius(td, options?.targetPowered ?? false) + 2,
+    orbitR,
+  )
+
+  return computeOrbitRingLinkSpec({
+    sameTier: true,
+    capacity,
+    slotA,
+    slotB,
+    occupiedSlots: occupied,
+    angleARad,
+    angleBRad,
+    arcRadius: orbitR,
+    trimARad,
+    trimBRad,
+  })
 }
 
 export function findRootFlowNode(nodes: Array<{ id: string }>): { id: string } | undefined {

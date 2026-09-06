@@ -5,6 +5,12 @@ import {
   outermostBandRadius,
   BAND_STROKE,
 } from './orbitGeometry'
+import {
+  computeOrbitRingLinkSpec,
+  orbitArcHasOnlyVoids,
+  orbitEndpointAngularTrim,
+  type OrbitRingLinkSpec,
+} from './orbitLinkGeometry'
 import { kindUsesTrainingBands } from './stage'
 import { clampOrbitTierCapacity } from './limits'
 import { ROOT_ARENA_Z, GRAPH_NODE_Z } from './graphLayers'
@@ -739,25 +745,6 @@ export function orbitSlotFromDropAngle(
   return { tier, slot }
 }
 
-/** True when the open arc from `fromSlot` → `toSlot` (exclusive) has no occupied slots. */
-function orbitArcHasOnlyVoids(
-  occupiedSlots: Set<number>,
-  capacity: number,
-  fromSlot: number,
-  toSlot: number,
-): boolean {
-  if (capacity <= 0) return false
-  if (fromSlot === toSlot) return false
-  let s = (fromSlot + 1) % capacity
-  let guard = 0
-  while (s !== toSlot) {
-    if (occupiedSlots.has(s)) return false
-    s = (s + 1) % capacity
-    if (++guard > capacity) return false
-  }
-  return true
-}
-
 /**
  * Clockwise neighbors on a mastery orbit ring.
  * Empty capacity slots (void spacers) do not break adjacency — only other
@@ -895,9 +882,7 @@ export function canOrbitLink(
   return areOrbitTiersAdjacent(tierA, tierB)
 }
 
-export type OrbitLinkSpec =
-  | { kind: 'arc'; a1: number; a2: number; arcRadius: number; clockwise: boolean }
-  | { kind: 'chord' }
+export type OrbitLinkSpec = OrbitRingLinkSpec
 
 /** Outermost training-band edge radius from the satellite node center. */
 export function satelliteBandOuterRadius(data: PassiveNodeData): number {
@@ -928,8 +913,7 @@ function orbitBandAngularTrim(
   orbitRadius: number,
   nodePowered = false,
 ) {
-  const rim = nodeLinkTrimRadius(data, nodePowered) + 2
-  return Math.asin(Math.min(1, rim / orbitRadius))
+  return orbitEndpointAngularTrim(nodeLinkTrimRadius(data, nodePowered) + 2, orbitRadius)
 }
 
 function orbitSlotAngle(
@@ -980,27 +964,18 @@ export function orbitLinkSpec(
     occupied.add(getSatelliteOrbitSlot(nodes, masteryId, sat.id))
   }
 
-  const cwClear = orbitArcHasOnlyVoids(occupied, capacity, ia, ib)
-  const ccwClear = orbitArcHasOnlyVoids(occupied, capacity, ib, ia)
-  const cwDist = (ib - ia + capacity) % capacity
-  const ccwDist = (ia - ib + capacity) % capacity
-  const clockwise = cwClear && (!ccwClear || cwDist <= ccwDist)
-
-  const a1Raw = orbitSlotAngle(md, tierA, ia, capacity)
-  const a2Raw = orbitSlotAngle(md, tierA, ib, capacity)
-  const trimA = orbitBandAngularTrim(sd, orbitR, options?.sourcePowered ?? false)
-  const trimB = orbitBandAngularTrim(td, orbitR, options?.targetPowered ?? false)
-
-  const a1 = clockwise ? a1Raw + trimA : a1Raw - trimA
-  const a2 = clockwise ? a2Raw - trimB : a2Raw + trimB
-
-  return {
-    kind: 'arc',
-    a1,
-    a2,
+  return computeOrbitRingLinkSpec({
+    sameTier: true,
+    capacity,
+    slotA: ia,
+    slotB: ib,
+    occupiedSlots: occupied,
+    angleARad: orbitSlotAngle(md, tierA, ia, capacity),
+    angleBRad: orbitSlotAngle(md, tierA, ib, capacity),
     arcRadius: orbitR,
-    clockwise,
-  }
+    trimARad: orbitBandAngularTrim(sd, orbitR, options?.sourcePowered ?? false),
+    trimBRad: orbitBandAngularTrim(td, orbitR, options?.targetPowered ?? false),
+  })
 }
 
 /** @deprecated Use orbitLinkSpec */

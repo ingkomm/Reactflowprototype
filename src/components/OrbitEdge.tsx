@@ -14,40 +14,13 @@ import {
   orbitLinkSpec,
   trimStraightEndpoints,
 } from '../orbit'
+import { orbitRingArcPathD, polarOnOrbit } from '../orbitLinkGeometry'
 import { usePowerSet, usePowerFlowMeta } from '../powerContext.shared'
 import { orientPowerLinkVisual } from '../power'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
 
 export type OrbitEdgeData = {
   masteryId?: string
-}
-
-function polar(cx: number, cy: number, r: number, angle: number) {
-  return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }
-}
-
-function orbitArcPath(
-  cx: number,
-  cy: number,
-  r: number,
-  a1: number,
-  a2: number,
-  clockwise: boolean,
-) {
-  let delta = a2 - a1
-  if (clockwise) {
-    while (delta <= 0) delta += Math.PI * 2
-    while (delta > Math.PI * 2) delta -= Math.PI * 2
-  } else {
-    while (delta >= 0) delta -= Math.PI * 2
-    while (delta < -Math.PI * 2) delta += Math.PI * 2
-  }
-  const absDelta = Math.abs(delta)
-  const useLong = absDelta > Math.PI
-  const sweep = clockwise ? 1 : 0
-  const p1 = polar(cx, cy, r, a1)
-  const p2 = polar(cx, cy, r, a2)
-  return `M ${p1.x} ${p1.y} A ${r} ${r} 0 ${useLong ? 1 : 0} ${sweep} ${p2.x} ${p2.y}`
 }
 
 export function OrbitEdge({
@@ -149,9 +122,9 @@ export function OrbitEdge({
     y: masteryNode.internals.positionAbsolute.y + (masteryNode.measured.height ?? 88) / 2,
   }
 
-  const path = orbitArcPath(mc.x, mc.y, spec.arcRadius, spec.a1, spec.a2, spec.clockwise)
-  const start = polar(mc.x, mc.y, spec.arcRadius, spec.a1)
-  const end = polar(mc.x, mc.y, spec.arcRadius, spec.a2)
+  const path = orbitRingArcPathD(mc.x, mc.y, spec.arcRadius, spec.a1, spec.a2, spec.clockwise)
+  const start = polarOnOrbit(mc.x, mc.y, spec.arcRadius, spec.a1)
+  const end = polarOnOrbit(mc.x, mc.y, spec.arcRadius, spec.a2)
   const beam = orientPowerLinkVisual(
     source,
     target,

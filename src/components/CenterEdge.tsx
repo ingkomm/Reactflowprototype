@@ -2,6 +2,7 @@ import {
   BaseEdge,
   getStraightPath,
   useInternalNode,
+  useStore,
   type Edge,
   type EdgeProps,
 } from '@xyflow/react'
@@ -14,14 +15,19 @@ import {
   NODE_SIZE,
   trimStraightEndpoints,
 } from '../orbit'
+import {
+  orbitRingArcPathD,
+  polarOnOrbit,
+} from '../orbitLinkGeometry'
 import { usePowerSet, usePowerFlowMeta } from '../powerContext.shared'
 import { orientPowerLinkVisual } from '../power'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
+import type { PassiveFlowNode } from './PassiveNode'
 import {
-  buildRootOrbitMemberLinkPath,
   isRootOrbitMemberLink,
   nodeFlowCenter,
   resolveRootAwareEndpoint,
+  rootOrbitLinkSpec,
   type FlowPoint,
 } from '../rootGeometry'
 
@@ -58,6 +64,7 @@ export function CenterEdge({
 }: EdgeProps) {
   const powered = usePowerSet()
   const flowMeta = usePowerFlowMeta()
+  const nodes = useStore((s) => s.nodes)
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
   const rootNode = useInternalNode(INITIAL_NODE_ID)
@@ -79,19 +86,38 @@ export function CenterEdge({
   const targetLit = powered.has(target)
   const lit = sourceLit && targetLit
 
-  const useOrbitPath =
-    Boolean(rootNode) && isRootOrbitMemberLink(sd, td, sourceHandleId, targetHandleId)
+  const orbitSpec =
+    rootNode != null
+      ? rootOrbitLinkSpec(nodes as PassiveFlowNode[], source, target, {
+          sourcePowered: sourceLit,
+          targetPowered: targetLit,
+          sourceHandle: sourceHandleId,
+          targetHandle: targetHandleId,
+        })
+      : null
 
   let path: string
   let hitPath: string
   let beamStart: FlowPoint
   let beamEnd: FlowPoint
 
-  if (useOrbitPath && rootNode) {
+  if (orbitSpec?.kind === 'arc' && rootNode) {
     const rootCenter = nodeFlowCenter(
       absoluteTopLeft(rootNode),
       rootNode.measured.width ?? NODE_SIZE.initial,
     )
+    path = orbitRingArcPathD(
+      rootCenter.x,
+      rootCenter.y,
+      orbitSpec.arcRadius,
+      orbitSpec.a1,
+      orbitSpec.a2,
+      orbitSpec.clockwise,
+    )
+    hitPath = path
+    beamStart = polarOnOrbit(rootCenter.x, rootCenter.y, orbitSpec.arcRadius, orbitSpec.a1)
+    beamEnd = polarOnOrbit(rootCenter.x, rootCenter.y, orbitSpec.arcRadius, orbitSpec.a2)
+  } else if (orbitSpec?.kind === 'chord') {
     const sourceCenter = nodeFlowCenter(
       absoluteTopLeft(sourceNode),
       sourceNode.measured.width ?? NODE_SIZE[sd.kind],
@@ -100,20 +126,23 @@ export function CenterEdge({
       absoluteTopLeft(targetNode),
       targetNode.measured.width ?? NODE_SIZE[td.kind],
     )
-    const orbitPath = buildRootOrbitMemberLinkPath({
-      rootCenter,
-      sourceData: sd,
-      targetData: td,
-      sourceCenter,
-      targetCenter,
-    })
-    if (!orbitPath) {
-      return null
-    }
-    path = orbitPath.pathD
-    hitPath = orbitPath.pathD
-    beamStart = orbitPath.start
-    beamEnd = orbitPath.end
+    const { sourceX, sourceY, targetX, targetY } = trimStraightEndpoints(
+      sourceCenter.x,
+      sourceCenter.y,
+      targetCenter.x,
+      targetCenter.y,
+      linkEndpointPad(sd, sourceLit),
+      linkEndpointPad(td, targetLit),
+    )
+    path = getStraightPath({ sourceX, sourceY, targetX, targetY })[0]
+    hitPath = getStraightPath({
+      sourceX: sourceCenter.x,
+      sourceY: sourceCenter.y,
+      targetX: targetCenter.x,
+      targetY: targetCenter.y,
+    })[0]
+    beamStart = { x: sourceX, y: sourceY }
+    beamEnd = { x: targetX, y: targetY }
   } else {
     const sourcePad = sd.kind === 'initial' ? 2 : linkEndpointPad(sd, sourceLit)
     const targetPad = td.kind === 'initial' ? 2 : linkEndpointPad(td, targetLit)
@@ -207,4 +236,3 @@ export function centerEdgeUsesOrbitGeometry(
 ): boolean {
   return isRootOrbitMemberLink(sourceData, targetData, sourceHandle, targetHandle)
 }
-

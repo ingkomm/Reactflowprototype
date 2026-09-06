@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Edge } from '@xyflow/react'
 import {
-  buildCrossTierRootOrbitPath,
-  buildRootOrbitMemberLinkPath,
-  buildSameTierRootOrbitArcPath,
   getRootConnectSlotForNode,
   isRootOrbitMemberLink,
   isRootSocketOccupied,
   resolveRootAwareEndpoint,
   rootHandleFlowPosition,
+  rootOrbitLinkSpec,
   syncConnectInitialSlotsFromEdges,
 } from './rootGeometry'
 import {
@@ -22,6 +20,7 @@ import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import { createPassiveData } from './graphFactory'
 import { centerEdgeUsesOrbitGeometry } from './components/CenterEdge'
+import { ROOT_ORBIT_TIER_RADIUS } from './rootOrbit'
 
 function orbitMember(
   id: string,
@@ -38,6 +37,20 @@ function orbitMember(
       rootOrbitTier: tier,
       rootOrbitSlot: slot,
     }),
+  }
+}
+
+function rootNode(capacity = 6): PassiveFlowNode {
+  const data = createPassiveData('initial', 'Root')
+  return {
+    id: INITIAL_NODE_ID,
+    type: 'passive',
+    position: { x: -60, y: -60 },
+    data: {
+      ...data,
+      rootOrbitCapacityByTier: { 1: capacity, 2: capacity, 3: capacity },
+      rootOrbitStartAngleByTier: { 1: -90, 2: -90, 3: -90 },
+    },
   }
 }
 
@@ -90,26 +103,44 @@ describe('rootGeometry endpoints', () => {
   })
 })
 
-describe('rootGeometry orbit paths', () => {
-  const root = { x: 0, y: 0 }
-
-  it('same-tier member link returns short arc path (not a straight chord)', () => {
-    const a = { x: 80, y: 0 }
-    const b = { x: 0, y: 80 }
-    const path = buildSameTierRootOrbitArcPath(root, 1, a, b)
-    expect(path.mode).toBe('same-tier-arc')
-    expect(path.pathD).toMatch(/ A /)
-    expect(path.pathD.startsWith('M ')).toBe(true)
-    expect(path.pathD.includes(' L ')).toBe(false)
+describe('rootOrbitLinkSpec (Mastery-shared rules)', () => {
+  it('same-tier member link returns arc (not straight chord)', () => {
+    const nodes = [
+      rootNode(4),
+      orbitMember('a', 'notable', 1, 0, { x: 0, y: -80 }),
+      orbitMember('b', 'shard', 1, 1, { x: 80, y: 0 }),
+    ]
+    const spec = rootOrbitLinkSpec(nodes, 'a', 'b')
+    expect(spec?.kind).toBe('arc')
+    if (spec?.kind === 'arc') {
+      expect(spec.arcRadius).toBe(ROOT_ORBIT_TIER_RADIUS[1])
+      expect(typeof spec.clockwise).toBe('boolean')
+    }
   })
 
-  it('cross-tier path uses radial + arc compound geometry', () => {
-    const a = { x: 80, y: 0 }
-    const b = { x: 0, y: 160 }
-    const path = buildCrossTierRootOrbitPath(root, 1, 2, a, b)
-    expect(path.mode).toBe('cross-tier')
-    expect(path.pathD).toMatch(/ A /)
-    expect(path.pathD).toMatch(/ L /)
+  it('cross-tier member link returns straight chord (not radial+arc compound)', () => {
+    const nodes = [
+      rootNode(4),
+      orbitMember('a', 'notable', 1, 0, { x: 0, y: -80 }),
+      orbitMember('b', 'shard', 2, 0, { x: 0, y: -160 }),
+    ]
+    const spec = rootOrbitLinkSpec(nodes, 'a', 'b')
+    expect(spec).toEqual({ kind: 'chord' })
+  })
+
+  it('occupied intermediate slot prefers the clear arc direction', () => {
+    const nodes = [
+      rootNode(4),
+      orbitMember('a', 'notable', 1, 0, { x: 0, y: -80 }),
+      orbitMember('blocker', 'shard', 1, 1, { x: 80, y: 0 }),
+      orbitMember('b', 'notable', 1, 2, { x: 0, y: 80 }),
+    ]
+    const spec = rootOrbitLinkSpec(nodes, 'a', 'b')
+    expect(spec?.kind).toBe('arc')
+    if (spec?.kind === 'arc') {
+      // CW 0→1→2 is blocked; CCW 0→3→2 is clear
+      expect(spec.clockwise).toBe(false)
+    }
   })
 
   it('Power Core links are not classified as orbit-member geometry', () => {
@@ -124,26 +155,22 @@ describe('rootGeometry orbit paths', () => {
     expect(
       centerEdgeUsesOrbitGeometry(rootData, memberData, ROOT_POWER_HANDLE_ID, 'center-target'),
     ).toBe(false)
-  })
 
-  it('buildRootOrbitMemberLinkPath picks arc for same tier', () => {
-    const a = orbitMember('a', 'notable', 1, 0, { x: 50, y: -20 })
-    const b = orbitMember('b', 'shard', 1, 1, { x: 20, y: 50 })
-    const path = buildRootOrbitMemberLinkPath({
-      rootCenter: root,
-      sourceData: a.data,
-      targetData: b.data,
-      sourceCenter: { x: 80, y: 0 },
-      targetCenter: { x: 0, y: 80 },
-    })
-    expect(path?.mode).toBe('same-tier-arc')
-  })
-
-  it('same-tier visible path geometry is reused for hit path contract', () => {
-    const path = buildSameTierRootOrbitArcPath(root, 2, { x: 100, y: 0 }, { x: 0, y: 100 })
-    // CenterEdge assigns hitPath = pathD for orbit links
-    expect(path.pathD).toBe(path.pathD)
-    expect(path.start).not.toEqual(path.end)
+    const nodes = [
+      rootNode(),
+      {
+        id: 'n',
+        type: 'passive' as const,
+        position: { x: 0, y: -80 },
+        data: memberData,
+      },
+    ]
+    expect(
+      rootOrbitLinkSpec(nodes, INITIAL_NODE_ID, 'n', {
+        sourceHandle: ROOT_POWER_HANDLE_ID,
+        targetHandle: 'center-target',
+      }),
+    ).toBeNull()
   })
 })
 
