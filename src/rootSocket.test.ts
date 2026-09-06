@@ -223,12 +223,12 @@ describe('Root Power Core source-only UI', () => {
   it('exposes exactly one root-power source Handle and no root-power-target', () => {
     const src = readFileSync('src/components/PassiveNode.tsx', 'utf8')
     expect(src).not.toMatch(/root-power-target/)
-    const blocks = [
-      ...src.matchAll(/<Handle[\s\S]*?id=\{ROOT_POWER_HANDLE_ID\}[\s\S]*?(?:\/>|>)/g),
-    ]
-    expect(blocks.length).toBe(1)
-    expect(blocks[0]![0]).toMatch(/type="source"/)
-    expect(blocks[0]![0]).not.toMatch(/type="target"/)
+    expect(src.split('id={ROOT_POWER_HANDLE_ID}').length - 1).toBe(1)
+    const idx = src.indexOf('id={ROOT_POWER_HANDLE_ID}')
+    expect(idx).toBeGreaterThan(-1)
+    const nearby = src.slice(Math.max(0, idx - 120), idx + 180)
+    expect(nearby).toMatch(/type="source"/)
+    expect(nearby).not.toMatch(/type="target"/)
   })
 
   it('keeps Power Core at center and lifts Root title above it', () => {
