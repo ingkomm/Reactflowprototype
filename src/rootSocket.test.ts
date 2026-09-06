@@ -20,7 +20,6 @@ import {
   rootSocketSourceHandle,
   initialSocketOffset,
 } from './initialHub'
-// patched below
 import { buildGraphDocument, documentToFlowState } from './graphDocument'
 import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
@@ -107,7 +106,7 @@ describe('Root socket connect snap + reload', () => {
     expect(slots).not.toContain(1)
   })
 
-  it('Root orbit membership alone does not grant power', () => {
+  it('powers Root even with no orbit members or Connect edges', () => {
     const nodes = buildEmptyNodes()
     const powered = computePoweredNodeIds(nodes, buildEmptyEdges())
     expect(powered.has(INITIAL_NODE_ID)).toBe(true)
