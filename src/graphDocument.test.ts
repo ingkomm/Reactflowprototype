@@ -349,9 +349,8 @@ describe('graphDocument', () => {
     const imported = documentToFlowState(parsed.document)
     const notableEdge = imported.edges.find((e) => e.id === 'e-notable')
     expect(notableEdge?.type).toBe('center')
-    const power = imported.edges.find((e) => e.id === 'e-power')
-    expect(power?.sourceHandle).toBe('root-power')
-    expect(power?.targetHandle).toBe('center-target')
+    // Generic center Root↔Orbit must NOT auto-promote to Power Core.
+    expect(imported.edges.find((e) => e.id === 'e-power')).toBeUndefined()
 
     const exported = buildGraphDocument({
       nodes: imported.nodes,
@@ -419,4 +418,151 @@ describe('graphDocument', () => {
     const repaired = imported.edges.find((e) => e.id === 'e-connect')
     expect(repaired?.sourceHandle).toBe('socket-2')
   })
+
+  it('canonicalizes explicit root-power and legacy root-power-target only', () => {
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: -100, y: -100 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'n1',
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'A',
+            kind: 'notable',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            rootOrbitTier: 1,
+            rootOrbitSlot: 0,
+          },
+        },
+        {
+          id: 'n2',
+          type: 'passive',
+          position: { x: 40, y: 0 },
+          data: {
+            label: 'B',
+            kind: 'shard',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            rootOrbitTier: 2,
+            rootOrbitSlot: 1,
+          },
+        },
+        {
+          id: 'n3',
+          type: 'passive',
+          position: { x: 80, y: 0 },
+          data: {
+            label: 'C',
+            kind: 'notable',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            rootOrbitTier: 3,
+            rootOrbitSlot: 2,
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'e-explicit',
+          type: 'center',
+          source: INITIAL_NODE_ID,
+          target: 'n1',
+          sourceHandle: 'root-power',
+          targetHandle: 'center-target',
+        },
+        {
+          id: 'e-legacy-target',
+          type: 'center',
+          source: 'n2',
+          target: INITIAL_NODE_ID,
+          sourceHandle: 'center',
+          targetHandle: 'root-power-target',
+        },
+        {
+          id: 'e-generic',
+          type: 'center',
+          source: INITIAL_NODE_ID,
+          target: 'n3',
+          sourceHandle: 'center',
+          targetHandle: 'center-target',
+        },
+      ],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const imported = documentToFlowState(parsed.document)
+    const explicit = imported.edges.find((e) => e.id === 'e-explicit')
+    expect(explicit?.source).toBe(INITIAL_NODE_ID)
+    expect(explicit?.target).toBe('n1')
+    expect(explicit?.sourceHandle).toBe('root-power')
+    expect(explicit?.targetHandle).toBe('center-target')
+    expect(explicit?.zIndex).toBe(1)
+
+    const legacy = imported.edges.find((e) => e.id === 'e-legacy-target')
+    expect(legacy?.source).toBe(INITIAL_NODE_ID)
+    expect(legacy?.target).toBe('n2')
+    expect(legacy?.sourceHandle).toBe('root-power')
+    expect(legacy?.targetHandle).toBe('center-target')
+
+    expect(imported.edges.find((e) => e.id === 'e-generic')).toBeUndefined()
+  })
+
+  it('canonicalizes legacy socket-N-target to socket-N on Root↔Connect import', () => {
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: -100, y: -100 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'c1',
+          type: 'passive',
+          position: { x: 200, y: 0 },
+          data: {
+            label: 'C',
+            kind: 'connect',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            connectEnabled: true,
+            initialSlot: 3,
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'e-legacy-socket',
+          type: 'center',
+          source: 'c1',
+          target: INITIAL_NODE_ID,
+          sourceHandle: 'center',
+          targetHandle: 'socket-3-target',
+        },
+      ],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const imported = documentToFlowState(parsed.document)
+    const edge = imported.edges.find((e) => e.id === 'e-legacy-socket')
+    expect(edge?.source).toBe(INITIAL_NODE_ID)
+    expect(edge?.target).toBe('c1')
+    expect(edge?.sourceHandle).toBe('socket-3')
+    expect(edge?.targetHandle).toBe('center-target')
+    expect(edge?.zIndex).toBe(1)
+  })
+
 })

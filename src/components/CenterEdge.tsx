@@ -87,11 +87,30 @@ export function CenterEdge({
     targetPad,
   )
 
+  // Keep edge hit clear of Root socket / Power Core disks so handles stay interactive.
+  const ROOT_HANDLE_HIT_CLEAR_PX = 20
+  const hitSource = { ...sourcePt }
+  const hitTarget = { ...targetPt }
+  const dx = targetPt.x - sourcePt.x
+  const dy = targetPt.y - sourcePt.y
+  const len = Math.hypot(dx, dy)
+  if (len > ROOT_HANDLE_HIT_CLEAR_PX * 2 + 1) {
+    const ux = dx / len
+    const uy = dy / len
+    if (sd.kind === 'initial') {
+      hitSource.x = sourcePt.x + ux * ROOT_HANDLE_HIT_CLEAR_PX
+      hitSource.y = sourcePt.y + uy * ROOT_HANDLE_HIT_CLEAR_PX
+    }
+    if (td.kind === 'initial') {
+      hitTarget.x = targetPt.x - ux * ROOT_HANDLE_HIT_CLEAR_PX
+      hitTarget.y = targetPt.y - uy * ROOT_HANDLE_HIT_CLEAR_PX
+    }
+  }
   const hitPath = getStraightPath({
-    sourceX: sourcePt.x,
-    sourceY: sourcePt.y,
-    targetX: targetPt.x,
-    targetY: targetPt.y,
+    sourceX: hitSource.x,
+    sourceY: hitSource.y,
+    targetX: hitTarget.x,
+    targetY: hitTarget.y,
   })[0]
   const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
   const beam = orientPowerLinkVisual(

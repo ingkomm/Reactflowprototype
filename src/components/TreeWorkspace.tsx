@@ -39,6 +39,7 @@ import { NODE_SIZE } from '../orbit'
 import type { PowerFlowMeta } from '../power'
 import { PinnedVideoPopup } from './PinnedVideoPopup'
 import { VideoPinProvider } from '../VideoPinContext'
+import { GRAPH_EDGE_Z } from '../graphLayers'
 
 const nodeTypes = { passive: PassiveNode }
 const edgeTypes = { center: CenterEdge, orbit: OrbitEdge }
@@ -54,7 +55,7 @@ const defaultEdgeOptions = {
     stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',
     strokeWidth: 1,
   },
-  zIndex: 0,
+  zIndex: GRAPH_EDGE_Z,
 }
 
 export type TreeWorkspaceProps = {
@@ -259,7 +260,7 @@ export function TreeWorkspace({
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               connectionMode={ConnectionMode.Loose}
-              connectionRadius={36}
+              connectionRadius={12}
               connectionLineType={ConnectionLineType.Straight}
               connectionLineStyle={connectionLineStyle}
               fitView

@@ -248,11 +248,13 @@
   z-index: 2;
 }
 
+/* Fixed rim hitbox — never scales with Root --connect-r / hub radius. */
+.react-flow__handle.passive-node__handle.passive-node__handle--root-socket,
 .passive-node__handle--root-socket {
-  width: clamp(28px, 5%, 44px) !important;
-  height: clamp(28px, 5%, 44px) !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
   /* Override centered .passive-node__handle left/top so each socket sits on the rim. */
   left: var(--root-socket-left) !important;
   top: var(--root-socket-top) !important;
@@ -283,11 +285,13 @@
   z-index: 4;
 }
 
+/* Fixed Power Core hitbox — never scales with Root --connect-r / hub radius. */
+.react-flow__handle.passive-node__handle.passive-node__handle--root-power,
 .passive-node__handle--root-power {
-  width: clamp(22px, 4%, 32px) !important;
-  height: clamp(22px, 4%, 32px) !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
   left: 50% !important;
   top: 50% !important;
   right: auto !important;
@@ -809,8 +813,8 @@
   color: #d5dde5;
 }
 
-/* Band-area connect ring (outside face); circular cursor instead of crosshair */
-.passive-node__handle {
+/* Band-area connect ring (Shard/Notable/…). Root socket/power excluded by selector. */
+.passive-node__handle:not(.passive-node__handle--root-socket):not(.passive-node__handle--root-power) {
   width: calc(var(--connect-r, var(--outer-band-r)) * 2) !important;
   height: calc(var(--connect-r, var(--outer-band-r)) * 2) !important;
   min-width: 0 !important;
@@ -831,7 +835,20 @@
     pointer !important;
 }
 
-.react-flow__handle.passive-node__handle {
+.react-flow__handle.passive-node__handle:not(.passive-node__handle--root-socket):not(.passive-node__handle--root-power) {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23eef3f7' stroke-width='2'/%3E%3C/svg%3E")
+      12 12,
+    pointer !important;
+}
+
+/* Shared non-size chrome for Root interaction handles (cursor / transparency). */
+.passive-node__handle--root-socket,
+.passive-node__handle--root-power {
+  border: none !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  opacity: 1;
+  pointer-events: all;
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23eef3f7' stroke-width='2'/%3E%3C/svg%3E")
       12 12,
     pointer !important;

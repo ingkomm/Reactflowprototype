@@ -266,3 +266,54 @@ describe('Root rim socket handle geometry', () => {
     expect(css).toMatch(/\.passive-node__handle--root-socket[\s\S]*?--root-socket-top/)
   })
 })
+
+describe('Root interaction + layering (15차)', () => {
+  it('renders exactly one Handle per socket and no socket-N-target', () => {
+    const src = readFileSync('src/components/PassiveNode.tsx', 'utf8')
+    expect(src).not.toMatch(/rootSocketTargetHandle/)
+    expect(src).not.toMatch(/socket-\$\{[^}]+\}-target/)
+    expect(src.split('passive-node__handle--root-socket').length - 1).toBe(1)
+    expect(src).toMatch(/INITIAL_CONNECT_SLOT_COUNT/)
+  })
+
+  it('excludes root-socket and root-power from generic handle sizing selector', () => {
+    const css = readFileSync('src/components/PassiveNode.css', 'utf8')
+    expect(css).toMatch(
+      /\.passive-node__handle:not\(\.passive-node__handle--root-socket\):not\(\.passive-node__handle--root-power\)/,
+    )
+    expect(css).toMatch(
+      /\.react-flow__handle\.passive-node__handle\.passive-node__handle--root-socket[\s\S]*?width:\s*32px\s*!important/,
+    )
+    expect(css).toMatch(
+      /\.react-flow__handle\.passive-node__handle\.passive-node__handle--root-power[\s\S]*?width:\s*28px\s*!important/,
+    )
+  })
+
+  it('parseRootSocketHandle maps socket-N and legacy socket-N-target; center is null', () => {
+    expect(parseRootSocketHandle('socket-0')).toBe(0)
+    expect(parseRootSocketHandle('socket-5')).toBe(5)
+    expect(parseRootSocketHandle('socket-0-target')).toBe(0)
+    expect(parseRootSocketHandle('socket-5-target')).toBe(5)
+    expect(parseRootSocketHandle('center')).toBeNull()
+    expect(parseRootSocketHandle('root-power')).toBeNull()
+  })
+
+  it('keeps connectionRadius at 12 and graph edge layer above Root arena', () => {
+    const tw = readFileSync('src/components/TreeWorkspace.tsx', 'utf8')
+    expect(tw).toMatch(/connectionRadius=\{12\}/)
+    const layers = readFileSync('src/graphLayers.ts', 'utf8')
+    expect(layers).toMatch(/ROOT_ARENA_Z\s*=\s*0/)
+    expect(layers).toMatch(/GRAPH_EDGE_Z\s*=\s*1/)
+    expect(layers).toMatch(/GRAPH_NODE_Z\s*=\s*6/)
+    const factory = readFileSync('src/graphFactory.ts', 'utf8')
+    expect(factory).toMatch(/rootPowerLinkEdge[\s\S]*?zIndex:\s*GRAPH_EDGE_Z/)
+    expect(factory).toMatch(/orbitLinkEdge[\s\S]*?zIndex:\s*GRAPH_EDGE_Z/)
+    expect(factory).toMatch(/passiveLinkEdge[\s\S]*?zIndex:\s*GRAPH_EDGE_Z/)
+  })
+
+  it('keeps Root z-index at arena level even when selected', () => {
+    const orb = readFileSync('src/orbit.ts', 'utf8')
+    expect(orb).toMatch(/isRoot \? ROOT_ARENA_Z/)
+    expect(orb).toMatch(/selectedZ = isRoot \? ROOT_ARENA_Z/)
+  })
+})

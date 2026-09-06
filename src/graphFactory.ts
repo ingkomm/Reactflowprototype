@@ -8,6 +8,7 @@ import {
   isMasteryKind,
 } from './orbit'
 import { ROOT_POWER_HANDLE_ID, rootSocketSourceHandle } from './initialHub'
+import { GRAPH_EDGE_Z } from './graphLayers'
 import { createEdgeId } from './ids'
 
 /** Build default `PassiveNodeData` for a new node. */
@@ -93,6 +94,7 @@ export function passiveLinkEdge(sourceId: string, targetId: string): Edge {
     sourceHandle: 'center',
     targetHandle: 'center-target',
     data: { active: true } satisfies GraphEdgeData,
+    zIndex: GRAPH_EDGE_Z,
   }
 }
 
@@ -110,6 +112,7 @@ export function rootSocketLinkEdge(
     sourceHandle: rootSocketSourceHandle(slot),
     targetHandle: 'center-target',
     data: { active: true } satisfies GraphEdgeData,
+    zIndex: GRAPH_EDGE_Z,
   }
 }
 
@@ -123,6 +126,7 @@ export function rootPowerLinkEdge(rootId: string, targetId: string): Edge {
     sourceHandle: ROOT_POWER_HANDLE_ID,
     targetHandle: 'center-target',
     data: { active: true } satisfies GraphEdgeData,
+    zIndex: GRAPH_EDGE_Z,
   }
 }
 
@@ -133,7 +137,7 @@ export function orbitLinkEdge(sourceId: string, targetId: string, masteryId: str
     source: sourceId,
     target: targetId,
     data: { masteryId, active: true } satisfies GraphEdgeData,
-    zIndex: 1,
+    zIndex: GRAPH_EDGE_Z,
   }
 }
 

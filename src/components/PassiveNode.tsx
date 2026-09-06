@@ -43,7 +43,6 @@ import {
   initialSocketOffset,
   ROOT_POWER_HANDLE_ID,
   rootSocketSourceHandle,
-  rootSocketTargetHandle,
 } from '../initialHub'
 import { rootOrbitRingPercent } from '../rootOrbit'
 import { useVoidHighlight } from '../voidHighlightContext.shared'
@@ -252,17 +251,10 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           } as CSSProperties
           return (
             <span key={slot}>
+              {/* Loose connectionMode: one source Handle per socket (in/out UX). */}
               <Handle
                 id={rootSocketSourceHandle(slot)}
                 type="source"
-                position={Position.Top}
-                className="passive-node__handle passive-node__handle--root-socket"
-                style={handleStyle}
-                isConnectable
-              />
-              <Handle
-                id={rootSocketTargetHandle(slot)}
-                type="target"
                 position={Position.Top}
                 className="passive-node__handle passive-node__handle--root-socket"
                 style={handleStyle}

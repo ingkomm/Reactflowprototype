@@ -36,7 +36,9 @@ import {
   ROOT_POWER_HANDLE_ID,
   rootSocketSourceHandle,
   parseRootSocketHandle,
+  isLoadTimeRootPowerHandle,
 } from './initialHub'
+import { GRAPH_EDGE_Z } from './graphLayers'
 import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags, isConnectKind } from './orbit'
 import {
   ensureRootFixed,
@@ -528,8 +530,10 @@ export function serializeGraphDocument(document: GraphDocumentV01): string {
 /**
  * Load-time Root/Notable edge repair:
  * - type:'notable' → center (also done in normalizeSerializedEdge)
- * - Root↔Orbit-member center → canonicalize to root-power (do NOT invent missing power edges)
+ * - Root↔Orbit-member: only explicit root-power / legacy root-power-target → canonicalize
+ *   (generic center / missing / unknown handles are dropped — not promoted to Power Core)
  * - Root↔Connect: repair handles from initialSlot; drop irreparable Root center edges
+ * - socket-N-target → socket-N via parseRootSocketHandle
  */
 export function migrateLoadedEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
   const byId = new Map(nodes.map((n) => [n.id, n]))
@@ -545,6 +549,7 @@ export function migrateLoadedEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edg
     const td = target.data as PassiveNodeData
     const rootIsSource = sd.kind === 'initial'
     const rootIsTarget = td.kind === 'initial'
+    const edgeZ = typeof edge.zIndex === 'number' ? edge.zIndex : GRAPH_EDGE_Z
 
     if (rootIsSource || rootIsTarget) {
       const root = rootIsSource ? source : target
@@ -566,13 +571,18 @@ export function migrateLoadedEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edg
           target: other.id,
           sourceHandle: rootSocketSourceHandle(slot),
           targetHandle: 'center-target',
+          zIndex: edgeZ,
         })
         continue
       }
 
       if (isValidRootOrbitMemberKind(od.kind) && isOnRootOrbit(od)) {
-        // Existing Root↔Orbit center edge → canonicalize Power Core handles.
-        // Do not auto-create power edges for orbit members that lack one.
+        // Only explicit Power Core handles (or legacy root-power-target) survive.
+        // Do NOT promote generic center / missing / unknown Root↔Orbit edges.
+        const powerHandle = rootIsSource ? edge.sourceHandle : edge.targetHandle
+        if (!isLoadTimeRootPowerHandle(powerHandle)) {
+          continue
+        }
         next.push({
           ...edge,
           type: 'center',
@@ -580,6 +590,7 @@ export function migrateLoadedEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edg
           target: other.id,
           sourceHandle: ROOT_POWER_HANDLE_ID,
           targetHandle: 'center-target',
+          zIndex: edgeZ,
         })
         continue
       }
@@ -591,6 +602,7 @@ export function migrateLoadedEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edg
     next.push({
       ...edge,
       type,
+      zIndex: edgeZ,
       ...(type === 'center' && !edge.sourceHandle ? { sourceHandle: 'center' } : {}),
       ...(type === 'center' && !edge.targetHandle ? { targetHandle: 'center-target' } : {}),
     })

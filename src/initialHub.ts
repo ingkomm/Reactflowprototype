@@ -34,6 +34,13 @@ export function isRootPowerHandle(handleId: string | null | undefined): boolean 
   return handleId === ROOT_POWER_HANDLE_ID
 }
 
+/** Load/import only: accept canonical root-power or legacy root-power-target. */
+export const LEGACY_ROOT_POWER_TARGET_HANDLE_ID = 'root-power-target'
+
+export function isLoadTimeRootPowerHandle(handleId: string | null | undefined): boolean {
+  return handleId === ROOT_POWER_HANDLE_ID || handleId === LEGACY_ROOT_POWER_TARGET_HANDLE_ID
+}
+
 /** Absolute flow position of the Root Power Core (exact hub center). */
 export function rootPowerFlowPosition(nodeTopLeft: { x: number; y: number }): {
   x: number

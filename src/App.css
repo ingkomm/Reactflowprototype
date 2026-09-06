@@ -202,8 +202,8 @@ body.is-resizing-inspector .react-flow {
 }
 
 /* Allow per-edge/node z-index to interleave.
-   Root hub is zIndex 0; derived Root Start Links use zIndex 1;
-   content nodes stay at 6+ so links render above Root disk but under bodies. */
+   Stacking: Root arena (0) < graph edges (1) < graph nodes (6+).
+   Root sockets / Power Core stay interactive via trimmed edge hit paths. */
 .canvas-pane .react-flow__edges,
 .canvas-pane .react-flow__nodes {
   z-index: auto !important;

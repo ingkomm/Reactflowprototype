@@ -7,6 +7,7 @@ import {
 } from './orbitGeometry'
 import { kindUsesTrainingBands } from './stage'
 import { clampOrbitTierCapacity } from './limits'
+import { ROOT_ARENA_Z, GRAPH_NODE_Z } from './graphLayers'
 
 export {
   BAND_GAP,
@@ -1408,8 +1409,8 @@ export function withMasteryDragFlags(
     // Mastery orbits are large; keep them under satellite titles/links visually.
     // Selected mastery must NOT jump above satellites — orbits are children of the mastery node.
     const isMastery = isMasteryKind(data.kind)
-    const baseZ = isRoot ? 0 : isMastery ? 1 : 6
-    const selectedZ = isRoot ? 0 : isMastery ? 2 : 40
+    const baseZ = isRoot ? ROOT_ARENA_Z : isMastery ? 1 : GRAPH_NODE_Z
+    const selectedZ = isRoot ? ROOT_ARENA_Z : isMastery ? 2 : 40
     return {
       ...node,
       dragHandle: '.node-drag-handle',
