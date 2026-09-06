@@ -115,12 +115,12 @@ describe('Root orbit', () => {
     ).toHaveLength(8)
   })
 
-  it('grants power to Root Orbit Notables via derived Start Link (no edge)', () => {
+  it('does not auto-power Root Orbit Notables without a Power Core edge', () => {
     let nodes = [rootNode(), notable('n1', 0, 0)]
     nodes = placeNotableOnRootOrbit(nodes, 'n1', 1)!
     const powered = computePoweredNodeIds(nodes, [])
     expect(powered.has(INITIAL_NODE_ID)).toBe(true)
-    expect(powered.has('n1')).toBe(true)
+    expect(powered.has('n1')).toBe(false)
   })
 
   it('keeps Root non-draggable at origin', () => {
