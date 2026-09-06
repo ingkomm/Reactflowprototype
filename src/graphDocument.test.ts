@@ -565,4 +565,51 @@ describe('graphDocument', () => {
     expect(edge?.zIndex).toBe(1)
   })
 
+
+  it('edge socket wins over mismatched initialSlot on load sync', () => {
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: -100, y: -100 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'c1',
+          type: 'passive',
+          position: { x: 200, y: 0 },
+          data: {
+            label: 'C',
+            kind: 'connect',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            connectEnabled: true,
+            initialSlot: 1,
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'e-mismatch',
+          type: 'center',
+          source: INITIAL_NODE_ID,
+          target: 'c1',
+          sourceHandle: 'socket-3',
+          targetHandle: 'center-target',
+        },
+      ],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const imported = documentToFlowState(parsed.document)
+    const edge = imported.edges.find((e) => e.id === 'e-mismatch')
+    expect(edge?.sourceHandle).toBe('socket-3')
+    const connect = imported.nodes.find((n) => n.id === 'c1')
+    expect(connect?.data.initialSlot).toBe(3)
+  })
+
 })

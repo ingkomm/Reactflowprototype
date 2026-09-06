@@ -6,6 +6,8 @@ import {
   MIN_ORBIT_TIER_CAPACITY,
 } from './limits'
 import { normalizeOrbitTier, normalizeOrbitTierCount } from './orbit'
+import { parseRootSocketHandle } from './initialHub'
+import { isValidRootOrbitMemberKind, normalizeRootOrbitTier, normalizeRootOrbitSlot, getRootOrbitCapacity } from './rootOrbit'
 
 const ALLOWED_EDGE_TYPES = new Set(['center', 'orbit', undefined])
 
@@ -91,15 +93,67 @@ export function validateGraphIntegrity(
     }
   }
 
-  const connectSlots = new Map<number, string>()
-  for (const node of nodes) {
-    if (node.data.kind !== 'connect') continue
-    const slot = node.data.initialSlot
-    if (slot == null) continue
-    if (connectSlots.has(slot)) {
+  
+  // Root↔Connect: edge.sourceHandle is authoritative after migration.
+  // At parse time, allow legacy repair cases (missing handle + initialSlot, or mismatch).
+  const rootConnectBySlot = new Map<number, string>()
+  const rootConnectByNode = new Map<string, number>()
+  for (const edge of edges) {
+    const source = nodeById.get(edge.source)
+    const target = nodeById.get(edge.target)
+    if (!source || !target) continue
+    const rootIsSource = source.data.kind === 'initial'
+    const rootIsTarget = target.data.kind === 'initial'
+    if (!rootIsSource && !rootIsTarget) continue
+    const other = rootIsSource ? target : source
+    if (other.data.kind !== 'connect') continue
+
+    const handle = rootIsSource ? edge.sourceHandle : edge.targetHandle
+    const slotFromHandle = parseRootSocketHandle(handle ?? null)
+    const slotFromData =
+      other.data.initialSlot != null && other.data.initialSlot >= 0 && other.data.initialSlot <= 5
+        ? other.data.initialSlot
+        : null
+    const slot = slotFromHandle ?? slotFromData
+    if (slot == null) {
+      return { message: `Root↔Connect 엣지를 복구할 수 없습니다: ${edge.id}` }
+    }
+    if (rootConnectBySlot.has(slot) && rootConnectBySlot.get(slot) !== other.id) {
       return { message: `Root Connect 소켓 ${slot}이 중복 사용되었습니다.` }
     }
-    connectSlots.set(slot, node.id)
+    if (rootConnectByNode.has(other.id) && rootConnectByNode.get(other.id) !== slot) {
+      return { message: `Connect 노드에 Root 소켓 엣지가 둘 이상입니다: ${other.id}` }
+    }
+    rootConnectBySlot.set(slot, other.id)
+    rootConnectByNode.set(other.id, slot)
+  }
+
+// Root Orbit member field integrity (after load migration).
+  const rootOrbitSlots = new Map<string, Set<number>>()
+  const rootData = initialNodes[0]!.data
+  for (const node of nodes) {
+    const data = node.data
+    if (!isValidRootOrbitMemberKind(data.kind)) continue
+    const tier = normalizeRootOrbitTier(data.rootOrbitTier)
+    if (tier == null) continue
+    const slot = normalizeRootOrbitSlot(data.rootOrbitSlot)
+    if (slot == null) {
+      return { message: `Root Orbit 슬롯이 없습니다: ${node.id}` }
+    }
+    if (slot < 0) {
+      return { message: `Root Orbit 슬롯은 0 이상의 정수여야 합니다: ${node.id}` }
+    }
+    const capacity = getRootOrbitCapacity(rootData, tier)
+    if (slot >= capacity) {
+      return { message: `Root Orbit 슬롯이 용량을 초과합니다: ${node.id} tier ${tier} slot ${slot}` }
+    }
+    const key = `root:${tier}`
+    if (!rootOrbitSlots.has(key)) rootOrbitSlots.set(key, new Set())
+    const used = rootOrbitSlots.get(key)!
+    if (used.has(slot)) {
+      return { message: `Root Orbit 슬롯 중복: tier ${tier} slot ${slot}` }
+    }
+    used.add(slot)
   }
 
   return null

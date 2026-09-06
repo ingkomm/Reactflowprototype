@@ -301,6 +301,7 @@ describe('Root interaction + layering (15차)', () => {
   it('keeps connectionRadius at 12 and graph edge layer above Root arena', () => {
     const tw = readFileSync('src/components/TreeWorkspace.tsx', 'utf8')
     expect(tw).toMatch(/connectionRadius=\{12\}/)
+    expect(tw).toMatch(/connectionLineComponent=\{RootAwareConnectionLine\}/)
     const layers = readFileSync('src/graphLayers.ts', 'utf8')
     expect(layers).toMatch(/ROOT_ARENA_Z\s*=\s*0/)
     expect(layers).toMatch(/GRAPH_EDGE_Z\s*=\s*1/)

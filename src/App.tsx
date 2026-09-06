@@ -35,6 +35,7 @@ import {
   snapNodeTopLeft,
 } from './grid'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, rootPowerLinkEdge, orbitLinkEdge } from './graphFactory'
+import { isRootSocketOccupied } from './rootGeometry'
 import {
   DEFAULT_SELECTED_NODE_ID,
 } from './seedGraph'
@@ -49,7 +50,6 @@ import {
   getSatelliteOrbitSlot,
   getSatelliteOrbitTier,
   getTierStartAngle,
-  isConnectKind,
   isMasteryKind,
   isMasteryOrbitLocked,
   isOrbitMemberKind,
@@ -230,15 +230,11 @@ function classifyLink(
 }
 
 function isRootConnectSlotTaken(
-  nodes: PassiveFlowNode[],
+  edges: Edge[],
   slot: InitialConnectSlot,
   exceptConnectId?: string,
 ): boolean {
-  return nodes.some((node) => {
-    if (node.id === exceptConnectId) return false
-    const data = node.data as PassiveNodeData
-    return isConnectKind(data.kind) && data.initialSlot === slot
-  })
+  return isRootSocketOccupied(edges, slot, INITIAL_NODE_ID, exceptConnectId)
 }
 
 function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
@@ -635,11 +631,11 @@ export default function App() {
         if (slot === null) return false
         const connectId = sd.kind === 'connect' ? source.id : td.kind === 'connect' ? target.id : null
         if (!connectId) return false
-        return !isRootConnectSlotTaken(nodes, slot, connectId)
+        return !isRootConnectSlotTaken(edges, slot, connectId)
       }
       return true
     },
-    [nodes],
+    [nodes, edges],
   )
 
   const attachSatellite = useCallback(
@@ -757,7 +753,7 @@ export default function App() {
         if (rootConnectSlot === null) return
         rootId = sd.kind === 'initial' ? source.id : target.id
         connectId = sd.kind === 'connect' ? source.id : target.id
-        if (isRootConnectSlotTaken(nodes, rootConnectSlot, connectId)) return
+        if (isRootConnectSlotTaken(edges, rootConnectSlot, connectId)) return
         const existingRootLink = findLinkEdge(edges, source.id, target.id, 'center')
         if (existingRootLink) {
           const prevSlot = resolveRootConnectSlot(

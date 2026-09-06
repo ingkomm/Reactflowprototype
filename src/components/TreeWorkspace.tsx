@@ -22,6 +22,7 @@ import {
 
 import { PassiveNode, type PassiveFlowNode } from './PassiveNode'
 import { CenterEdge } from './CenterEdge'
+import { RootAwareConnectionLine } from './RootAwareConnectionLine'
 import { OrbitEdge } from './OrbitEdge'
 import { Inspector, type OrbitMember } from './Inspector'
 import { NodeLibrary } from './NodeLibrary'
@@ -262,6 +263,7 @@ export function TreeWorkspace({
               connectionMode={ConnectionMode.Loose}
               connectionRadius={12}
               connectionLineType={ConnectionLineType.Straight}
+              connectionLineComponent={RootAwareConnectionLine}
               connectionLineStyle={connectionLineStyle}
               fitView
               elevateNodesOnSelect={false}

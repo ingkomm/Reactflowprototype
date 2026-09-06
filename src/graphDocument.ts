@@ -38,6 +38,7 @@ import {
   parseRootSocketHandle,
   isLoadTimeRootPowerHandle,
 } from './initialHub'
+import { syncConnectInitialSlotsFromEdges } from './rootGeometry'
 import { GRAPH_EDGE_Z } from './graphLayers'
 import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags, isConnectKind } from './orbit'
 import {
@@ -495,9 +496,13 @@ function normalizePassiveDataForExport(data: PassiveNodeData): PassiveNodeData {
 }
 
 export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
+  const syncedNodes = syncConnectInitialSlotsFromEdges(
+    input.nodes,
+    input.edges,
+  )
   return {
     schemaVersion: GRAPH_SCHEMA_VERSION,
-    nodes: input.nodes.map((node) => ({
+    nodes: syncedNodes.map((node) => ({
       id: node.id,
       type: 'passive' as const,
       position: { x: node.position.x, y: node.position.y },
@@ -646,6 +651,7 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
   }))
 
   const edges = migrateLoadedEdges(nodes, rawEdges)
+  nodes = syncConnectInitialSlotsFromEdges(nodes, edges)
 
   return {
     nodes,
