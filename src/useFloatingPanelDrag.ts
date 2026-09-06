@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react'
+import type { ViewerPanelBounds } from './pinnedViewer'
 
 export type FloatingPanelPoint = { x: number; y: number }
 
@@ -42,6 +43,11 @@ type HeaderDragProps = {
   onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void
 }
 
+type UseFloatingPanelDragOptions = {
+  /** Fires when panel position or size changes (UI-only; for tether overlay). */
+  onBoundsChange?: (bounds: ViewerPanelBounds) => void
+}
+
 /**
  * UI-only floating panel position + header pointer drag.
  * Remount (or change initial x/y) to reset to a new open coordinate.
@@ -50,6 +56,7 @@ type HeaderDragProps = {
 export function useFloatingPanelDrag(
   initialX: number,
   initialY: number,
+  options?: UseFloatingPanelDragOptions,
 ): {
   panelRef: RefObject<HTMLDivElement | null>
   position: FloatingPanelPoint
@@ -60,13 +67,40 @@ export function useFloatingPanelDrag(
     clampFloatingPanelPosition(initialX, initialY, 320, 200),
   )
   const dragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null)
+  const onBoundsChangeRef = useRef(options?.onBoundsChange)
+  useLayoutEffect(() => {
+    onBoundsChangeRef.current = options?.onBoundsChange
+  }, [options?.onBoundsChange])
+  const lastBoundsRef = useRef<ViewerPanelBounds | null>(null)
+
+  const reportBounds = useCallback((next: FloatingPanelPoint) => {
+    const el = panelRef.current
+    if (!el) return
+    const width = el.offsetWidth
+    const height = el.offsetHeight
+    const prev = lastBoundsRef.current
+    if (
+      prev &&
+      prev.x === next.x &&
+      prev.y === next.y &&
+      prev.width === width &&
+      prev.height === height
+    ) {
+      return
+    }
+    const bounds = { x: next.x, y: next.y, width, height }
+    lastBoundsRef.current = bounds
+    onBoundsChangeRef.current?.(bounds)
+  }, [])
 
   useLayoutEffect(() => {
     const el = panelRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    setPosition(clampFloatingPanelPosition(initialX, initialY, rect.width, rect.height))
-  }, [initialX, initialY])
+    const next = clampFloatingPanelPosition(initialX, initialY, rect.width, rect.height)
+    setPosition(next)
+    reportBounds(next)
+  }, [initialX, initialY, reportBounds])
 
   useLayoutEffect(() => {
     const reclampToViewport = () => {
@@ -75,9 +109,11 @@ export function useFloatingPanelDrag(
       const el = panelRef.current
       if (!el) return
       const rect = el.getBoundingClientRect()
-      setPosition((prev) =>
-        clampFloatingPanelPosition(prev.x, prev.y, rect.width, rect.height),
-      )
+      setPosition((prev) => {
+        const next = clampFloatingPanelPosition(prev.x, prev.y, rect.width, rect.height)
+        reportBounds(next)
+        return next
+      })
     }
     window.addEventListener('resize', reclampToViewport)
 
@@ -94,7 +130,7 @@ export function useFloatingPanelDrag(
       window.removeEventListener('resize', reclampToViewport)
       observer?.disconnect()
     }
-  }, [])
+  }, [reportBounds])
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return
@@ -112,21 +148,24 @@ export function useFloatingPanelDrag(
     }
   }, [])
 
-  const onPointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const drag = dragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    const el = panelRef.current
-    const width = el?.offsetWidth ?? 320
-    const height = el?.offsetHeight ?? 200
-    setPosition(
-      clampFloatingPanelPosition(
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      const el = panelRef.current
+      const width = el?.offsetWidth ?? 320
+      const height = el?.offsetHeight ?? 200
+      const next = clampFloatingPanelPosition(
         event.clientX - drag.offsetX,
         event.clientY - drag.offsetY,
         width,
         height,
-      ),
-    )
-  }, [])
+      )
+      setPosition(next)
+      reportBounds(next)
+    },
+    [reportBounds],
+  )
 
   const endDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return

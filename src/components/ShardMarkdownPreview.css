@@ -67,3 +67,14 @@
   color: #9aa8b5;
   font-size: 0.88rem;
 }
+
+.shard-markdown-preview__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.shard-markdown-preview.is-pinned {
+  z-index: 45;
+}

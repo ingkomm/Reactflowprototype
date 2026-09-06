@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { MarkdownView } from './MarkdownView'
 import { useFloatingPanelDrag } from '../useFloatingPanelDrag'
+import type { ViewerPanelBounds } from '../pinnedViewer'
 import './ShardMarkdownPreview.css'
 
 type Props = {
@@ -10,6 +11,16 @@ type Props = {
   nodeLabel: string
   markdown?: string
   onClose: () => void
+  /** When true, no backdrop and Escape does not close (unless closeOnEscape). */
+  pinned?: boolean
+  /** Default true for transient viewers. */
+  modal?: boolean
+  /** Default true for transient viewers; false for pinned. */
+  closeOnEscape?: boolean
+  zIndex?: number
+  onPin?: (position: { x: number; y: number }) => void
+  onBoundsChange?: (bounds: ViewerPanelBounds) => void
+  onActivate?: () => void
 }
 
 /** Read-only Shard markdown quick view (edit stays in Inspector). */
@@ -20,17 +31,28 @@ export function ShardMarkdownPreview({
   nodeLabel,
   markdown,
   onClose,
+  pinned = false,
+  modal,
+  closeOnEscape,
+  zIndex,
+  onPin,
+  onBoundsChange,
+  onActivate,
 }: Props) {
-  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y)
+  const showModal = modal ?? !pinned
+  const escapeCloses = closeOnEscape ?? !pinned
+  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y, {
+    onBoundsChange,
+  })
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !escapeCloses) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  }, [open, escapeCloses, onClose])
 
   if (!open) return null
 
@@ -38,19 +60,23 @@ export function ShardMarkdownPreview({
 
   return (
     <>
-      <button
-        type="button"
-        className="shard-markdown-preview__backdrop"
-        aria-label="닫기"
-        onClick={onClose}
-      />
+      {showModal ? (
+        <button
+          type="button"
+          className="shard-markdown-preview__backdrop"
+          aria-label="닫기"
+          onClick={onClose}
+        />
+      ) : null}
       <div
         ref={panelRef}
-        className="shard-markdown-preview"
+        className={`shard-markdown-preview${pinned ? ' is-pinned' : ''}`}
         role="dialog"
         aria-label={`${nodeLabel} Markdown 미리보기`}
         data-testid="shard-markdown-preview"
-        style={{ left: position.x, top: position.y }}
+        data-pinned={pinned ? 'true' : 'false'}
+        style={{ left: position.x, top: position.y, zIndex: zIndex ?? undefined }}
+        onPointerDownCapture={onActivate}
       >
         <header
           className="shard-markdown-preview__head"
@@ -58,12 +84,24 @@ export function ShardMarkdownPreview({
           {...headerDragProps}
         >
           <div>
-            <p className="shard-markdown-preview__kind">Shard</p>
+            <p className="shard-markdown-preview__kind">Shard{pinned ? ' · Pin' : ''}</p>
             <strong>{nodeLabel}</strong>
           </div>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
-            닫기
-          </button>
+          <div className="shard-markdown-preview__actions">
+            {!pinned && onPin ? (
+              <button
+                type="button"
+                className="btn btn--ghost"
+                data-testid="viewer-pin"
+                onClick={() => onPin({ x: position.x, y: position.y })}
+              >
+                Pin
+              </button>
+            ) : null}
+            <button type="button" className="btn btn--ghost" onClick={onClose}>
+              닫기
+            </button>
+          </div>
         </header>
         <div className="shard-markdown-preview__body">
           {hasContent ? (

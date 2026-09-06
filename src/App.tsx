@@ -76,6 +76,17 @@ import { FirstRunDialog } from './components/FirstRunDialog'
 import { NodeContextPopup } from './components/NodeContextPopup'
 import { ShardMarkdownPreview } from './components/ShardMarkdownPreview'
 import { NotableLogViewer } from './components/NotableLogViewer'
+import { PinnedViewerTetherOverlay } from './components/PinnedViewerTetherOverlay'
+import {
+  bringPinnedViewerToFront,
+  closePinnedViewer,
+  findPinnedViewer,
+  pinOrFocusViewer,
+  prunePinnedViewers,
+  type PinnedViewerEntry,
+  type PinnedViewerKind,
+  type ViewerPanelBounds,
+} from './pinnedViewer'
 import {
   commitBootstrapChoice,
   createNewSheet,
@@ -255,6 +266,9 @@ export default function App() {
   const [importError, setImportError] = useState<string | null>(null)
   const [pinnedVideoNodeIds, setPinnedVideoNodeIds] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const [pinnedViewers, setPinnedViewers] = useState<PinnedViewerEntry[]>([])
+  const [pinnedViewerBounds, setPinnedViewerBounds] = useState<Record<string, ViewerPanelBounds>>({})
+  const pinnedZCounterRef = useRef(50)
   const [focusLogId, setFocusLogId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
@@ -433,6 +447,20 @@ export default function App() {
         eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)),
       )
       setSelectedId((cur) => (cur && removeIds.has(cur) ? null : cur))
+      setPinnedVideoNodeIds((cur) => cur.filter((id) => !removeIds.has(id)))
+      setPinnedViewers((cur) => prunePinnedViewers(cur, nodesRef.current.map((n) => n.id).filter((id) => !removeIds.has(id))))
+      setPinnedViewerBounds((cur) => {
+        let changed = false
+        const next: Record<string, ViewerPanelBounds> = {}
+        for (const [id, bounds] of Object.entries(cur)) {
+          if (removeIds.has(id)) {
+            changed = true
+            continue
+          }
+          next[id] = bounds
+        }
+        return changed ? next : cur
+      })
     },
     [commit, onNodesChange, setEdges, setNodes],
   )
@@ -1165,6 +1193,10 @@ export default function App() {
     })
     downloadGraphDocument(document)
     setImportError(null)
+      setContextMenu(null)
+      setPinnedViewers([])
+      setPinnedViewerBounds({})
+      setPinnedVideoNodeIds([])
   }, [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled])
 
   const handleImportJson = useCallback(
@@ -1237,6 +1269,10 @@ export default function App() {
     setImportError(null)
     setSaveStatus('saved')
     setSaveFailureReason(null)
+    setContextMenu(null)
+    setPinnedViewers([])
+    setPinnedViewerBounds({})
+    setPinnedVideoNodeIds([])
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -1255,6 +1291,13 @@ export default function App() {
       if (nodeId === INITIAL_NODE_ID) return
       commit()
       setPinnedVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
+      setPinnedViewers((cur) => closePinnedViewer(cur, nodeId))
+      setPinnedViewerBounds((cur) => {
+        if (!(nodeId in cur)) return cur
+        const next = { ...cur }
+        delete next[nodeId]
+        return next
+      })
       setNodes((nds) =>
         removeNodesAndRelayout(nds, [nodeId], selectedIdRef.current),
       )
@@ -1280,11 +1323,73 @@ export default function App() {
     setSelectedId(node.id)
   }, [])
 
-  const onNodeContextMenu = useCallback((event: ReactMouseEvent, node: Node) => {
-    event.preventDefault()
-    setSelectedId(node.id)
-    setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+  const nextPinnedZ = useCallback(() => {
+    pinnedZCounterRef.current += 1
+    return pinnedZCounterRef.current
   }, [])
+
+  const handlePinViewer = useCallback(
+    (nodeId: string, kind: PinnedViewerKind, position: { x: number; y: number }) => {
+      const z = nextPinnedZ()
+      setPinnedViewers((cur) =>
+        pinOrFocusViewer(cur, { nodeId, kind, x: position.x, y: position.y }, z),
+      )
+      setContextMenu(null)
+    },
+    [nextPinnedZ],
+  )
+
+  const handleClosePinnedViewer = useCallback((nodeId: string) => {
+    setPinnedViewers((cur) => closePinnedViewer(cur, nodeId))
+    setPinnedViewerBounds((cur) => {
+      if (!(nodeId in cur)) return cur
+      const next = { ...cur }
+      delete next[nodeId]
+      return next
+    })
+  }, [])
+
+  const handleActivatePinnedViewer = useCallback(
+    (nodeId: string) => {
+      const z = nextPinnedZ()
+      setPinnedViewers((cur) => bringPinnedViewerToFront(cur, nodeId, z))
+    },
+    [nextPinnedZ],
+  )
+
+  const handlePinnedBoundsChange = useCallback((nodeId: string, bounds: ViewerPanelBounds) => {
+    setPinnedViewerBounds((cur) => {
+      const prev = cur[nodeId]
+      if (
+        prev &&
+        prev.x === bounds.x &&
+        prev.y === bounds.y &&
+        prev.width === bounds.width &&
+        prev.height === bounds.height
+      ) {
+        return cur
+      }
+      return { ...cur, [nodeId]: bounds }
+    })
+  }, [])
+
+  const onNodeContextMenu = useCallback(
+    (event: ReactMouseEvent, node: Node) => {
+      event.preventDefault()
+      setSelectedId(node.id)
+      const data = node.data as PassiveNodeData
+      if (data.kind === 'shard' || data.kind === 'notable') {
+        if (findPinnedViewer(pinnedViewers, node.id)) {
+          const z = nextPinnedZ()
+          setPinnedViewers((cur) => bringPinnedViewerToFront(cur, node.id, z))
+          setContextMenu(null)
+          return
+        }
+      }
+      setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+    },
+    [nextPinnedZ, pinnedViewers],
+  )
 
   const contextMenuNode = useMemo(() => {
     if (!contextMenu) return null
@@ -1660,6 +1765,59 @@ export default function App() {
               onDeleteNode={deleteNode}
             />
 
+            <PinnedViewerTetherOverlay
+              entries={pinnedViewers}
+              boundsByNodeId={pinnedViewerBounds}
+              nodes={nodes}
+            />
+
+            {pinnedViewers.map((entry) => {
+              const node = nodes.find((n) => n.id === entry.nodeId)
+              if (!node) return null
+              const data = node.data as PassiveNodeData
+              if (entry.kind === 'shard') {
+                return (
+                  <ShardMarkdownPreview
+                    key={`pinned-shard-${entry.nodeId}`}
+                    open
+                    pinned
+                    modal={false}
+                    closeOnEscape={false}
+                    x={entry.x}
+                    y={entry.y}
+                    zIndex={entry.zIndex}
+                    nodeLabel={data.label}
+                    markdown={data.markdown}
+                    onClose={() => handleClosePinnedViewer(entry.nodeId)}
+                    onActivate={() => handleActivatePinnedViewer(entry.nodeId)}
+                    onBoundsChange={(bounds) =>
+                      handlePinnedBoundsChange(entry.nodeId, bounds)
+                    }
+                  />
+                )
+              }
+              return (
+                <NotableLogViewer
+                  key={`pinned-notable-${entry.nodeId}`}
+                  open
+                  pinned
+                  modal={false}
+                  closeOnEscape={false}
+                  x={entry.x}
+                  y={entry.y}
+                  zIndex={entry.zIndex}
+                  nodeLabel={data.label}
+                  markdown={data.markdown}
+                  logs={dailyLogsForNode(data)}
+                  onClose={() => handleClosePinnedViewer(entry.nodeId)}
+                  onActivate={() => handleActivatePinnedViewer(entry.nodeId)}
+                  onBoundsChange={(bounds) =>
+                    handlePinnedBoundsChange(entry.nodeId, bounds)
+                  }
+                />
+              )
+            })}
+
             {contextMenu && contextMenuNode ? (
               (() => {
                 const data = contextMenuNode.data as PassiveNodeData
@@ -1673,6 +1831,9 @@ export default function App() {
                       nodeLabel={data.label}
                       markdown={data.markdown}
                       onClose={closeMenu}
+                      onPin={(position) =>
+                        handlePinViewer(contextMenu.nodeId, 'shard', position)
+                      }
                     />
                   )
                 }
@@ -1687,6 +1848,9 @@ export default function App() {
                       markdown={data.markdown}
                       logs={dailyLogsForNode(data)}
                       onClose={closeMenu}
+                      onPin={(position) =>
+                        handlePinViewer(contextMenu.nodeId, 'notable', position)
+                      }
                     />
                   )
                 }

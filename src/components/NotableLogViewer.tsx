@@ -8,6 +8,7 @@ import {
 import type { TrainingLog, VideoMedia } from '../types'
 import { dailyLogSummary, sortedDailyLogs } from '../dailyLog'
 import { useFloatingPanelDrag } from '../useFloatingPanelDrag'
+import type { ViewerPanelBounds } from '../pinnedViewer'
 import { MarkdownView } from './MarkdownView'
 import { VideoEmbed } from './VideoEmbed'
 import './NotableLogViewer.css'
@@ -21,6 +22,16 @@ type Props = {
   markdown?: string
   logs: TrainingLog[]
   onClose: () => void
+  /** When true, no backdrop and Escape does not close (unless closeOnEscape). */
+  pinned?: boolean
+  /** Default true for transient viewers. */
+  modal?: boolean
+  /** Default true for transient viewers; false for pinned. */
+  closeOnEscape?: boolean
+  zIndex?: number
+  onPin?: (position: { x: number; y: number }) => void
+  onBoundsChange?: (bounds: ViewerPanelBounds) => void
+  onActivate?: () => void
 }
 
 const DEFAULT_PLAYER_WIDTH = 480
@@ -59,8 +70,19 @@ export function NotableLogViewer({
   markdown,
   logs,
   onClose,
+  pinned = false,
+  modal,
+  closeOnEscape,
+  zIndex,
+  onPin,
+  onBoundsChange,
+  onActivate,
 }: Props) {
-  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y)
+  const showModal = modal ?? !pinned
+  const escapeCloses = closeOnEscape ?? !pinned
+  const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y, {
+    onBoundsChange,
+  })
   const timeline = useMemo(() => sortedDailyLogs(logs), [logs])
   const [selectedLogId, setSelectedLogId] = useState<string | null>(
     () => timeline[0]?.id ?? null,
@@ -78,13 +100,13 @@ export function NotableLogViewer({
   } | null>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !escapeCloses) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  }, [open, escapeCloses, onClose])
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -140,19 +162,23 @@ export function NotableLogViewer({
 
   return (
     <>
-      <button
-        type="button"
-        className="notable-log-viewer__backdrop"
-        aria-label="닫기"
-        onClick={onClose}
-      />
+      {showModal ? (
+        <button
+          type="button"
+          className="notable-log-viewer__backdrop"
+          aria-label="닫기"
+          onClick={onClose}
+        />
+      ) : null}
       <div
         ref={panelRef}
-        className="notable-log-viewer"
+        className={`notable-log-viewer${pinned ? ' is-pinned' : ''}`}
         role="dialog"
         aria-label={`${nodeLabel} Notable Viewer`}
-        style={{ left: position.x, top: position.y }}
+        style={{ left: position.x, top: position.y, zIndex: zIndex ?? undefined }}
         data-testid="notable-log-viewer"
+        data-pinned={pinned ? 'true' : 'false'}
+        onPointerDownCapture={onActivate}
       >
         <header
           className="notable-log-viewer__head"
@@ -160,12 +186,24 @@ export function NotableLogViewer({
           {...headerDragProps}
         >
           <div>
-            <p className="notable-log-viewer__kind">Notable</p>
+            <p className="notable-log-viewer__kind">Notable{pinned ? ' · Pin' : ''}</p>
             <strong>{nodeLabel}</strong>
           </div>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
-            닫기
-          </button>
+          <div className="notable-log-viewer__actions">
+            {!pinned && onPin ? (
+              <button
+                type="button"
+                className="btn btn--ghost"
+                data-testid="viewer-pin"
+                onClick={() => onPin({ x: position.x, y: position.y })}
+              >
+                Pin
+              </button>
+            ) : null}
+            <button type="button" className="btn btn--ghost" onClick={onClose}>
+              닫기
+            </button>
+          </div>
         </header>
 
         <section className="notable-log-viewer__summary" data-testid="notable-summary">

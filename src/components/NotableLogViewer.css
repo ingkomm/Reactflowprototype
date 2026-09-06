@@ -313,3 +313,14 @@ body.is-notable-player-resizing .notable-log-viewer__player .video-embed iframe 
   gap: 8px;
   min-width: 0;
 }
+
+.notable-log-viewer__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.notable-log-viewer.is-pinned {
+  z-index: 45;
+}
