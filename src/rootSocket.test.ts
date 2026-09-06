@@ -19,6 +19,7 @@ import {
   parseRootSocketHandle,
   rootSocketSourceHandle,
   initialSocketOffset,
+  ROOT_POWER_HANDLE_ID,
 } from './initialHub'
 import { buildGraphDocument, documentToFlowState } from './graphDocument'
 import { INITIAL_NODE_ID } from './types'
@@ -28,7 +29,6 @@ import {
   ROOT_HUB_RADIUS,
 } from './rootOrbit'
 import { computePoweredNodeIds, isValidRootConnectHandles, isValidRootPowerHandles } from './power'
-import { ROOT_POWER_HANDLE_ID } from './initialHub'
 
 describe('default Connect slots on 6-socket Root', () => {
   it('empty graph uses slots 0 / 2 / 4', () => {
