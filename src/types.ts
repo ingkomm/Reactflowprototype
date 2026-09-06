@@ -15,14 +15,14 @@ export const INITIAL_NODE_ID = 'initial-main'
 export type OrbitTier = 1 | 2 | 3
 export type OrbitTierCount = 1 | 2 | 3
 
-/** One training log entry — one calendar day of practice. */
+/** One training log entry — one practice session record. */
 export type TrainingLog = {
   id: string
   /** Local calendar date YYYY-MM-DD */
   date: string
   /** Freeform practice memo */
   note?: string
-  /** Optional external video links for this practice day. */
+  /** Optional external video links for this practice entry. */
   media?: VideoMedia[]
 }
 

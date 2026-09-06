@@ -133,7 +133,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
   const [editingId, setEditingId] = useState<string | null>(null)
 
   const activeEditingId = focusLogId ?? editingId
-  const practiceDays = new Set(logs.map((log) => log.date)).size
+  const practiceEntries = logs.length
   const orderedLogs = sortedDailyLogs(logs)
 
   const buildLog = (
@@ -194,7 +194,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
     <div className="daily-log-panel">
       <div className="inspector__section-head">
         <h3>연습 기록</h3>
-        <span className="daily-log-panel__summary">총 {practiceDays}일</span>
+        <span className="daily-log-panel__summary">총 {practiceEntries}회</span>
       </div>
 
       <div className="daily-log-card daily-log-card--form">

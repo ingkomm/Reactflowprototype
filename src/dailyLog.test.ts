@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  countPracticeDays,
+  countPracticeEntries,
   createDailyLog,
   dailyLogSummary,
-  hasDateConflict,
   memoPreview,
-  mergeLogsByDate,
   migrateLegacyTrainingLogs,
   normalizeDailyLogs,
   recentDailyLogs,
@@ -43,13 +41,12 @@ describe('dailyLog duplicate dates', () => {
     expect(logs).toHaveLength(3)
     expect(new Set(logs.map((log) => log.id)).size).toBe(3)
     expect(logs.map((log) => log.note)).toEqual(['morning', 'evening', 'next memo'])
-    expect(countPracticeDays(logs)).toBe(1)
+    expect(countPracticeEntries(logs)).toBe(3)
 
     const added = upsertDailyLog(logs, createDailyLog('2026-09-06', 'fourth'))
     expect(added.error).toBeUndefined()
     expect(added.logs).toHaveLength(4)
-    expect(countPracticeDays(added.logs)).toBe(1)
-    expect(hasDateConflict(added.logs, '2026-09-06')).toBe(false)
+    expect(countPracticeEntries(added.logs)).toBe(4)
   })
 
   it('sorts by newest date while keeping same-date relative order', () => {
@@ -60,19 +57,19 @@ describe('dailyLog duplicate dates', () => {
     expect(sorted.map((log) => log.note)).toEqual(['first', 'second', 'older'])
   })
 
-  it('counts practice days by unique date (not log count)', () => {
+  it('counts practice progression by entry count (not unique dates)', () => {
     const base = [
       createDailyLog('2026-09-01', 'd1'),
       createDailyLog('2026-09-02', 'd2'),
       createDailyLog('2026-09-03', 'd3'),
     ]
-    expect(countPracticeDays(base)).toBe(3)
+    expect(countPracticeEntries(base)).toBe(3)
     const withDupes = [
       ...base,
       createDailyLog('2026-09-01', 'd1-extra'),
       createDailyLog('2026-09-02', 'd2-extra'),
     ]
-    expect(countPracticeDays(withDupes)).toBe(3)
+    expect(countPracticeEntries(withDupes)).toBe(5)
 
     const stages = ensureNotableStages(createNotableStages(0, withDupes))
     expect(canNotableTransmit(stages)).toBe(true)
@@ -81,27 +78,22 @@ describe('dailyLog duplicate dates', () => {
 })
 
 describe('dailyLog legacy helpers', () => {
-  it('still exposes explicit mergeLogsByDate for opt-in merge', () => {
-    const merged = mergeLogsByDate([
-      createDailyLog('2025-01-01', 'morning'),
-      { ...createDailyLog('2025-01-01', 'evening'), id: 'log-b' },
-    ])
-    expect(merged).toHaveLength(1)
-    expect(merged[0]?.note).toContain('morning')
-    expect(merged[0]?.note).toContain('evening')
-  })
-
-  it('expands legacy count into multiple dates', () => {
+  it('expands legacy count into same-date entries', () => {
     const logs = migrateLegacyTrainingLogs({
       id: 'log-legacy',
       label: '2025-03-10',
-      count: 2,
+      count: 3,
       date: '2025-03-10',
       note: 'old',
+      media: [{ id: 'm1', url: 'https://youtu.be/aaaaaaaaaaa' }],
     })
-    expect(logs).toHaveLength(2)
-    expect(logs.map((log) => log.date)).toEqual(['2025-03-09', '2025-03-10'])
-    expect(logs[1]?.note).toBe('old')
+    expect(logs).toHaveLength(3)
+    expect(logs.every((log) => log.date === '2025-03-10')).toBe(true)
+    expect(logs[0]?.id).toBe('log-legacy')
+    expect(logs[0]?.note).toBe('old')
+    expect(logs[0]?.media?.[0]?.url).toContain('youtu.be')
+    expect(logs[1]?.note).toBeUndefined()
+    expect(logs[2]?.note).toBeUndefined()
   })
 
   it('returns recent daily logs and summaries', () => {
@@ -209,7 +201,7 @@ describe('duplicate-date parse/export round-trip', () => {
     expect(loaded?.stages?.[0]?.logs?.map((l) => l.id)).toEqual(['log-a', 'log-b', 'log-c'])
     expect(loaded?.stages?.[0]?.logs?.[0]?.media?.[0]?.note).toBe(mediaNote)
     expect(loaded?.stages?.map((s) => s.goal)).toEqual([3, 5, 7])
-    expect(countPracticeDays(loaded?.stages?.[0]?.logs ?? [])).toBe(1)
+    expect(countPracticeEntries(loaded?.stages?.[0]?.logs ?? [])).toBe(3)
 
     const exported = buildGraphDocument({
       nodes: parsed.document.nodes,

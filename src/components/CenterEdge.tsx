@@ -12,7 +12,7 @@ import {
   linkGlowStyle,
   trimStraightEndpoints,
 } from '../orbit'
-import { rootSocketFlowPosition } from '../initialHub'
+import { isRootPowerHandle, rootPowerFlowPosition, rootSocketFlowPosition } from '../initialHub'
 import { usePowerSet, usePowerFlowMeta } from '../powerContext.shared'
 import { orientPowerLinkVisual } from '../power'
 import { PoweredLinkVisual } from './PoweredLinkVisual'
@@ -26,17 +26,19 @@ function nodeCenter(node: NonNullable<ReturnType<typeof useInternalNode>>) {
   }
 }
 
-/** Root uses rim sockets; every other node keeps center-to-center links. */
+/**
+ * Root endpoints only via root-power (center) or socket-N (rim).
+ * Invalid / missing Root handles resolve to null — never hub-center fallback.
+ */
 function endpointForNode(
   node: NonNullable<ReturnType<typeof useInternalNode>>,
   data: PassiveNodeData,
   handleId: string | null | undefined,
-  allowRootCenter = false,
 ): { x: number; y: number } | null {
   if (data.kind === 'initial') {
-    // Derived Root Orbit Start Links originate at the exact Root center.
-    if (allowRootCenter) return nodeCenter(node)
-    // Root↔Connect edges must use a rim socket — never fall back to hub center.
+    if (isRootPowerHandle(handleId)) {
+      return rootPowerFlowPosition(node.internals.positionAbsolute)
+    }
     return rootSocketFlowPosition(node.internals.positionAbsolute, handleId)
   }
   return nodeCenter(node)
@@ -50,7 +52,6 @@ export function CenterEdge({
   targetHandleId,
   interactionWidth = 28,
   selected,
-  data: edgeData,
 }: EdgeProps) {
   const powered = usePowerSet()
   const flowMeta = usePowerFlowMeta()
@@ -63,22 +64,9 @@ export function CenterEdge({
 
   const sd = sourceNode.data as PassiveNodeData
   const td = targetNode.data as PassiveNodeData
-  const derivedRootStart = Boolean(
-    (edgeData as { derivedRootOrbitStart?: boolean } | undefined)?.derivedRootOrbitStart,
-  )
 
-  const sourcePt = endpointForNode(
-    sourceNode,
-    sd,
-    sourceHandleId,
-    derivedRootStart && sd.kind === 'initial',
-  )
-  const targetPt = endpointForNode(
-    targetNode,
-    td,
-    targetHandleId,
-    derivedRootStart && td.kind === 'initial',
-  )
+  const sourcePt = endpointForNode(sourceNode, sd, sourceHandleId)
+  const targetPt = endpointForNode(targetNode, td, targetHandleId)
   if (!sourcePt || !targetPt) {
     return null
   }

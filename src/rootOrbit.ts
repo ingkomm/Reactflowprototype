@@ -2,6 +2,7 @@ import type { Edge } from '@xyflow/react'
 import type { PassiveNodeData } from './types'
 import { INITIAL_NODE_ID } from './types'
 import type { PassiveFlowNode } from './components/PassiveNode'
+import { isRootPowerHandle } from './initialHub'
 import {
   NODE_SIZE,
   ROOT_HUB_SIZE,
@@ -578,29 +579,32 @@ export function stripRootOrbitWhenMasteryBound(nodes: PassiveFlowNode[]): Passiv
   return changed ? layoutRootOrbit(next) : nodes
 }
 
-/** Ephemeral Root→orbit-member Start Links (not persisted in document edges). */
-export function buildRootOrbitStartEdges(nodes: PassiveFlowNode[]): Edge[] {
-  const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
-  if (!root) return []
-  const edges: Edge[] = []
-  for (const node of nodes) {
-    const data = node.data as PassiveNodeData
-    if (!isValidRootOrbitMemberKind(data.kind)) continue
-    if (!isOnRootOrbit(data)) continue
-    edges.push({
-      id: `derived-root-orbit-${node.id}`,
-      type: 'center',
-      source: root.id,
-      target: node.id,
-      sourceHandle: null,
-      targetHandle: 'center-target',
-      selectable: false,
-      deletable: false,
-      focusable: false,
-      interactionWidth: 0,
-      zIndex: 1,
-      data: { derivedRootOrbitStart: true, active: true },
-    })
-  }
-  return edges
+/**
+ * Drop Power Core edges whose other endpoint is not a Root Orbit Shard/Notable.
+ * Call after orbit detach, kind change, or mastery bind that clears membership.
+ */
+export function stripInvalidRootPowerEdges(
+  nodes: PassiveFlowNode[],
+  edges: Edge[],
+): Edge[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  return edges.filter((edge) => {
+    const source = byId.get(edge.source)
+    const target = byId.get(edge.target)
+    if (!source || !target) return false
+    const sd = source.data as PassiveNodeData
+    const td = target.data as PassiveNodeData
+    const rootIsSource = sd.kind === 'initial'
+    const rootIsTarget = td.kind === 'initial'
+    if (!rootIsSource && !rootIsTarget) return true
+
+    const powerHandle = rootIsSource
+      ? isRootPowerHandle(edge.sourceHandle)
+      : isRootPowerHandle(edge.targetHandle)
+    if (!powerHandle) return true
+
+    const other = rootIsSource ? target : source
+    const od = other.data as PassiveNodeData
+    return isValidRootOrbitMemberKind(od.kind) && isOnRootOrbit(od)
+  })
 }

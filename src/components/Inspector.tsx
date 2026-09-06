@@ -181,8 +181,8 @@ export function Inspector({
       {isFixedInitial ? (
         <>
           <p className="inspector__empty">
-            Root Node — 전원 소스. 이름 수정 가능. 삭제·종류 변경 불가. rim socket → Connect 회로, center →
-            Root Orbit Shard/Notable 파생 Start Link.
+            Root Node — 전원 소스. 이름 수정 가능. 삭제·종류 변경 불가. rim socket → Connect 회로,
+            Power Core → Root Orbit Shard/Notable 수동 파워 링크.
           </p>
           <h3 className="inspector__subtitle">Root Orbit (3단 고정)</h3>
           {([1, 2, 3] as const).map((tier) => {

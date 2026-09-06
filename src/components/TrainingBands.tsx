@@ -2,7 +2,7 @@ import type { StageData } from '../types'
 import {
   isStageComplete,
   notableBandFills,
-  notableBandGoalsForDays,
+  notableBandGoalsForCount,
   NOTABLE_BAND_GOALS,
   sortedStages,
   stageLoggedCount,
@@ -87,7 +87,7 @@ function StageRing({ ringKey, goal, filled, cx, cy, r }: RingProps) {
 
 /**
  * One segmented ring per band: stage 1 innermost → outer.
- * Notable uses dynamic goals 3,5,7,9,… from unique practice days (9+ UI-only).
+ * Notable uses dynamic goals 3,5,7,9,… from practice entry count (9+ UI-only).
  */
 export function TrainingBands({ stages, nodeSize }: Props) {
   const ordered = sortedStages(stages)
@@ -100,7 +100,7 @@ export function TrainingBands({ stages, nodeSize }: Props) {
 
   let rings: { key: string; goal: number; filled: number }[]
   if (isNotableBands) {
-    const goals = notableBandGoalsForDays(totalLogged)
+    const goals = notableBandGoalsForCount(totalLogged)
     const fills = notableBandFills(totalLogged)
     const visibleCount = visibleNotableBandCount(totalLogged)
     rings = goals.slice(0, visibleCount).map((goal, i) => ({

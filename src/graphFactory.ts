@@ -7,7 +7,7 @@ import {
   DEFAULT_ORBIT_TIER_CAPACITY,
   isMasteryKind,
 } from './orbit'
-import { rootSocketSourceHandle } from './initialHub'
+import { ROOT_POWER_HANDLE_ID, rootSocketSourceHandle } from './initialHub'
 import { createEdgeId } from './ids'
 
 /** Build default `PassiveNodeData` for a new node. */
@@ -113,15 +113,16 @@ export function rootSocketLinkEdge(
   }
 }
 
-export function notableLinkEdge(sourceId: string, targetId: string): Edge {
+/** Root Power Core → Root Orbit Shard/Notable (manual power start). */
+export function rootPowerLinkEdge(rootId: string, targetId: string): Edge {
   return {
     id: createEdgeId(),
-    type: 'notable',
-    source: sourceId,
+    type: 'center',
+    source: rootId,
     target: targetId,
-    sourceHandle: 'center',
+    sourceHandle: ROOT_POWER_HANDLE_ID,
     targetHandle: 'center-target',
-    zIndex: 0,
+    data: { active: true } satisfies GraphEdgeData,
   }
 }
 
