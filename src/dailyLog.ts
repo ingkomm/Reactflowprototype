@@ -69,17 +69,14 @@ export function migrateLegacyTrainingLogs(value: unknown): TrainingLog[] {
     return [log]
   }
 
-  const end = new Date(`${date}T12:00:00`)
+  // Legacy {date, count:N} → N entries all sharing the same date (no invented prior days).
   const logs: TrainingLog[] = []
   for (let i = 0; i < count; i++) {
-    const day = new Date(end)
-    day.setDate(day.getDate() - (count - 1 - i))
-    const dayStr = formatPracticeDate(day)
     logs.push({
-      id: i === count - 1 ? raw.id.trim() : createLogId(),
-      date: dayStr,
-      ...(i === count - 1 && note ? { note } : {}),
-      ...(i === count - 1 && media?.length ? { media } : {}),
+      id: i === 0 ? raw.id.trim() : createLogId(),
+      date,
+      ...(i === 0 && note ? { note } : {}),
+      ...(i === 0 && media?.length ? { media } : {}),
     })
   }
   return logs
@@ -90,59 +87,18 @@ export function migrateLegacyTrainingLog(value: unknown): TrainingLog | null {
   return migrateLegacyTrainingLogs(value)[0] ?? null
 }
 
-/**
- * @deprecated Same-date logs are kept as separate entries. Do not use for normalize/import.
- * Kept only for older call sites/tests that explicitly request merge behavior.
- */
-export function mergeLogsByDate(logs: TrainingLog[]): TrainingLog[] {
-  const byDate = new Map<string, TrainingLog>()
-  for (const log of logs) {
-    const existing = byDate.get(log.date)
-    if (!existing) {
-      byDate.set(log.date, log)
-      continue
-    }
-    const notes = [existing.note, log.note].filter(Boolean) as string[]
-    const mergedNote = notes.length > 0 ? [...new Set(notes)].join('\n') : undefined
-    const media = [...(existing.media ?? []), ...(log.media ?? [])]
-    const seen = new Set<string>()
-    const mergedMedia = media.filter((item) => {
-      const key = item.url
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    byDate.set(log.date, {
-      id: existing.id,
-      date: existing.date,
-      ...(mergedNote ? { note: mergedNote } : {}),
-      ...(mergedMedia.length > 0 ? { media: mergedMedia } : {}),
-    })
-  }
-  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date))
-}
-
 /** Trim dates and sort; never merges same-date logs. */
 export function normalizeDailyLogs(logs: TrainingLog[]): TrainingLog[] {
   return sortedDailyLogs(logs.map((log) => ({ ...log, date: log.date.trim() })))
 }
 
-/** Practice days = unique calendar dates (not log count). */
-export function countPracticeDays(logs: TrainingLog[]): number {
-  return new Set(logs.map((log) => log.date)).size
+/** Practice progression = log entry count (same-date entries each count). */
+export function countPracticeEntries(logs: TrainingLog[]): number {
+  return logs.length
 }
 
-export function countPracticeDaysInStages(stages: StageData[]): number {
-  return countPracticeDays(stages.flatMap((stage) => stage.logs))
-}
-
-/** @deprecated Same-date logs are allowed; always returns false. */
-export function hasDateConflict(
-  _logs: TrainingLog[],
-  _date: string,
-  _excludeId?: string,
-): boolean {
-  return false
+export function countPracticeEntriesInStages(stages: StageData[]): number {
+  return stages.reduce((sum, stage) => sum + stage.logs.length, 0)
 }
 
 /** Newest date first; same-date entries keep their relative input order. */

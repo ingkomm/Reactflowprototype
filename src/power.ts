@@ -1,5 +1,5 @@
 import type { Edge } from '@xyflow/react'
-import { parseRootSocketHandle } from './initialHub'
+import { isRootPowerHandle, parseRootSocketHandle } from './initialHub'
 import { isOnRootOrbit, isValidRootOrbitMemberKind } from './rootOrbit'
 import type { PassiveFlowNode } from './components/PassiveNode'
 import type { GraphEdgeData, PassiveNodeData, InitialConnectSlot } from './types'
@@ -16,11 +16,11 @@ import {
   shareSameOrbit,
 } from './orbit'
 
-export type LinkKind = 'center' | 'orbit' | 'notable'
+export type LinkKind = 'center' | 'orbit'
 
 export function edgeLinkKind(edge: Edge): LinkKind {
   if (edge.type === 'orbit') return 'orbit'
-  if (edge.type === 'notable') return 'notable'
+  // Legacy type:'notable' is treated as ordinary center.
   return 'center'
 }
 
@@ -86,13 +86,6 @@ export function computePoweredNodeIds(
       powered.add(node.id)
     }
   }
-  // Derived Start Link: Root center → Root Orbit Notable (membership only, not an edge).
-  for (const node of nodes) {
-    const data = node.data as PassiveNodeData
-    if (isValidRootOrbitMemberKind(data.kind) && isOnRootOrbit(data)) {
-      powered.add(node.id)
-    }
-  }
 
   let changed = true
   while (changed) {
@@ -100,7 +93,7 @@ export function computePoweredNodeIds(
     for (const edge of edges) {
       if (!isEdgeActive(edge)) continue
       const kind = edgeLinkKind(edge)
-      if (kind !== 'center' && kind !== 'orbit' && kind !== 'notable') continue
+      if (kind !== 'center' && kind !== 'orbit') continue
 
       const source = byId.get(edge.source)
       const target = byId.get(edge.target)
@@ -117,22 +110,32 @@ export function computePoweredNodeIds(
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
         if (isStealth(toData)) continue
-        if (isConnect(toData)) {
-          // Connect receives power from Root (socket) or from another powered Connect.
-          if (isInitial(fromData)) {
+        if (isInitial(fromData)) {
+          const rootNode = from
+          const otherNode = to
+          if (isConnect(toData)) {
             if (
               !isValidRootConnectHandles(
-                isInitial(sd) ? source : target,
-                isConnect(sd) ? source : target,
+                rootNode,
+                otherNode,
                 edge.sourceHandle,
                 edge.targetHandle,
               )
             ) {
               continue
             }
-          } else if (!isConnect(fromData)) {
+          } else if (
+            !isValidRootPowerHandles(
+              rootNode,
+              otherNode,
+              edge.sourceHandle,
+              edge.targetHandle,
+            )
+          ) {
             continue
           }
+        } else if (isConnect(toData) && !isConnect(fromData) && !isInitial(fromData)) {
+          continue
         }
         if (!powered.has(to.id)) {
           powered.add(to.id)
@@ -174,23 +177,11 @@ export function computePowerFlowMeta(
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const depth = new Map<string, number>()
   const parent = new Map<string, string>()
-  let rootId: string | null = null
 
   for (const node of nodes) {
     const data = node.data as PassiveNodeData
     if (isInitial(data)) {
       depth.set(node.id, 0)
-      rootId = node.id
-    }
-  }
-  // Derived Start Link meta: parent=Root, depth=1
-  if (rootId) {
-    for (const node of nodes) {
-      const data = node.data as PassiveNodeData
-      if (isValidRootOrbitMemberKind(data.kind) && isOnRootOrbit(data)) {
-        depth.set(node.id, 1)
-        parent.set(node.id, rootId)
-      }
     }
   }
 
@@ -200,7 +191,7 @@ export function computePowerFlowMeta(
     for (const edge of edges) {
       if (!isEdgeActive(edge)) continue
       const kind = edgeLinkKind(edge)
-      if (kind !== 'center' && kind !== 'orbit' && kind !== 'notable') continue
+      if (kind !== 'center' && kind !== 'orbit') continue
 
       const source = byId.get(edge.source)
       const target = byId.get(edge.target)
@@ -217,22 +208,32 @@ export function computePowerFlowMeta(
         const toData = to.data as PassiveNodeData
         if (isMastery(toData)) continue
         if (isStealth(toData)) continue
-        if (isConnect(toData)) {
-          // Connect receives power from Root (socket) or from another powered Connect.
-          if (isInitial(fromData)) {
+        if (isInitial(fromData)) {
+          const rootNode = from
+          const otherNode = to
+          if (isConnect(toData)) {
             if (
               !isValidRootConnectHandles(
-                isInitial(sd) ? source : target,
-                isConnect(sd) ? source : target,
+                rootNode,
+                otherNode,
                 edge.sourceHandle,
                 edge.targetHandle,
               )
             ) {
               continue
             }
-          } else if (!isConnect(fromData)) {
+          } else if (
+            !isValidRootPowerHandles(
+              rootNode,
+              otherNode,
+              edge.sourceHandle,
+              edge.targetHandle,
+            )
+          ) {
             continue
           }
+        } else if (isConnect(toData) && !isConnect(fromData) && !isInitial(fromData)) {
+          continue
         }
         if (!depth.has(to.id)) {
           depth.set(to.id, depth.get(from.id)! + 1)
@@ -329,16 +330,6 @@ export function getNodesReachableFromInitial(
       queue.push(node.id)
     }
   }
-  // Derived Start Link also seeds reachability for Root Orbit members.
-  for (const node of nodes) {
-    const data = node.data as PassiveNodeData
-    if (isValidRootOrbitMemberKind(data.kind) && isOnRootOrbit(data)) {
-      if (!reachable.has(node.id)) {
-        reachable.add(node.id)
-        queue.push(node.id)
-      }
-    }
-  }
 
   const adj = new Map<string, Set<string>>()
   for (const edge of edges) {
@@ -367,20 +358,14 @@ export function getNodesReachableFromInitial(
 
 /**
  * Keep all valid links; deactivate center/orbit links not reachable from Root.
- * Notable links stay active when both endpoints exist.
  */
 export function syncEdgesReachableFromInitial(
   nodes: PassiveFlowNode[],
   edges: Edge[],
 ): Edge[] {
   const reachable = getNodesReachableFromInitial(nodes, edges)
-  const nodeIds = new Set(nodes.map((n) => n.id))
 
   return edges.map((e) => {
-    if (e.type === 'notable') {
-      const valid = nodeIds.has(e.source) && nodeIds.has(e.target)
-      return valid ? e : e
-    }
     const active = reachable.has(e.source) && reachable.has(e.target)
     return withEdgeActive(e, active)
   })
@@ -410,6 +395,7 @@ export function classifyPassiveConnection(
   if (isInitial(sd) || isInitial(td)) {
     const other = isInitial(sd) ? td : sd
     if (isConnect(other)) return 'center'
+    if (isValidRootOrbitMemberKind(other.kind) && isOnRootOrbit(other)) return 'center'
     return null
   }
 
@@ -423,7 +409,7 @@ export function classifyPassiveConnection(
     return null
   }
 
-  if (sd.kind === 'notable' && td.kind === 'notable') return 'notable'
+  if (sd.kind === 'notable' && td.kind === 'notable') return 'center'
 
   if (
     shareSameOrbit({ data: sd }, { data: td }) &&
@@ -476,4 +462,37 @@ export function isValidRootConnectHandles(
   targetHandle?: string | null,
 ): boolean {
   return resolveRootConnectSlot(source, target, sourceHandle, targetHandle) !== null
+}
+
+/** Root Power Core ↔ Root Orbit Shard/Notable only. */
+export function isValidRootPowerHandles(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+  sourceHandle?: string | null,
+  targetHandle?: string | null,
+): boolean {
+  const sd = source.data as PassiveNodeData
+  const td = target.data as PassiveNodeData
+  if (isInitial(sd) && isValidRootOrbitMemberKind(td.kind) && isOnRootOrbit(td)) {
+    return isRootPowerHandle(sourceHandle)
+  }
+  if (isInitial(td) && isValidRootOrbitMemberKind(sd.kind) && isOnRootOrbit(sd)) {
+    return isRootPowerHandle(targetHandle)
+  }
+  return false
+}
+
+/** Root edge must use either a rim socket (Connect) or the Power Core (Orbit member). */
+export function isValidRootEdgeHandles(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+  sourceHandle?: string | null,
+  targetHandle?: string | null,
+): boolean {
+  const sd = source.data as PassiveNodeData
+  const td = target.data as PassiveNodeData
+  if (isConnect(sd) || isConnect(td)) {
+    return isValidRootConnectHandles(source, target, sourceHandle, targetHandle)
+  }
+  return isValidRootPowerHandles(source, target, sourceHandle, targetHandle)
 }

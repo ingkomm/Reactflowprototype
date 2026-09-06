@@ -5,7 +5,7 @@ import { PASSIVE_KIND_LABEL } from '../types'
 import {
   kindUsesTrainingBands,
   notableBandFills,
-  notableBandGoalsForDays,
+  notableBandGoalsForCount,
   stageBandLevel,
   totalRawLoggedAcrossStages,
   visibleNotableBandCount,
@@ -38,7 +38,13 @@ import {
   outermostBandRadius,
 } from '../orbitGeometry'
 import { TrainingBands } from './TrainingBands'
-import { INITIAL_CONNECT_SLOT_COUNT, initialSocketOffset, rootSocketSourceHandle, rootSocketTargetHandle } from '../initialHub'
+import {
+  INITIAL_CONNECT_SLOT_COUNT,
+  initialSocketOffset,
+  ROOT_POWER_HANDLE_ID,
+  rootSocketSourceHandle,
+  rootSocketTargetHandle,
+} from '../initialHub'
 import { rootOrbitRingPercent } from '../rootOrbit'
 import { useVoidHighlight } from '../voidHighlightContext.shared'
 import './PassiveNode.css'
@@ -114,7 +120,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       : 0
 
   const bandGoals = kindUsesTrainingBands(data.kind)
-    ? notableBandGoalsForDays(totalLogged)
+    ? notableBandGoalsForCount(totalLogged)
     : []
   const fills = kindUsesTrainingBands(data.kind) ? notableBandFills(totalLogged) : []
   const done = fills.filter((f, i) => f >= (bandGoals[i] ?? 0)).length
@@ -271,6 +277,26 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           )
         })}
 
+      {isInitialNode && (
+        <>
+          <Handle
+            id={ROOT_POWER_HANDLE_ID}
+            type="source"
+            position={Position.Top}
+            className="passive-node__handle passive-node__handle--root-power"
+            isConnectable
+          />
+          <Handle
+            id="root-power-target"
+            type="target"
+            position={Position.Top}
+            className="passive-node__handle passive-node__handle--root-power"
+            isConnectable
+          />
+          <span className="passive-node__power-core" aria-hidden />
+        </>
+      )}
+
       <div className="passive-node__ring" aria-hidden>
         {isInitialNode && (
           <div className="passive-node__initial-arena">
@@ -324,7 +350,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           )}
           {showBands && (
             <p className="passive-node__tooltip-meta">
-              연습 {totalLogged}일 · 밴드 {done}/{visibleBandCount}
+              연습 {totalLogged}회 · 밴드 {done}/{visibleBandCount}
               {activeFill >= 0 && activeFill < visibleBandCount
                 ? ` · ${fills[activeFill]}/${bandGoals[activeFill]}`
                 : ''}

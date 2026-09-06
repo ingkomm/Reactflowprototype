@@ -31,11 +31,19 @@ import {
   isWithinStringLimit,
 } from './limits'
 import { validateGraphIntegrity } from './graphIntegrity'
-import { pinGraphSoRootCenteredAtOrigin, snapSocketedConnectsToRoot } from './initialHub'
-import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags } from './orbit'
+import {
+  pinGraphSoRootCenteredAtOrigin,
+  snapSocketedConnectsToRoot,
+  ROOT_POWER_HANDLE_ID,
+  rootSocketSourceHandle,
+  parseRootSocketHandle,
+} from './initialHub'
+import { isMasteryKind, layoutMasteryOrbit, withMasteryDragFlags, isConnectKind } from './orbit'
 import {
   ensureRootFixed,
   ensureRootOrbitSlotsAssigned,
+  isOnRootOrbit,
+  isValidRootOrbitMemberKind,
   layoutRootOrbit,
 } from './rootOrbit'
 
@@ -330,7 +338,10 @@ function normalizeSerializedEdge(value: unknown): SerializedEdge | null {
     source: value.source.trim(),
     target: value.target.trim(),
   }
-  if (typeof value.type === 'string') edge.type = value.type
+  if (typeof value.type === 'string') {
+    // Legacy Notable↔Notable affinity edges become ordinary center links.
+    edge.type = value.type === 'notable' ? 'center' : value.type
+  }
   if (value.sourceHandle === null || typeof value.sourceHandle === 'string') edge.sourceHandle = value.sourceHandle
   if (value.targetHandle === null || typeof value.targetHandle === 'string') edge.targetHandle = value.targetHandle
   if (isRecord(value.data)) edge.data = value.data
@@ -494,9 +505,10 @@ export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
     edges: input.edges.map((edge) => {
       const raw = edge.data ? (structuredClone(edge.data) as GraphEdgeData) : undefined
       if (raw) delete raw.active
+      const type = edge.type === 'notable' ? 'center' : edge.type
       return {
         id: edge.id,
-        type: edge.type,
+        type,
         source: edge.source,
         target: edge.target,
         sourceHandle: edge.sourceHandle,
@@ -512,6 +524,80 @@ export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
 
 export function serializeGraphDocument(document: GraphDocumentV01): string {
   return JSON.stringify(document, null, 2)
+}
+
+/**
+ * Load-time Root/Notable edge repair:
+ * - type:'notable' → center (also done in normalizeSerializedEdge)
+ * - Root↔Orbit-member center → canonicalize to root-power (do NOT invent missing power edges)
+ * - Root↔Connect: repair handles from initialSlot; drop irreparable Root center edges
+ */
+export function migrateLoadedEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const next: Edge[] = []
+
+  for (const edge of edges) {
+    const source = byId.get(edge.source)
+    const target = byId.get(edge.target)
+    if (!source || !target) continue
+
+    let type = edge.type === 'notable' ? 'center' : edge.type
+    const sd = source.data as PassiveNodeData
+    const td = target.data as PassiveNodeData
+    const rootIsSource = sd.kind === 'initial'
+    const rootIsTarget = td.kind === 'initial'
+
+    if (rootIsSource || rootIsTarget) {
+      const root = rootIsSource ? source : target
+      const other = rootIsSource ? target : source
+      const od = other.data as PassiveNodeData
+
+      if (isConnectKind(od.kind)) {
+        let slot = rootIsSource
+          ? parseRootSocketHandle(edge.sourceHandle)
+          : parseRootSocketHandle(edge.targetHandle)
+        if (slot === null && od.initialSlot != null) {
+          slot = od.initialSlot
+        }
+        if (slot === null) continue
+        next.push({
+          ...edge,
+          type: 'center',
+          source: root.id,
+          target: other.id,
+          sourceHandle: rootSocketSourceHandle(slot),
+          targetHandle: 'center-target',
+        })
+        continue
+      }
+
+      if (isValidRootOrbitMemberKind(od.kind) && isOnRootOrbit(od)) {
+        // Existing Root↔Orbit center edge → canonicalize Power Core handles.
+        // Do not auto-create power edges for orbit members that lack one.
+        next.push({
+          ...edge,
+          type: 'center',
+          source: root.id,
+          target: other.id,
+          sourceHandle: ROOT_POWER_HANDLE_ID,
+          targetHandle: 'center-target',
+        })
+        continue
+      }
+
+      // Irreparable Root center edge (body / unknown handle / non-member) — drop.
+      continue
+    }
+
+    next.push({
+      ...edge,
+      type,
+      ...(type === 'center' && !edge.sourceHandle ? { sourceHandle: 'center' } : {}),
+      ...(type === 'center' && !edge.targetHandle ? { targetHandle: 'center-target' } : {}),
+    })
+  }
+
+  return next
 }
 
 export function documentToFlowState(document: GraphDocumentV01): GraphImportResult {
@@ -538,7 +624,7 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
 
   nodes = withMasteryDragFlags(nodes)
 
-  const edges: Edge[] = document.edges.map((edge) => ({
+  const rawEdges: Edge[] = document.edges.map((edge) => ({
     id: edge.id,
     type: edge.type,
     source: edge.source,
@@ -548,6 +634,8 @@ export function documentToFlowState(document: GraphDocumentV01): GraphImportResu
     data: edge.data,
     zIndex: edge.zIndex,
   }))
+
+  const edges = migrateLoadedEdges(nodes, rawEdges)
 
   return {
     nodes,

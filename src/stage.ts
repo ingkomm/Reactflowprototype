@@ -1,14 +1,14 @@
 import type { PassiveKind, PassiveNodeData, StageData, TrainingLog } from './types'
 import { DEFAULT_STAGE_GOAL } from './types'
 import {
-  countPracticeDaysInStages,
+  countPracticeEntriesInStages,
   createDailyLog,
   normalizeDailyLogs,
 } from './dailyLog'
 import { createStageId } from './ids'
 
 export { formatPracticeDate } from './dailyLog'
-export { createDailyLog, countPracticeDaysInStages } from './dailyLog'
+export { createDailyLog, countPracticeEntriesInStages } from './dailyLog'
 
 export function uid(_prefix?: string) {
   return createStageId()
@@ -93,9 +93,9 @@ export function completedStageCount(stages: StageData[]): number {
   return stages.filter(isStageComplete).length
 }
 
-/** Total practice days across all stage logs (Notable cumulative pool). */
+/** Total practice entries across all stage logs (Notable cumulative pool). */
 export function totalRawLoggedAcrossStages(stages: StageData[]): number {
-  return countPracticeDaysInStages(stages)
+  return countPracticeEntriesInStages(stages)
 }
 
 export function totalLoggedAcrossStages(stages: StageData[]): number {
@@ -103,15 +103,15 @@ export function totalLoggedAcrossStages(stages: StageData[]): number {
 }
 
 /**
- * Build Notable's fixed 3/5/7 bands from practice-day logs.
- * All logs are kept on band 1; fill amounts are derived from the day count.
+ * Build Notable's fixed 3/5/7 bands from practice entry logs.
+ * All logs are kept on band 1; fill amounts are derived from the entry count.
  */
-export function createNotableStages(practiceDays = 0, logs: TrainingLog[] = []): StageData[] {
+export function createNotableStages(entryCount = 0, logs: TrainingLog[] = []): StageData[] {
   const poolLogs = normalizeStageLogs(
     logs.length > 0
       ? logs
-      : practiceDays > 0
-        ? Array.from({ length: practiceDays }, (_, i) =>
+      : entryCount > 0
+        ? Array.from({ length: entryCount }, (_, i) =>
             createDailyLog(`1970-01-${String(i + 1).padStart(2, '0')}`),
           )
         : [],
@@ -151,12 +151,12 @@ export type DynamicNotableBands = {
 }
 
 /**
- * Dynamic Notable bands from unique practice days.
+ * Dynamic Notable bands from practice entry count.
  * Persisted StageData stays [3,5,7]; extended rings are UI-only.
  * Next ring appears only after previous rings are full and progress continues.
  */
-export function computeDynamicNotableBands(practiceDays: number): DynamicNotableBands {
-  let remaining = Math.max(0, Math.floor(practiceDays))
+export function computeDynamicNotableBands(entryCount: number): DynamicNotableBands {
+  let remaining = Math.max(0, Math.floor(entryCount))
   const goals: number[] = []
   const fills: number[] = []
   let i = 0
@@ -179,12 +179,12 @@ export function computeDynamicNotableBands(practiceDays: number): DynamicNotable
   return { goals, fills }
 }
 
-/** Per-band filled segment counts from cumulative practice days (never a solid ring). */
+/** Per-band filled segment counts from cumulative practice entries (never a solid ring). */
 export function notableBandFills(totalLogged: number): number[] {
   return computeDynamicNotableBands(totalLogged).fills
 }
 
-export function notableBandGoalsForDays(totalLogged: number): number[] {
+export function notableBandGoalsForCount(totalLogged: number): number[] {
   return computeDynamicNotableBands(totalLogged).goals
 }
 

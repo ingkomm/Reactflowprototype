@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildGraphDocument,
+  documentToFlowState,
   graphDocumentsEqual,
   parseGraphDocumentJson,
   serializeGraphDocument,
@@ -288,5 +289,134 @@ describe('graphDocument', () => {
     expect(root?.data.label).toBe('Renamed Root')
     expect(root?.id).toBe(INITIAL_NODE_ID)
     expect(root?.data.kind).toBe('initial')
+  })
+
+  it('migrates legacy notable edges to center and never exports type notable', () => {
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: -100, y: -100 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'n1',
+          type: 'passive',
+          position: { x: 0, y: 0 },
+          data: {
+            label: 'A',
+            kind: 'notable',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            rootOrbitTier: 1,
+            rootOrbitSlot: 0,
+          },
+        },
+        {
+          id: 'n2',
+          type: 'passive',
+          position: { x: 80, y: 0 },
+          data: { label: 'B', kind: 'notable', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+      ],
+      edges: [
+        {
+          id: 'e-notable',
+          type: 'notable',
+          source: 'n1',
+          target: 'n2',
+          sourceHandle: 'center',
+          targetHandle: 'center-target',
+          data: { active: true },
+        },
+        {
+          id: 'e-power',
+          type: 'center',
+          source: INITIAL_NODE_ID,
+          target: 'n1',
+          sourceHandle: 'center',
+          targetHandle: 'center-target',
+        },
+      ],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.document.edges.every((e) => e.type !== 'notable')).toBe(true)
+    const imported = documentToFlowState(parsed.document)
+    const notableEdge = imported.edges.find((e) => e.id === 'e-notable')
+    expect(notableEdge?.type).toBe('center')
+    const power = imported.edges.find((e) => e.id === 'e-power')
+    expect(power?.sourceHandle).toBe('root-power')
+    expect(power?.targetHandle).toBe('center-target')
+
+    const exported = buildGraphDocument({
+      nodes: imported.nodes,
+      edges: imported.edges,
+      customSymbols: [],
+    })
+    expect(exported.edges.every((e) => e.type !== 'notable')).toBe(true)
+  })
+
+  it('repairs Root↔Connect from initialSlot and drops irreparable Root center edges', () => {
+    const raw = {
+      schemaVersion: '0.1',
+      nodes: [
+        {
+          id: INITIAL_NODE_ID,
+          type: 'passive',
+          position: { x: -100, y: -100 },
+          data: { label: 'Root', kind: 'initial', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+        {
+          id: 'c1',
+          type: 'passive',
+          position: { x: 200, y: 0 },
+          data: {
+            label: 'C',
+            kind: 'connect',
+            stages: [],
+            symbolId: DEFAULT_SYMBOL_ID,
+            connectEnabled: true,
+            initialSlot: 2,
+          },
+        },
+        {
+          id: 'orphan',
+          type: 'passive',
+          position: { x: 40, y: 40 },
+          data: { label: 'S', kind: 'shard', stages: [], symbolId: DEFAULT_SYMBOL_ID },
+        },
+      ],
+      edges: [
+        {
+          id: 'e-connect',
+          type: 'center',
+          source: INITIAL_NODE_ID,
+          target: 'c1',
+          sourceHandle: 'center',
+          targetHandle: 'center-target',
+        },
+        {
+          id: 'e-bad',
+          type: 'center',
+          source: INITIAL_NODE_ID,
+          target: 'orphan',
+          sourceHandle: null,
+          targetHandle: 'center-target',
+        },
+      ],
+      customSymbols: [],
+    }
+    const parsed = parseGraphDocumentJson(JSON.stringify(raw))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const imported = documentToFlowState(parsed.document)
+    expect(imported.edges.find((e) => e.id === 'e-bad')).toBeUndefined()
+    const repaired = imported.edges.find((e) => e.id === 'e-connect')
+    expect(repaired?.sourceHandle).toBe('socket-2')
   })
 })

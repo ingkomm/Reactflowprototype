@@ -263,6 +263,40 @@
   z-index: 6;
 }
 
+.passive-node__power-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(12px, 2.4%, 20px);
+  height: clamp(12px, 2.4%, 20px);
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #ffe066 70%, white);
+  background:
+    radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.55), transparent 45%),
+    radial-gradient(circle at 50% 50%, #ffe066 0%, #c9a227 70%, #1a1510 100%);
+  box-shadow:
+    0 0 10px color-mix(in srgb, #ffe066 55%, transparent),
+    0 0 18px color-mix(in srgb, #ffe066 28%, transparent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.passive-node__handle--root-power {
+  width: clamp(22px, 4%, 32px) !important;
+  height: clamp(22px, 4%, 32px) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  /* Above Root selection hit; aligned with visible Power Core. */
+  z-index: 6;
+}
+
 .passive-node--connect {
   --node-size: 22px;
   --ring: transparent;
@@ -684,6 +718,9 @@
   max-width: 70%;
   white-space: normal;
   line-height: 1.15;
+  /* Selection/rename text must not steal Power Core connection hits. */
+  pointer-events: none;
+  z-index: 3;
 }
 
 .passive-node--notable .passive-node__title {

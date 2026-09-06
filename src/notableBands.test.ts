@@ -12,13 +12,13 @@ import {
   createNotableStages,
   ensureNotableStages,
   notableBandFills,
-  notableBandGoalsForDays,
+  notableBandGoalsForCount,
   totalRawLoggedAcrossStages,
 } from './stage'
-import { countPracticeDays, createDailyLog } from './dailyLog'
+import { countPracticeEntries, createDailyLog } from './dailyLog'
 
 describe('dynamic Notable bands', () => {
-  it('counts same-date logs as one practice day for band fills', () => {
+  it('counts each same-date log as its own entry for band fills', () => {
     const logs = [
       createDailyLog('2026-01-01', 'a'),
       createDailyLog('2026-01-01', 'b'),
@@ -27,10 +27,10 @@ describe('dynamic Notable bands', () => {
     ]
     const stages = ensureNotableStages(createNotableStages(0, logs))
     expect(stages[0]?.logs).toHaveLength(4)
-    expect(countPracticeDays(stages[0]!.logs)).toBe(2)
-    expect(totalRawLoggedAcrossStages(stages)).toBe(2)
-    expect(notableBandGoalsForDays(totalRawLoggedAcrossStages(stages))).toEqual([3, 5, 7])
-    expect(notableBandFills(2)).toEqual([2, 0, 0])
+    expect(countPracticeEntries(stages[0]!.logs)).toBe(4)
+    expect(totalRawLoggedAcrossStages(stages)).toBe(4)
+    expect(notableBandGoalsForCount(totalRawLoggedAcrossStages(stages))).toEqual([3, 5, 7])
+    expect(notableBandFills(4)).toEqual([3, 1, 0])
   })
 
   it('extends goals only when prior bands are full and progress continues', () => {
@@ -52,7 +52,7 @@ describe('dynamic Notable bands', () => {
     })
   })
 
-  it('keeps persisted stages at exactly 3/5/7 after 25+ practice days round-trip', () => {
+  it('keeps persisted stages at exactly 3/5/7 after 25+ practice entries round-trip', () => {
     const logs = Array.from({ length: 25 }, (_, i) =>
       createDailyLog(`2026-01-${String(i + 1).padStart(2, '0')}`),
     )
@@ -95,20 +95,20 @@ describe('dynamic Notable bands', () => {
     const restored = parsed.document.nodes.find((n) => n.id === 'notable-25')?.data
     expect(restored?.stages).toHaveLength(3)
     expect(restored?.stages?.map((s) => s.goal)).toEqual([3, 5, 7])
-    const days = totalRawLoggedAcrossStages(restored?.stages ?? [])
-    expect(days).toBe(25)
-    expect(computeDynamicNotableBands(days)).toEqual({
+    const entries = totalRawLoggedAcrossStages(restored?.stages ?? [])
+    expect(entries).toBe(25)
+    expect(computeDynamicNotableBands(entries)).toEqual({
       goals: [3, 5, 7, 9, 11],
       fills: [3, 5, 7, 9, 1],
     })
   })
 
-  it('does not invent 9/11 stage rows when seeding many practice days', () => {
+  it('does not invent 9/11 stage rows when seeding many practice entries', () => {
     const stages = createNotableStages(30)
     expect(stages).toHaveLength(3)
     expect(stages.map((s) => s.goal)).toEqual([3, 5, 7])
     expect(totalRawLoggedAcrossStages(stages)).toBe(30)
-    expect(notableBandGoalsForDays(30)).toEqual([3, 5, 7, 9, 11])
+    expect(notableBandGoalsForCount(30)).toEqual([3, 5, 7, 9, 11])
     expect(notableBandFills(30)).toEqual([3, 5, 7, 9, 6])
   })
 })

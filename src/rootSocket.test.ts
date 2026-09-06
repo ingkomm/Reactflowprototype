@@ -27,7 +27,8 @@ import {
   ensureRootFixed,
   ROOT_HUB_RADIUS,
 } from './rootOrbit'
-import { computePoweredNodeIds, isValidRootConnectHandles } from './power'
+import { computePoweredNodeIds, isValidRootConnectHandles, isValidRootPowerHandles } from './power'
+import { ROOT_POWER_HANDLE_ID } from './initialHub'
 
 describe('default Connect slots on 6-socket Root', () => {
   it('empty graph uses slots 0 / 2 / 4', () => {
@@ -123,6 +124,8 @@ describe('Root socket layering class', () => {
     expect(css).toMatch(/\.passive-node__handle--root-socket[\s\S]*?z-index:\s*6/)
     expect(css).toMatch(/\.passive-node__hit[\s\S]*?z-index:\s*5/)
     expect(css).toMatch(/.passive-node--initial .passive-node__hit[\s\S]*?z-index:\s*1/)
+    expect(css).toMatch(/\.passive-node__handle--root-power[\s\S]*?z-index:\s*6/)
+    expect(css).toMatch(/\.passive-node__power-core/)
   })
 })
 
@@ -166,6 +169,46 @@ describe('Root socket endpoints', () => {
     expect(
       isValidRootConnectHandles(root, connect, rootSocketSourceHandle(2), 'center-target'),
     ).toBe(true)
+    expect(
+      isValidRootPowerHandles(root, connect, ROOT_POWER_HANDLE_ID, 'center-target'),
+    ).toBe(false)
+  })
+
+  it('allows Power Core only for Root Orbit Shard/Notable', () => {
+    const root = {
+      id: INITIAL_NODE_ID,
+      type: 'passive',
+      position: { x: -ROOT_HUB_RADIUS, y: -ROOT_HUB_RADIUS },
+      data: { label: 'Root', kind: 'initial', stages: [], symbolId: 'default' },
+    } as import('./components/PassiveNode').PassiveFlowNode
+    const onOrbit = {
+      id: 'n1',
+      type: 'passive',
+      position: { x: 0, y: 0 },
+      data: {
+        label: 'N',
+        kind: 'notable',
+        stages: [],
+        symbolId: 'default',
+        rootOrbitTier: 1,
+        rootOrbitSlot: 0,
+      },
+    } as import('./components/PassiveNode').PassiveFlowNode
+    const external = {
+      id: 'n2',
+      type: 'passive',
+      position: { x: 300, y: 0 },
+      data: { label: 'Ext', kind: 'notable', stages: [], symbolId: 'default' },
+    } as import('./components/PassiveNode').PassiveFlowNode
+    expect(
+      isValidRootPowerHandles(root, onOrbit, ROOT_POWER_HANDLE_ID, 'center-target'),
+    ).toBe(true)
+    expect(
+      isValidRootPowerHandles(root, external, ROOT_POWER_HANDLE_ID, 'center-target'),
+    ).toBe(false)
+    expect(
+      isValidRootConnectHandles(root, onOrbit, rootSocketSourceHandle(0), 'center-target'),
+    ).toBe(false)
   })
 })
 

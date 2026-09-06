@@ -13,7 +13,7 @@ import '@xyflow/react/dist/style.css'
 
 import { type PassiveFlowNode } from './components/PassiveNode'
 import { TreeWorkspace } from './components/TreeWorkspace'
-import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot, isEdgeActive } from './power'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot, isValidRootPowerHandles, isEdgeActive } from './power'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot, TrainingLog } from './types'
 import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
 import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
@@ -34,7 +34,7 @@ import {
   normalizeGridSnapScale,
   snapNodeTopLeft,
 } from './grid'
-import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, orbitLinkEdge, notableLinkEdge } from './graphFactory'
+import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, rootPowerLinkEdge, orbitLinkEdge } from './graphFactory'
 import {
   DEFAULT_SELECTED_NODE_ID,
 } from './seedGraph'
@@ -76,7 +76,6 @@ import {
   layoutRootOrbit,
   placeNotableFromRootOrbitDrag,
   stripRootOrbitWhenMasteryBound,
-  buildRootOrbitStartEdges,
   getRootOrbitCapacity,
   setRootOrbitCapacity,
   setRootOrbitStartAngle,
@@ -522,11 +521,8 @@ export default function App() {
     [nodes, edges],
   )
 
-  // Derived Root→Orbit Start Links for display only (never persisted).
-  const flowEdges = useMemo(
-    () => [...edges, ...buildRootOrbitStartEdges(nodes)],
-    [edges, nodes],
-  )
+  // Persisted edges only — Power Core links are user-created, never derived.
+  const flowEdges = edges
 
   // Drop invalid links and anything not reachable from Initial.
   // Skip while a satellite drag preview is active so hover alone cannot prune edges.
@@ -611,13 +607,25 @@ export default function App() {
       const target = nodes.find((n) => n.id === connection.target)
       if (!source || !target || source.id === target.id) return false
       const kind = classifyLink(source, target, nodes)
-      if (kind !== 'center' && kind !== 'orbit' && kind !== 'notable' && kind !== 'attach') {
+      if (kind !== 'center' && kind !== 'orbit' && kind !== 'attach') {
         return false
       }
       const sd = source.data as PassiveNodeData
       const td = target.data as PassiveNodeData
       if (sd.kind === 'initial' || td.kind === 'initial') {
         if (kind !== 'center') return false
+        // Power Core ↔ Root Orbit Shard/Notable
+        if (
+          isValidRootPowerHandles(
+            source,
+            target,
+            connection.sourceHandle,
+            connection.targetHandle,
+          )
+        ) {
+          return true
+        }
+        // Rim socket ↔ Connect only
         const slot = resolveRootConnectSlot(
           source,
           target,
@@ -700,18 +708,46 @@ export default function App() {
         }
         return
       }
-      if (linkKind !== 'center' && linkKind !== 'orbit' && linkKind !== 'notable') return
+      if (linkKind !== 'center' && linkKind !== 'orbit') return
 
       commit()
 
       const sd = source.data as PassiveNodeData
       const td = target.data as PassiveNodeData
-      const isRootConnect =
-        linkKind === 'center' && (sd.kind === 'initial' || td.kind === 'initial')
+      const involvesRoot = sd.kind === 'initial' || td.kind === 'initial'
       let rootConnectSlot: InitialConnectSlot | null = null
       let rootId: string | null = null
       let connectId: string | null = null
-      if (isRootConnect) {
+      let isRootPower = false
+      if (involvesRoot) {
+        if (linkKind !== 'center') return
+        isRootPower = isValidRootPowerHandles(
+          source,
+          target,
+          connection.sourceHandle,
+          connection.targetHandle,
+        )
+        if (isRootPower) {
+          rootId = sd.kind === 'initial' ? source.id : target.id
+          const memberId = sd.kind === 'initial' ? target.id : source.id
+          setEdges((eds) => {
+            const existing = findLinkEdge(eds, source.id, target.id, 'center')
+            let next: Edge[]
+            if (existing) {
+              next = eds.filter((e) => e.id !== existing.id)
+            } else {
+              const without = eds.filter((e) => {
+                const pair =
+                  (e.source === rootId && e.target === memberId) ||
+                  (e.source === memberId && e.target === rootId)
+                return !pair
+              })
+              next = [...without, rootPowerLinkEdge(rootId!, memberId)]
+            }
+            return sanitizeEdges(nodes, next)
+          })
+          return
+        }
         rootConnectSlot = resolveRootConnectSlot(
           source,
           target,
@@ -787,8 +823,7 @@ export default function App() {
       }
 
       setEdges((eds) => {
-        const edgeType =
-          linkKind === 'orbit' ? 'orbit' : linkKind === 'notable' ? 'notable' : 'center'
+        const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
         const existing = findLinkEdge(eds, source.id, target.id, edgeType)
         let next: Edge[]
         if (existing) {
@@ -797,9 +832,7 @@ export default function App() {
           const orbitMasteryId = sd.masteryId ?? td.masteryId
           if (!orbitMasteryId) return eds
           next = [...eds, orbitLinkEdge(source.id, target.id, orbitMasteryId)]
-        } else if (linkKind === 'notable') {
-          next = [...eds, notableLinkEdge(source.id, target.id)]
-        } else if (isRootConnect && rootConnectSlot !== null && rootId && connectId) {
+        } else if (involvesRoot && rootConnectSlot !== null && rootId && connectId) {
           const withoutRoot = eds.filter((e) => {
             const pair =
               (e.source === rootId && e.target === connectId) ||
@@ -1246,7 +1279,6 @@ export default function App() {
           )
 
           if (e.type === 'orbit') return linkKind === 'orbit'
-          if (e.type === 'notable') return linkKind === 'notable'
           return linkKind === 'center'
         }),
       )

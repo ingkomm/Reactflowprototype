@@ -24,6 +24,7 @@ import type { CustomSymbol, GraphDocumentSettings } from './types'
 import { MAX_JSON_BYTES } from './limits'
 import { syncEdgesReachableFromInitial } from './power'
 import { pruneInvalidEdges } from './graphEdges'
+import { stripInvalidRootPowerEdges } from './rootOrbit'
 
 export type GraphAppSnapshot = {
   nodes: PassiveFlowNode[]
@@ -97,7 +98,10 @@ export function resolveInitialGraphState(): {
 }
 
 export function sanitizeFlowEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
-  return syncEdgesReachableFromInitial(nodes, pruneInvalidEdges(nodes, edges))
+  return syncEdgesReachableFromInitial(
+    nodes,
+    stripInvalidRootPowerEdges(nodes, pruneInvalidEdges(nodes, edges)),
+  )
 }
 
 export function snapshotToDocument(input: GraphPersistInput): GraphDocumentV01 {

@@ -26,6 +26,25 @@ export function parseRootSocketHandle(
   return Number(match[1]) as InitialConnectSlot
 }
 
+/** Manual power start from Root center → Root Orbit Shard/Notable. */
+export const ROOT_POWER_HANDLE_ID = 'root-power'
+
+export function isRootPowerHandle(handleId: string | null | undefined): boolean {
+  return handleId === ROOT_POWER_HANDLE_ID || handleId === 'root-power-target'
+}
+
+/** Absolute flow position of the Root Power Core (exact hub center). */
+export function rootPowerFlowPosition(nodeTopLeft: { x: number; y: number }): {
+  x: number
+  y: number
+} {
+  const half = NODE_SIZE.initial / 2
+  return {
+    x: nodeTopLeft.x + half,
+    y: nodeTopLeft.y + half,
+  }
+}
+
 /** Place a Connect node's top-left so it sits on a Root hub socket. */
 export function connectPositionForInitialHub(
   initialTopLeft: { x: number; y: number },

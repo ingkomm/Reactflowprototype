@@ -22,7 +22,6 @@ import {
 
 import { PassiveNode, type PassiveFlowNode } from './PassiveNode'
 import { CenterEdge } from './CenterEdge'
-import { NotableEdge } from './NotableEdge'
 import { OrbitEdge } from './OrbitEdge'
 import { Inspector, type OrbitMember } from './Inspector'
 import { NodeLibrary } from './NodeLibrary'
@@ -42,7 +41,7 @@ import { PinnedVideoPopup } from './PinnedVideoPopup'
 import { VideoPinProvider } from '../VideoPinContext'
 
 const nodeTypes = { passive: PassiveNode }
-const edgeTypes = { center: CenterEdge, orbit: OrbitEdge, notable: NotableEdge }
+const edgeTypes = { center: CenterEdge, orbit: OrbitEdge }
 
 const connectionLineStyle = {
   stroke: 'color-mix(in srgb, #9aa8b5 22%, transparent)',

@@ -30,9 +30,11 @@ import {
   setRootOrbitStartAngle,
   ensureRootOrbitSlotsAssigned,
   rootOrbitAngleDegrees,
-  buildRootOrbitStartEdges,
+  stripInvalidRootPowerEdges,
 } from './rootOrbit'
 import { computePoweredNodeIds, computePowerFlowMeta } from './power'
+import { rootPowerLinkEdge } from './graphFactory'
+import { ROOT_POWER_HANDLE_ID } from './initialHub'
 
 function notable(id: string, x: number, y: number, extra: Record<string, unknown> = {}): PassiveFlowNode {
   return {
@@ -361,36 +363,49 @@ describe('Root orbit capacity/slot layout', () => {
   })
 })
 
-describe('Root orbit derived Start Link / power', () => {
-  it('builds ephemeral Start Links that are not document edges', () => {
+describe('Root orbit Power Core (manual)', () => {
+  it('keeps Orbit members unpowered until a Power Core edge exists', () => {
     let nodes = [
       rootNode(),
       notable('n1', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
     ]
     nodes = layoutRootOrbit(nodes)
-    const derived = buildRootOrbitStartEdges(nodes)
-    expect(derived).toHaveLength(1)
-    expect(derived[0]!.id.startsWith('derived-root-orbit-')).toBe(true)
-    expect(derived[0]!.data).toMatchObject({ derivedRootOrbitStart: true })
-  })
-
-  it('powers Root Orbit Notables from Root without a persisted edge', () => {
-    let nodes = [
-      rootNode(),
-      notable('n1', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
-    ]
-    nodes = layoutRootOrbit(nodes)
-    const powered = computePoweredNodeIds(nodes, [])
-    expect(powered.has(INITIAL_NODE_ID)).toBe(true)
+    expect(computePoweredNodeIds(nodes, []).has('n1')).toBe(false)
+    const edges = [rootPowerLinkEdge(INITIAL_NODE_ID, 'n1')]
+    expect(edges[0]!.sourceHandle).toBe(ROOT_POWER_HANDLE_ID)
+    const powered = computePoweredNodeIds(nodes, edges)
     expect(powered.has('n1')).toBe(true)
-    const meta = computePowerFlowMeta(nodes, [])
+    const meta = computePowerFlowMeta(nodes, edges)
     expect(meta.parent.get('n1')).toBe(INITIAL_NODE_ID)
     expect(meta.depth.get('n1')).toBe(1)
+  })
+
+  it('strips Power Core edges when membership is cleared', () => {
+    let nodes = [
+      rootNode(),
+      notable('n1', 0, 0, { rootOrbitTier: 1, rootOrbitSlot: 0 }),
+    ]
+    nodes = layoutRootOrbit(nodes)
+    const edges = [rootPowerLinkEdge(INITIAL_NODE_ID, 'n1')]
+    const detached = nodes.map((n) =>
+      n.id === 'n1'
+        ? {
+            ...n,
+            data: {
+              ...n.data,
+              rootOrbitTier: undefined,
+              rootOrbitSlot: undefined,
+            },
+          }
+        : n,
+    ) as PassiveFlowNode[]
+    const stripped = stripInvalidRootPowerEdges(detached, edges)
+    expect(stripped).toHaveLength(0)
   })
 })
 
 describe('Root Orbit Shard + hub clearance + Connect eject', () => {
-  it('attaches Shard with rootOrbitTier/slot and powers via derived Start Link', () => {
+  it('attaches Shard with rootOrbitTier/slot but does not auto-power', () => {
     let nodes = [rootNode(), shard('s1', 40, 0)]
     const next = placeNotableOnRootOrbit(nodes, 's1', 2, 1)
     expect(next).not.toBeNull()
@@ -398,11 +413,9 @@ describe('Root Orbit Shard + hub clearance + Connect eject', () => {
     const s = nodes.find((n) => n.id === 's1')!
     expect(s.data.rootOrbitTier).toBe(2)
     expect(s.data.rootOrbitSlot).toBe(1)
-    const powered = computePoweredNodeIds(nodes, [])
+    expect(computePoweredNodeIds(nodes, []).has('s1')).toBe(false)
+    const powered = computePoweredNodeIds(nodes, [rootPowerLinkEdge(INITIAL_NODE_ID, 's1')])
     expect(powered.has('s1')).toBe(true)
-    const derived = buildRootOrbitStartEdges(nodes)
-    expect(derived.some((e) => e.target === 's1')).toBe(true)
-    expect(derived[0]!.zIndex).toBe(1)
   })
 
   it('rejects Mastery/Connect Root Orbit attach', () => {
