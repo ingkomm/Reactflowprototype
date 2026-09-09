@@ -9,10 +9,10 @@ import {
   bringPinnedViewerToFront,
   closePinnedViewer,
   findPinnedViewer,
-  nearestPointOnRectEdge,
   pinOrFocusViewer,
   prunePinnedViewers,
   prunePinnedViewersByKindMismatch,
+  viewerPanelCenter,
   type PinnedViewerEntry,
 } from './pinnedViewer'
 import { ShardMarkdownPreview } from './components/ShardMarkdownPreview'
@@ -70,10 +70,20 @@ describe('pinnedViewer helpers', () => {
     expect(entries.map((e) => e.nodeId)).toEqual(['b'])
   })
 
-  it('computes nearest rect edge for tether endpoints', () => {
-    const rect = { x: 100, y: 100, width: 200, height: 100 }
-    expect(nearestPointOnRectEdge(rect, { x: 50, y: 150 })).toEqual({ x: 100, y: 150 })
-    expect(nearestPointOnRectEdge(rect, { x: 200, y: 50 })).toEqual({ x: 200, y: 100 })
+  it('tether panel endpoint is bounds center (not nearest edge)', () => {
+    const bounds = { x: 100, y: 100, width: 400, height: 300 }
+    expect(viewerPanelCenter(bounds)).toEqual({ x: 300, y: 250 })
+
+    const wider = { ...bounds, width: 600 }
+    expect(viewerPanelCenter(wider).x).toBe(400)
+    expect(viewerPanelCenter(wider).y).toBe(250)
+
+    const taller = { ...bounds, height: 500 }
+    expect(viewerPanelCenter(taller).x).toBe(300)
+    expect(viewerPanelCenter(taller).y).toBe(350)
+
+    const resized = { x: 100, y: 100, width: 600, height: 500 }
+    expect(viewerPanelCenter(resized)).toEqual({ x: 400, y: 350 })
   })
 })
 
@@ -119,7 +129,123 @@ describe('transient vs pinned viewer chrome', () => {
     expect(
       pinned.host.querySelector('[data-testid="shard-markdown-preview"]')?.getAttribute('data-pinned'),
     ).toBe('true')
+    expect(
+      pinned.host
+        .querySelector('[data-testid="shard-markdown-preview"]')
+        ?.getAttribute('data-resizable'),
+    ).toBe('true')
     pinned.unmount()
+  })
+
+  it('marks pinned Notable as resizable and transient viewers as not', () => {
+    const transientShard = mount(
+      <ShardMarkdownPreview
+        open
+        x={40}
+        y={50}
+        nodeLabel="Shard A"
+        markdown="# hi"
+        onClose={() => {}}
+      />,
+    )
+    expect(
+      transientShard.host
+        .querySelector('[data-testid="shard-markdown-preview"]')
+        ?.getAttribute('data-resizable'),
+    ).toBe('false')
+    transientShard.unmount()
+
+    const transientNotable = mount(
+      <NotableLogViewer
+        open
+        x={10}
+        y={10}
+        nodeLabel="N"
+        logs={[createDailyLog('2026-09-01', 'memo')]}
+        onClose={() => {}}
+      />,
+    )
+    expect(
+      transientNotable.host
+        .querySelector('[data-testid="notable-log-viewer"]')
+        ?.getAttribute('data-resizable'),
+    ).toBe('false')
+    transientNotable.unmount()
+
+    const pinnedNotable = mount(
+      <NotableLogViewer
+        open
+        pinned
+        modal={false}
+        closeOnEscape={false}
+        x={10}
+        y={10}
+        nodeLabel="N"
+        logs={[createDailyLog('2026-09-01', 'memo')]}
+        onClose={() => {}}
+      />,
+    )
+    expect(
+      pinnedNotable.host
+        .querySelector('[data-testid="notable-log-viewer"]')
+        ?.getAttribute('data-resizable'),
+    ).toBe('true')
+    pinnedNotable.unmount()
+  })
+
+  it('reports new width/height via onBoundsChange after panel size change', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+
+    const onBoundsChange = vi.fn()
+    const view = mount(
+      <ShardMarkdownPreview
+        open
+        pinned
+        modal={false}
+        closeOnEscape={false}
+        x={40}
+        y={50}
+        nodeLabel="Shard A"
+        markdown="# hi"
+        onClose={() => {}}
+        onBoundsChange={onBoundsChange}
+      />,
+    )
+    const panel = view.host.querySelector(
+      '[data-testid="shard-markdown-preview"]',
+    ) as HTMLElement
+
+    act(() => {
+      Object.defineProperty(panel, 'offsetWidth', { configurable: true, value: 500 })
+      Object.defineProperty(panel, 'offsetHeight', { configurable: true, value: 400 })
+      Object.defineProperty(panel, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({
+          x: 40,
+          y: 50,
+          left: 40,
+          top: 50,
+          width: 500,
+          height: 400,
+          right: 540,
+          bottom: 450,
+          toJSON() {
+            return {}
+          },
+        }),
+      })
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    expect(onBoundsChange).toHaveBeenCalled()
+    const last = onBoundsChange.mock.calls.at(-1)?.[0] as {
+      width: number
+      height: number
+    }
+    expect(last.width).toBe(500)
+    expect(last.height).toBe(400)
+    view.unmount()
   })
 
   it('does not close pinned Notable on Escape, but closes transient on Escape', () => {

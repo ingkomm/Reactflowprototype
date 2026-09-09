@@ -75,6 +75,7 @@ export function ShardMarkdownPreview({
         aria-label={`${nodeLabel} Markdown 미리보기`}
         data-testid="shard-markdown-preview"
         data-pinned={pinned ? 'true' : 'false'}
+        data-resizable={pinned ? 'true' : 'false'}
         style={{ left: position.x, top: position.y, zIndex: zIndex ?? undefined }}
         onPointerDownCapture={onActivate}
       >

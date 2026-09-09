@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { NotableLogViewer } from './NotableLogViewer'
@@ -146,7 +146,14 @@ describe('NotableLogViewer interactions', () => {
       ),
     ).toBe(true)
     expect(view.host.querySelector('[data-testid="notable-video-player"]')).toBeTruthy()
-    expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeTruthy()
+    expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeNull()
+    const player = view.host.querySelector(
+      '[data-testid="notable-video-player"]',
+    ) as HTMLElement
+    // Video follows content width (no fixed px player size).
+    expect(player.style.width).toBe('')
+    expect(player.style.height).toBe('')
+    expect(player.className).toContain('notable-log-viewer__player')
 
     act(() => {
       ;(
@@ -211,7 +218,7 @@ describe('NotableLogViewer interactions', () => {
     view.unmount()
   })
 
-  it('moves on header drag, ignores close button, resizes video, and reclamps after grow', () => {
+  it('moves on header drag, ignores close button, and has no video resize handle', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
 
@@ -293,78 +300,67 @@ describe('NotableLogViewer interactions', () => {
       newest.click()
     })
 
-    const player = view.host.querySelector('[data-testid="notable-video-player"]') as HTMLElement
-    const resize = view.host.querySelector(
-      '[data-testid="notable-video-resize"]',
-    ) as HTMLButtonElement
-    expect(player.style.width).toBe('480px')
-    expect(player.style.height).toBe('270px')
+    expect(view.host.querySelector('[data-testid="notable-video-player"]')).toBeTruthy()
+    expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeNull()
+    expect(view.host.textContent).not.toContain('영상 크기 조절')
+    expect(panel.getAttribute('data-resizable')).toBe('false')
 
-    // Place panel near the right edge, then grow player so ResizeObserver reclamps.
-    act(() => {
-      head.dispatchEvent(
-        new PointerEvent('pointerdown', {
-          bubbles: true,
-          clientX: 1200,
-          clientY: 100,
-          button: 0,
-          pointerId: 4,
-        }),
-      )
-      head.dispatchEvent(
-        new PointerEvent('pointermove', {
-          bubbles: true,
-          clientX: 1300,
-          clientY: 100,
-          pointerId: 4,
-        }),
-      )
-      head.dispatchEvent(
-        new PointerEvent('pointerup', {
-          bubbles: true,
-          clientX: 1300,
-          clientY: 100,
-          pointerId: 4,
-        }),
-      )
-    })
-    const leftNearEdge = parseFloat(panel.style.left)
+    view.unmount()
+  })
+
+  it('pinned Notable reports bounds after size change and stays resizable', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+
+    const onBoundsChange = vi.fn()
+    const view = mount(
+      <NotableLogViewer
+        open
+        pinned
+        modal={false}
+        closeOnEscape={false}
+        x={40}
+        y={50}
+        nodeLabel="Drill"
+        markdown={'## Sum'}
+        logs={sampleLogs}
+        onClose={() => undefined}
+        onBoundsChange={onBoundsChange}
+      />,
+    )
+    const panel = view.host.querySelector('[data-testid="notable-log-viewer"]') as HTMLElement
+    expect(panel.getAttribute('data-resizable')).toBe('true')
+    expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeNull()
 
     act(() => {
-      resize.dispatchEvent(
-        new PointerEvent('pointerdown', {
-          bubbles: true,
-          clientX: 500,
-          clientY: 300,
-          button: 0,
-          pointerId: 3,
+      Object.defineProperty(panel, 'offsetWidth', { configurable: true, value: 640 })
+      Object.defineProperty(panel, 'offsetHeight', { configurable: true, value: 480 })
+      Object.defineProperty(panel, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({
+          x: 40,
+          y: 50,
+          left: 40,
+          top: 50,
+          width: 640,
+          height: 480,
+          right: 680,
+          bottom: 530,
+          toJSON() {
+            return {}
+          },
         }),
-      )
-      window.dispatchEvent(
-        new PointerEvent('pointermove', {
-          bubbles: true,
-          clientX: 900,
-          clientY: 500,
-          pointerId: 3,
-        }),
-      )
-      window.dispatchEvent(
-        new PointerEvent('pointerup', {
-          bubbles: true,
-          clientX: 900,
-          clientY: 500,
-          pointerId: 3,
-        }),
-      )
+      })
+      window.dispatchEvent(new Event('resize'))
     })
-    expect(parseFloat(player.style.width)).toBeGreaterThan(480)
-    expect(parseFloat(player.style.height)).toBeGreaterThan(270)
-    // After growth, panel should remain within viewport (clamped).
-    const leftAfterGrow = parseFloat(panel.style.left)
-    const width = panel.offsetWidth || 600
-    expect(leftAfterGrow + width).toBeLessThanOrEqual(window.innerWidth - 8 + 1)
-    expect(leftAfterGrow).toBeLessThanOrEqual(leftNearEdge + 1)
 
+    expect(onBoundsChange).toHaveBeenCalled()
+    const last = onBoundsChange.mock.calls.at(-1)?.[0] as {
+      width: number
+      height: number
+    }
+    expect(last.width).toBe(640)
+    expect(last.height).toBe(480)
     view.unmount()
   })
 })

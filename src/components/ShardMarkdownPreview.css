@@ -77,4 +77,18 @@
 
 .shard-markdown-preview.is-pinned {
   z-index: 45;
+  /* Whole pin window resize (UI-only; not persisted). */
+  resize: both;
+  overflow: auto;
+  min-width: 280px;
+  min-height: 180px;
+  width: min(420px, calc(100vw - 16px));
+  height: min(520px, calc(100vh - 16px));
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+}
+
+.shard-markdown-preview.is-pinned .shard-markdown-preview__body {
+  flex: 1 1 auto;
+  min-height: 0;
 }

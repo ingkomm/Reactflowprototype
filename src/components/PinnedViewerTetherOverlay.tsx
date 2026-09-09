@@ -3,11 +3,7 @@ import { useReactFlow, useStore } from '@xyflow/react'
 import type { Node } from '@xyflow/react'
 import { NODE_SIZE } from '../orbit'
 import type { PassiveNodeData } from '../types'
-import {
-  nearestPointOnRectEdge,
-  type PinnedViewerEntry,
-  type ViewerPanelBounds,
-} from '../pinnedViewer'
+import { viewerPanelCenter, type PinnedViewerEntry, type ViewerPanelBounds } from '../pinnedViewer'
 import './PinnedViewerTetherOverlay.css'
 
 type Props = {
@@ -38,7 +34,8 @@ export function PinnedViewerTetherOverlay({ entries, boundsByNodeId, nodes }: Pr
         x: node.position.x + size / 2,
         y: node.position.y + size / 2,
       })
-      const end = nearestPointOnRectEdge(bounds, screen)
+      // End at pin panel center (not nearest edge). Panel sits above the tether.
+      const end = viewerPanelCenter(bounds)
       return [
         {
           key: entry.nodeId,
