@@ -306,9 +306,12 @@ export function NotableLogViewer({
                 ) : null}
 
                 {selectedLog?.note?.trim() ? (
-                  <p className="notable-log-viewer__short-note" data-testid="notable-short-note">
-                    {selectedLog.note}
-                  </p>
+                  <div
+                    className="notable-log-viewer__short-note"
+                    data-testid="notable-short-note"
+                  >
+                    <MarkdownView markdown={selectedLog.note} />
+                  </div>
                 ) : (
                   <p className="notable-log-viewer__empty" data-testid="notable-short-note-empty">
                     짧은 메모가 없습니다.

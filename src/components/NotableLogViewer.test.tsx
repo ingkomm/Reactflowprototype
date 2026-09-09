@@ -81,7 +81,7 @@ describe('ShardMarkdownPreview', () => {
 })
 
 describe('NotableLogViewer interactions', () => {
-  it('shows Summary markdown and timeline newest-first with short notes (not log markdown viewer)', () => {
+  it('shows Summary markdown and timeline newest-first; selected log note uses MarkdownView', () => {
     const view = mount(
       <NotableLogViewer
         open
@@ -110,10 +110,11 @@ describe('NotableLogViewer interactions', () => {
     expect(view.host.querySelector('[data-testid="notable-short-note"]')?.textContent).toContain(
       'newest',
     )
-    // Daily Log note is plain text, not rendered as markdown headings from the log body.
+    // Selected Daily Log note body is Markdown (heading from log note).
     expect(
-      view.host.querySelector('[data-testid="notable-log-detail"] h2'),
-    ).toBeNull()
+      view.host.querySelector('[data-testid="notable-log-detail"] h2')?.textContent,
+    ).toBe('newest')
+    expect(view.host.querySelector('[data-testid="notable-log-detail"] .markdown-view')).toBeTruthy()
 
     const older = view.host.querySelector(
       '[data-testid="notable-log-item-' + sampleLogs[0]!.id + '"]',

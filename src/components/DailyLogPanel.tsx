@@ -100,7 +100,7 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
         />
       </label>
       <label className="field">
-        <span>Simple Memo (선택)</span>
+        <span>Memo (Markdown, 선택)</span>
         <textarea
           className="daily-log-panel__memo"
           value={editNote}
@@ -212,7 +212,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
           />
         </label>
         <label className="field">
-          <span>Simple Memo (선택)</span>
+          <span>Memo (Markdown, 선택)</span>
           <textarea
             className="daily-log-panel__memo"
             value={draftNote}
