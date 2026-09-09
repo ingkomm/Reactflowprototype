@@ -139,7 +139,7 @@ describe('NotableLogViewer interactions', () => {
     const shortNote = detail.querySelector('[data-testid="notable-short-note"]') as HTMLElement
     expect(videoPane).toBeTruthy()
     expect(shortNote).toBeTruthy()
-    // Video must render above Simple Memo.
+    // Video must render above log note.
     expect(
       Boolean(
         videoPane.compareDocumentPosition(shortNote) & Node.DOCUMENT_POSITION_FOLLOWING,
