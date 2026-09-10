@@ -23,9 +23,14 @@ import { SymbolKindEditor } from './components/SymbolKindEditor'
 import {
   buildGraphDocument,
   downloadGraphDocument,
+  serializeGraphDocument,
 } from './graphDocument'
 import { createVideoMediaId, canPinNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
+import {
+  isDesktopGraphExportSupported,
+  saveGraphJsonDesktop,
+} from './platform/graphExport'
 import { stagesForKind } from './stage'
 import { createLogId, createNodeId, createStageId } from './ids'
 import {
@@ -1379,13 +1384,23 @@ export default function App() {
     [commit, gridSnapEnabled, gridSnapScale, setNodes, stack],
   )
 
-  const handleExportJson = useCallback(() => {
+  const handleExportJson = useCallback(async () => {
     const document = buildGraphDocument({
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     })
+    if (isDesktopGraphExportSupported()) {
+      const result = await saveGraphJsonDesktop(serializeGraphDocument(document))
+      if (result.status === 'cancelled') return
+      if (result.status === 'error') {
+        setImportError(result.message)
+        return
+      }
+      setImportError(null)
+      return
+    }
     downloadGraphDocument(document)
     setImportError(null)
   }, [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled])
@@ -1948,8 +1963,8 @@ export default function App() {
                 <button type="button" className="btn" onClick={handleNewSheet}>
                   새 시트
                 </button>
-                <button type="button" className="btn" onClick={handleExportJson}>
-                  JSON보내기
+                <button type="button" className="btn" onClick={() => void handleExportJson()}>
+                  JSON 내보내기
                 </button>
                 <button
                   type="button"

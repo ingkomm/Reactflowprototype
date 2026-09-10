@@ -26,5 +26,25 @@ export function decodePalettePayload(raw: string): NodeTemplatePayload | null {
   }
 }
 
+/** Write palette payload to custom MIME + text/plain (WebView2-compatible). */
+export function writePalettePayload(
+  dataTransfer: DataTransfer,
+  payload: NodeTemplatePayload,
+): void {
+  const encoded = encodePalettePayload(payload)
+  dataTransfer.setData(PALETTE_MIME, encoded)
+  dataTransfer.setData('text/plain', encoded)
+  dataTransfer.effectAllowed = 'copy'
+}
+
+/** Read palette payload: custom MIME first, then text/plain fallback. */
+export function readPalettePayload(dataTransfer: DataTransfer): NodeTemplatePayload | null {
+  const primary = dataTransfer.getData(PALETTE_MIME)
+  const fromPrimary = primary ? decodePalettePayload(primary) : null
+  if (fromPrimary) return fromPrimary
+  const fallback = dataTransfer.getData('text/plain')
+  return fallback ? decodePalettePayload(fallback) : null
+}
+
 /** Kinds with expandable symbol lists in the left Library tree. */
 export const LIBRARY_NODE_KINDS = ['mastery', 'notable', 'shard', 'connect'] as const satisfies PassiveKind[]

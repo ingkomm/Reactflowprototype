@@ -1,5 +1,5 @@
 import type { NodeTemplatePayload } from '../nodeTemplate'
-import { encodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
+import { writePalettePayload } from '../nodeTemplate'
 import {
   DEFAULT_SYMBOL_ID,
   LIBRARY_KINDS,
@@ -19,8 +19,7 @@ type Props = {
 }
 
 function beginPaletteDrag(event: React.DragEvent, template: NodeTemplatePayload) {
-  event.dataTransfer.setData(PALETTE_MIME, encodePalettePayload(template))
-  event.dataTransfer.effectAllowed = 'copy'
+  writePalettePayload(event.dataTransfer, template)
 }
 
 function SpannerIcon() {

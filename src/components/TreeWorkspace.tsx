@@ -35,7 +35,7 @@ import type { SymbolEditorKind } from '../librarySymbols'
 import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData } from '../types'
 import { DEFAULT_ICON_BY_KIND } from '../types'
 import type { NodeTemplatePayload } from '../nodeTemplate'
-import { decodePalettePayload, PALETTE_MIME } from '../nodeTemplate'
+import { readPalettePayload } from '../nodeTemplate'
 import { NODE_SIZE } from '../orbit'
 import type { PowerFlowMeta } from '../power'
 import { PinnedVideoPopup } from './PinnedVideoPopup'
@@ -207,7 +207,7 @@ export function TreeWorkspace({
   const onCanvasDrop = useCallback(
     (event: DragEvent) => {
       event.preventDefault()
-      const template = decodePalettePayload(event.dataTransfer.getData(PALETTE_MIME))
+      const template = readPalettePayload(event.dataTransfer)
       if (!template) return
       const kind = template.kind
       onCreateFromTemplate(
