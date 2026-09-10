@@ -6,7 +6,11 @@ import {
   sortedDailyLogs,
   upsertDailyLog,
 } from '../dailyLog'
-import { createVideoMedia } from '../videoMedia'
+import {
+  createLocalVideoMedia,
+  createVideoMedia,
+  isLocalVideoMedia,
+} from '../videoMedia'
 import {
   DailyLogEditorModal,
   type DailyLogEditorDraft,
@@ -21,30 +25,54 @@ type Props = {
   onFocusLogConsumed?: () => void
 }
 
-function videoUrlFromLog(log: TrainingLog): string {
-  return log.media?.[0]?.url ?? ''
+export function draftFieldsFromLog(log: TrainingLog): Pick<
+  DailyLogEditorDraft,
+  'videoUrl' | 'localVideoPath'
+> {
+  const first = log.media?.[0]
+  if (first && isLocalVideoMedia(first)) {
+    return { videoUrl: '', localVideoPath: first.url }
+  }
+  return { videoUrl: first?.url ?? '', localVideoPath: '' }
 }
 
 /**
  * Edit only the first video slot. Preserve media[1...] always.
- * - empty URL → drop media[0] only
- * - same URL → keep media[0] (id/note/title) + rest
- * - new URL → replace media[0] without writing a new note; keep rest
+ * Local path and remote URL are mutually exclusive for media[0].
+ * - both empty → drop media[0] only
+ * - same locator → keep media[0] (id/note/title) + rest
+ * - new locator → replace media[0]; keep rest
  */
 export function resolveDailyLogMediaEdit(
   existing: VideoMedia[] | undefined,
   nextUrl: string,
+  nextLocalPath = '',
 ): VideoMedia[] | null {
   const previous = existing ?? []
   const rest = previous.slice(1)
   const trimmedUrl = nextUrl.trim()
+  const trimmedLocal = nextLocalPath.trim()
+
+  if (trimmedLocal && trimmedUrl) {
+    // Prefer explicit local selection when both are somehow set.
+  }
+
+  if (trimmedLocal) {
+    const first = previous[0]
+    if (first && isLocalVideoMedia(first) && first.url === trimmedLocal) {
+      return [{ ...first, url: trimmedLocal, kind: 'local', provider: 'local' }, ...rest]
+    }
+    const created = createLocalVideoMedia(trimmedLocal)
+    if (!created) return null
+    return [created, ...rest]
+  }
 
   if (!trimmedUrl) {
     return rest
   }
 
   const first = previous[0]
-  if (first?.url === trimmedUrl) {
+  if (first && !isLocalVideoMedia(first) && first.url === trimmedUrl) {
     return [{ ...first, url: trimmedUrl }, ...rest]
   }
 
@@ -54,8 +82,14 @@ export function resolveDailyLogMediaEdit(
 }
 
 /** New Daily Log: optional single video, never writes media.note. */
-function mediaFromUrl(url: string): VideoMedia[] | null {
-  const trimmedUrl = url.trim()
+export function mediaFromDraft(draft: Pick<DailyLogEditorDraft, 'videoUrl' | 'localVideoPath'>): VideoMedia[] | null {
+  const local = draft.localVideoPath.trim()
+  if (local) {
+    const created = createLocalVideoMedia(local)
+    if (!created) return null
+    return [created]
+  }
+  const trimmedUrl = draft.videoUrl.trim()
   if (!trimmedUrl) return []
   const created = createVideoMedia(trimmedUrl)
   if (!created) return null
@@ -92,8 +126,16 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
 
   const handleSave = (draft: DailyLogEditorDraft): string | null => {
     if (editor.open && editor.mode === 'edit') {
-      const media = resolveDailyLogMediaEdit(editor.log.media, draft.videoUrl)
-      if (media === null) return '유효한 http(s) 동영상 URL을 입력하세요.'
+      const media = resolveDailyLogMediaEdit(
+        editor.log.media,
+        draft.videoUrl,
+        draft.localVideoPath,
+      )
+      if (media === null) {
+        return draft.localVideoPath.trim()
+          ? '유효한 로컬 동영상 경로를 선택하세요.'
+          : '유효한 http(s) 동영상 URL을 입력하세요.'
+      }
       const next = createDailyLog(draft.date, draft.note, media.length ? media : undefined)
       next.id = editor.log.id
       const result = upsertDailyLog(logs, next)
@@ -103,8 +145,12 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
       return null
     }
 
-    const media = mediaFromUrl(draft.videoUrl)
-    if (media === null) return '유효한 http(s) 동영상 URL을 입력하세요.'
+    const media = mediaFromDraft(draft)
+    if (media === null) {
+      return draft.localVideoPath.trim()
+        ? '유효한 로컬 동영상 경로를 선택하세요.'
+        : '유효한 http(s) 동영상 URL을 입력하세요.'
+    }
     const log = createDailyLog(draft.date, draft.note, media.length ? media : undefined)
     const result = upsertDailyLog(logs, log)
     if (result.error) return result.error
@@ -132,7 +178,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
       ? {
           date: editor.log.date,
           note: editor.log.note ?? '',
-          videoUrl: videoUrlFromLog(editor.log),
+          ...draftFieldsFromLog(editor.log),
         }
       : null
 

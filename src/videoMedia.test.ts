@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyVideoUrl,
   collectNodeVideos,
+  createLocalVideoMedia,
   createVideoMedia,
   extractYouTubeId,
+  isLocalVideoMedia,
   isSafeHttpUrl,
+  isValidLocalVideoPath,
   validateVideoMedia,
   canPinNodeVideos,
 } from './videoMedia'
@@ -32,6 +35,50 @@ describe('videoMedia', () => {
     expect(media?.kind).toBe('youtube')
     expect(media?.provider).toBe('youtube')
     expect(validateVideoMedia({ ...media!, url: 'data:video/mp4;base64,abc' })).toBeNull()
+  })
+
+  it('creates and validates local path references', () => {
+    const media = createLocalVideoMedia('/home/user/Videos/clip.mp4')
+    expect(media?.kind).toBe('local')
+    expect(media?.provider).toBe('local')
+    expect(media?.url).toBe('/home/user/Videos/clip.mp4')
+    expect(media?.title).toBe('clip.mp4')
+    expect(isLocalVideoMedia(media!)).toBe(true)
+    expect(validateVideoMedia(media)).toEqual(media)
+    expect(createLocalVideoMedia('')).toBeNull()
+    expect(createLocalVideoMedia('   ')).toBeNull()
+  })
+
+  it('rejects disguised schemes as local paths', () => {
+    expect(isValidLocalVideoPath('data:video/mp4;base64,aaa')).toBe(false)
+    expect(isValidLocalVideoPath('javascript:alert(1)')).toBe(false)
+    expect(isValidLocalVideoPath('http://example.com/a.mp4')).toBe(false)
+    expect(isValidLocalVideoPath('https://example.com/a.mp4')).toBe(false)
+    expect(
+      validateVideoMedia({
+        id: 'x',
+        url: 'https://example.com/a.mp4',
+        kind: 'local',
+        provider: 'local',
+      }),
+    ).toBeNull()
+    expect(
+      validateVideoMedia({
+        id: 'x',
+        url: 'data:video/mp4;base64,abc',
+        kind: 'local',
+        provider: 'local',
+      }),
+    ).toBeNull()
+  })
+
+  it('keeps remote validate path for unmarked http media', () => {
+    const media = validateVideoMedia({
+      id: 'r1',
+      url: 'https://example.com/x.mp4',
+    })
+    expect(media?.kind).toBe('external')
+    expect(media?.provider).toBe('link')
   })
 
   it('collects stage-log videos without duplicates', () => {

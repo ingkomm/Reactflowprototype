@@ -109,6 +109,54 @@ describe('graphDocument', () => {
     expect(logs.some((log) => log.media?.[0]?.url === 'https://youtu.be/dQw4w9WgXcQ')).toBe(true)
   })
 
+  it('preserves local video path references through serialize/parse (no bytes)', () => {
+    const localPath = '/home/user/Videos/practice.mp4'
+    const nodes = structuredClone(SEED_NODES)
+    const notable = nodes.find((n) => n.id === 'notable-hiphop')
+    expect(notable).toBeTruthy()
+    notable!.data.stages = [
+      {
+        id: 'stage-1',
+        index: 1,
+        label: '기록',
+        goal: 9999,
+        completedManually: false,
+        logs: [
+          {
+            id: 'log-local-1',
+            date: '2026-09-10',
+            note: 'local ref',
+            media: [
+              {
+                id: createVideoMediaId(),
+                url: localPath,
+                title: 'practice.mp4',
+                kind: 'local',
+                provider: 'local',
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    const doc = buildGraphDocument({
+      nodes,
+      edges: SEED_EDGES,
+      customSymbols: [],
+    })
+    const json = serializeGraphDocument(doc)
+    expect(json).toContain(localPath)
+    expect(json).not.toMatch(/data:video/i)
+    const parsed = parseGraphDocumentJson(json)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const restored = parsed.document.nodes.find((n) => n.id === 'notable-hiphop')
+    const media = restored?.data.stages?.[0]?.logs?.[0]?.media?.[0]
+    expect(media?.kind).toBe('local')
+    expect(media?.provider).toBe('local')
+    expect(media?.url).toBe(localPath)
+  })
+
   it('preserves Mastery legacy stages and media through parse/export round-trip', () => {
     const media = {
       id: createVideoMediaId(),

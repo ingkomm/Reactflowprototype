@@ -26,16 +26,20 @@ export type TrainingLog = {
   media?: VideoMedia[]
 }
 
-/** External video reference (URL only — no binary upload). */
+/**
+ * Video reference only — never embeds file bytes.
+ * - youtube / external: http(s) URL in `url`
+ * - local: absolute filesystem path in `url` (Desktop playback via asset protocol)
+ */
 export type VideoMedia = {
   id: string
   url: string
   title?: string
   note?: string
   /** Parsed provider hint (e.g. youtube). */
-  provider?: 'youtube' | 'link'
+  provider?: 'youtube' | 'link' | 'local'
   /** Alias for provider-style classification. */
-  kind?: 'youtube' | 'external'
+  kind?: 'youtube' | 'external' | 'local'
 }
 
 /** User-imported SVG symbol (stored once, referenced by id on nodes). */

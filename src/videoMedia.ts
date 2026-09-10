@@ -42,6 +42,41 @@ export function createVideoMedia(
   }
 }
 
+/** Local file path reference — never copies or embeds video bytes. */
+export function createLocalVideoMedia(
+  path: string,
+  extras: Partial<Pick<VideoMedia, 'id' | 'title' | 'note'>> = {},
+): VideoMedia | null {
+  const trimmed = path.trim()
+  if (!isValidLocalVideoPath(trimmed)) return null
+  const nameFromPath = trimmed.split(/[/\\]/).pop()?.trim()
+  return {
+    id: extras.id ?? createVideoMediaId(),
+    url: trimmed,
+    title: extras.title?.trim() || nameFromPath || undefined,
+    note: extras.note?.trim() || undefined,
+    provider: 'local',
+    kind: 'local',
+  }
+}
+
+export function isLocalVideoMedia(media: Pick<VideoMedia, 'kind' | 'provider'>): boolean {
+  return media.kind === 'local' || media.provider === 'local'
+}
+
+/**
+ * Absolute path sanity check only — not a filesystem permission grant.
+ * Rejects URL schemes that must never be treated as local references.
+ */
+export function isValidLocalVideoPath(path: string): boolean {
+  const trimmed = path.trim()
+  if (!trimmed) return false
+  if (/^(data:|javascript:|blob:|http:|https:|vbscript:)/i.test(trimmed)) return false
+  // Reject pure scheme-like tokens without a path body.
+  if (/^[a-z][a-z0-9+.-]*:$/i.test(trimmed)) return false
+  return true
+}
+
 export function isSafeHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
@@ -59,6 +94,25 @@ export function validateVideoMedia(value: unknown): VideoMedia | null {
   if (typeof raw.id !== 'string' || !raw.id.trim()) return null
   if (typeof raw.url !== 'string' || !raw.url.trim()) return null
   if (/^data:/i.test(raw.url)) return null
+
+  const markedLocal = raw.kind === 'local' || raw.provider === 'local'
+  if (markedLocal) {
+    const path = raw.url.trim()
+    if (!isValidLocalVideoPath(path)) return null
+    const nameFromPath = path.split(/[/\\]/).pop()?.trim()
+    return {
+      id: raw.id.trim(),
+      url: path,
+      title:
+        typeof raw.title === 'string' && raw.title.trim()
+          ? raw.title.trim()
+          : nameFromPath || undefined,
+      note: typeof raw.note === 'string' && raw.note.trim() ? raw.note.trim() : undefined,
+      provider: 'local',
+      kind: 'local',
+    }
+  }
+
   if (!isSafeHttpUrl(raw.url.trim())) return null
   const kind = classifyVideoUrl(raw.url)
   return {

@@ -68,6 +68,8 @@ Prerequisite: [Rust](https://www.rust-lang.org/tools/install) and [Tauri 2 syste
 
 Persistence remains browser `localStorage` inside the WebView. Move data between Web and Desktop with JSON export/import — there is no automatic migration.
 
+**Local Video Reference (Desktop):** 로컬 동영상은 파일 자체가 아니라 **경로만** 저장됩니다. 다른 PC에서는 같은 경로가 없으면 재생되지 않습니다. Browser에서는 YouTube/외부 URL만 재생되며, 로컬 경로는 Desktop 안내로 표시됩니다.
+
 ## GitHub Pages
 
 `main` 브랜치 push 시 `.github/workflows/pages.yml`이 빌드·배포합니다.  

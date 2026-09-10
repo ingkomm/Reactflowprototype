@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatPracticeDate } from '../dailyLog'
 import { tryPasteSvgIntoTextarea } from '../markdownSvgPaste'
+import {
+  isLocalVideoSupported,
+  localVideoDisplayName,
+  pickLocalVideo,
+} from '../platform/localVideo'
 import './DailyLogEditorModal.css'
 
 export type DailyLogEditorMode = 'add' | 'edit'
@@ -10,6 +15,8 @@ export type DailyLogEditorDraft = {
   date: string
   note: string
   videoUrl: string
+  /** Absolute local path reference (Desktop only). Mutually exclusive with videoUrl. */
+  localVideoPath: string
 }
 
 type Props = {
@@ -22,13 +29,20 @@ type Props = {
 }
 
 function seedDraft(initial?: DailyLogEditorDraft | null): DailyLogEditorDraft {
-  return (
-    initial ?? {
+  if (!initial) {
+    return {
       date: formatPracticeDate(),
       note: '',
       videoUrl: '',
+      localVideoPath: '',
     }
-  )
+  }
+  return {
+    date: initial.date,
+    note: initial.note,
+    videoUrl: initial.videoUrl ?? '',
+    localVideoPath: initial.localVideoPath ?? '',
+  }
 }
 
 export function isDailyLogDraftDirty(
@@ -38,7 +52,8 @@ export function isDailyLogDraftDirty(
   return (
     current.date !== initial.date ||
     current.note !== initial.note ||
-    current.videoUrl !== initial.videoUrl
+    current.videoUrl !== initial.videoUrl ||
+    current.localVideoPath !== initial.localVideoPath
   )
 }
 
@@ -48,15 +63,21 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
   const [date, setDate] = useState(seed.date)
   const [note, setNote] = useState(seed.note)
   const [videoUrl, setVideoUrl] = useState(seed.videoUrl)
+  const [localVideoPath, setLocalVideoPath] = useState(seed.localVideoPath)
   const [error, setError] = useState<string | null>(null)
-  const draftRef = useRef({ date, note, videoUrl })
+  const [picking, setPicking] = useState(false)
+  const draftRef = useRef({ date, note, videoUrl, localVideoPath })
+  const localSupported = isLocalVideoSupported()
 
   useEffect(() => {
-    draftRef.current = { date, note, videoUrl }
-  }, [date, note, videoUrl])
+    draftRef.current = { date, note, videoUrl, localVideoPath }
+  }, [date, note, videoUrl, localVideoPath])
 
   const requestClose = () => {
-    const dirty = isDailyLogDraftDirty({ date, note, videoUrl }, initialRef.current)
+    const dirty = isDailyLogDraftDirty(
+      { date, note, videoUrl, localVideoPath },
+      initialRef.current,
+    )
     if (
       dirty &&
       !window.confirm('작성 중인 내용을 버릴까요?\n확인하면 변경 내용이 사라집니다.')
@@ -91,8 +112,31 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
   const title = mode === 'edit' ? '기록 수정' : '기록 추가'
 
   const handleSave = () => {
-    const saveError = onSave({ date, note, videoUrl })
+    const saveError = onSave({ date, note, videoUrl, localVideoPath })
     if (saveError) setError(saveError)
+  }
+
+  const onVideoUrlChange = (value: string) => {
+    setVideoUrl(value)
+    if (value.trim()) setLocalVideoPath('')
+  }
+
+  const onPickLocal = async () => {
+    if (!localSupported || picking) return
+    setPicking(true)
+    setError(null)
+    try {
+      const path = await pickLocalVideo()
+      if (!path) return
+      setLocalVideoPath(path)
+      setVideoUrl('')
+    } finally {
+      setPicking(false)
+    }
+  }
+
+  const clearLocal = () => {
+    setLocalVideoPath('')
   }
 
   return createPortal(
@@ -136,11 +180,57 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
             <span>동영상 URL (선택)</span>
             <input
               value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
+              onChange={(e) => onVideoUrlChange(e.target.value)}
               placeholder="https://..."
               data-testid="daily-log-editor-video"
+              disabled={Boolean(localVideoPath)}
             />
           </label>
+          {localSupported ? (
+            <div className="field daily-log-editor-modal__local-field">
+              <span>로컬 동영상 (선택)</span>
+              <div className="daily-log-editor-modal__local-row">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  data-testid="daily-log-editor-pick-local"
+                  onClick={() => {
+                    void onPickLocal()
+                  }}
+                  disabled={picking}
+                >
+                  {picking ? '선택 중…' : '로컬 동영상 선택'}
+                </button>
+                {localVideoPath ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    data-testid="daily-log-editor-clear-local"
+                    onClick={clearLocal}
+                  >
+                    해제
+                  </button>
+                ) : null}
+              </div>
+              {localVideoPath ? (
+                <p
+                  className="daily-log-editor-modal__local-hint"
+                  data-testid="daily-log-editor-local-name"
+                  title={localVideoPath}
+                >
+                  {localVideoDisplayName(localVideoPath)}
+                </p>
+              ) : (
+                <p className="daily-log-editor-modal__local-hint">
+                  파일은 복사되지 않고 경로만 저장됩니다.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="daily-log-editor-modal__local-hint" data-testid="daily-log-editor-local-web-hint">
+              로컬 동영상은 Desktop 앱에서 사용할 수 있습니다.
+            </p>
+          )}
           <label className="field daily-log-editor-modal__memo-field">
             <span>Memo (Markdown)</span>
             <textarea

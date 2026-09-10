@@ -162,7 +162,7 @@ describe('DailyLogPanel compact + editor modal', () => {
       <DailyLogEditorModal
         open
         mode="add"
-        initial={{ date: '2026-09-10', note: '', videoUrl: '' }}
+        initial={{ date: '2026-09-10', note: '', videoUrl: '', localVideoPath: '' }}
         onClose={onClose}
         onSave={() => null}
       />,
@@ -182,7 +182,7 @@ describe('DailyLogPanel compact + editor modal', () => {
       <DailyLogEditorModal
         open
         mode="add"
-        initial={{ date: '2026-09-10', note: '', videoUrl: '' }}
+        initial={{ date: '2026-09-10', note: '', videoUrl: '', localVideoPath: '' }}
         onClose={onClose}
         onSave={() => null}
       />,
@@ -210,11 +210,32 @@ describe('DailyLogPanel compact + editor modal', () => {
     confirmSpy.mockRestore()
   })
 
-  it('isDailyLogDraftDirty compares date/note/videoUrl', () => {
-    const base = { date: '2026-01-01', note: 'a', videoUrl: '' }
+  it('isDailyLogDraftDirty compares date/note/videoUrl/localVideoPath', () => {
+    const base = { date: '2026-01-01', note: 'a', videoUrl: '', localVideoPath: '' }
     expect(isDailyLogDraftDirty(base, base)).toBe(false)
     expect(isDailyLogDraftDirty({ ...base, note: 'b' }, base)).toBe(true)
     expect(isDailyLogDraftDirty({ ...base, date: '2026-01-02' }, base)).toBe(true)
     expect(isDailyLogDraftDirty({ ...base, videoUrl: 'https://x' }, base)).toBe(true)
+    expect(isDailyLogDraftDirty({ ...base, localVideoPath: '/videos/a.mp4' }, base)).toBe(true)
+  })
+
+  it('browser shows desktop-only hint and no crash for local draft fields', () => {
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{
+          date: '2026-09-10',
+          note: '',
+          videoUrl: '',
+          localVideoPath: '/home/user/clip.mp4',
+        }}
+        onClose={() => undefined}
+        onSave={() => null}
+      />,
+    )
+    expect(document.body.querySelector('[data-testid="daily-log-editor-local-web-hint"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-testid="daily-log-editor-pick-local"]')).toBeNull()
+    view.unmount()
   })
 })

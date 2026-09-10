@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { resolveDailyLogMediaEdit } from './components/DailyLogPanel'
+import {
+  mediaFromDraft,
+  resolveDailyLogMediaEdit,
+} from './components/DailyLogPanel'
 import { createDailyLog } from './dailyLog'
 import type { VideoMedia } from './types'
+import { createLocalVideoMedia } from './videoMedia'
 
 function media(
   id: string,
   url: string,
-  extras: Partial<Pick<VideoMedia, 'title' | 'note'>> = {},
+  extras: Partial<Pick<VideoMedia, 'title' | 'note' | 'kind' | 'provider'>> = {},
 ): VideoMedia {
   return {
     id,
     url,
-    provider: 'youtube',
-    kind: 'youtube',
-    ...extras,
+    provider: extras.provider ?? 'youtube',
+    kind: extras.kind ?? 'youtube',
+    title: extras.title,
+    note: extras.note,
   }
 }
 
@@ -61,6 +66,58 @@ describe('Daily Log multiple media preservation on edit', () => {
     expect(saved.media?.[0]?.id).toBe('m0')
     expect(saved.date).toBe('2026-09-07')
     expect(saved.note).toBe('memo edited')
+  })
+})
+
+describe('Daily Log local video media edit', () => {
+  const localPath = '/home/user/Videos/practice.mp4'
+  const otherLocal = 'D:\\Videos\\other.mp4'
+  const withRest: VideoMedia[] = [
+    createLocalVideoMedia(localPath, { id: 'loc0', title: 'practice.mp4' })!,
+    media('m1', 'https://youtu.be/bbbbbbbbbbb', { title: 'second' }),
+  ]
+
+  it('adds local video as media[0]', () => {
+    const created = mediaFromDraft({ videoUrl: '', localVideoPath: localPath })
+    expect(created).toHaveLength(1)
+    expect(created?.[0]?.kind).toBe('local')
+    expect(created?.[0]?.provider).toBe('local')
+    expect(created?.[0]?.url).toBe(localPath)
+  })
+
+  it('edits local → local and keeps media[1+]', () => {
+    const next = resolveDailyLogMediaEdit(withRest, '', otherLocal)
+    expect(next).toHaveLength(2)
+    expect(next?.[0]?.kind).toBe('local')
+    expect(next?.[0]?.url).toBe(otherLocal)
+    expect(next?.[0]?.id).not.toBe('loc0')
+    expect(next?.[1]).toEqual(withRest[1])
+  })
+
+  it('edits local → URL and keeps media[1+]', () => {
+    const next = resolveDailyLogMediaEdit(withRest, 'https://youtu.be/ccccccccccc', '')
+    expect(next).toHaveLength(2)
+    expect(next?.[0]?.kind).toBe('youtube')
+    expect(next?.[0]?.url).toBe('https://youtu.be/ccccccccccc')
+    expect(next?.[1]).toEqual(withRest[1])
+  })
+
+  it('edits URL → local and keeps media[1+]', () => {
+    const remoteFirst: VideoMedia[] = [
+      media('m0', 'https://youtu.be/aaaaaaaaaaa'),
+      media('m1', 'https://example.com/x'),
+    ]
+    const next = resolveDailyLogMediaEdit(remoteFirst, '', localPath)
+    expect(next).toHaveLength(2)
+    expect(next?.[0]?.kind).toBe('local')
+    expect(next?.[0]?.url).toBe(localPath)
+    expect(next?.[1]).toEqual(remoteFirst[1])
+  })
+
+  it('keeps same local path identity when unchanged', () => {
+    const next = resolveDailyLogMediaEdit(withRest, '', localPath)
+    expect(next?.[0]?.id).toBe('loc0')
+    expect(next?.[1]).toEqual(withRest[1])
   })
 })
 

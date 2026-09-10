@@ -89,6 +89,27 @@
   color: #ffb4b4;
 }
 
+.daily-log-editor-modal__local-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-log-editor-modal__local-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.daily-log-editor-modal__local-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #9eb0bf;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .daily-log-editor-modal__footer {
   display: flex;
   justify-content: flex-end;
