@@ -75,6 +75,10 @@
   margin: 0 0 0.75em;
   max-width: 100%;
   overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid color-mix(in srgb, #c5ced6 55%, transparent);
 }
 
 .markdown-view__svg {

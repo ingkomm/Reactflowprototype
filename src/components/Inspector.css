@@ -112,6 +112,13 @@
   font-size: 0.9rem;
 }
 
+/* Display-only soft wrap for long SVG/XML lines; does not alter stored value. */
+.field textarea {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .field input:focus,
 .field select:focus,
 .field textarea:focus,

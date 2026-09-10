@@ -85,4 +85,7 @@
 .daily-log-panel__memo {
   resize: vertical;
   min-height: 56px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }

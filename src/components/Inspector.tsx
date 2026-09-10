@@ -532,6 +532,7 @@ export function Inspector({
           <span>Markdown</span>
           <textarea
             rows={12}
+            wrap="soft"
             value={data.markdown ?? ''}
             onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
             onPaste={(e) => {
@@ -549,6 +550,7 @@ export function Inspector({
           <span>Summary (Markdown)</span>
           <textarea
             rows={8}
+            wrap="soft"
             value={data.markdown ?? ''}
             onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
             onPaste={(e) => {

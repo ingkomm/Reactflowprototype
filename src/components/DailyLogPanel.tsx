@@ -104,6 +104,7 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
         <span>Memo (Markdown, 선택)</span>
         <textarea
           className="daily-log-panel__memo"
+          wrap="soft"
           value={editNote}
           onChange={(e) => setEditNote(e.target.value)}
           onPaste={(e) => {
@@ -219,6 +220,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
           <span>Memo (Markdown, 선택)</span>
           <textarea
             className="daily-log-panel__memo"
+            wrap="soft"
             value={draftNote}
             onChange={(e) => setDraftNote(e.target.value)}
             onPaste={(e) => {
