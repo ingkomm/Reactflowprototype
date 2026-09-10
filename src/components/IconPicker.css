@@ -1,0 +1,131 @@
+.icon-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 8, 12, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+.icon-picker {
+  width: min(520px, 100%);
+  max-height: min(640px, 90vh);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #121820;
+  border: 1px solid color-mix(in srgb, #9eb0c2 24%, transparent);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.icon-picker__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.icon-picker__head h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  color: #eef3f7;
+}
+
+.icon-picker__head p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #9aa8b5;
+  line-height: 1.4;
+}
+
+.icon-picker__close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, #8fa0b0 16%, transparent);
+  color: #eef3f7;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.icon-picker__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.icon-picker__tab {
+  border: 1px solid color-mix(in srgb, #8fa0b0 28%, transparent);
+  background: transparent;
+  color: #b7c4d0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.icon-picker__tab.is-active {
+  background: color-mix(in srgb, #3db8a8 22%, transparent);
+  border-color: color-mix(in srgb, #3db8a8 45%, transparent);
+  color: #9fe8dd;
+}
+
+.icon-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  overflow: auto;
+  padding-bottom: 4px;
+}
+
+.icon-picker__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+  background: color-mix(in srgb, #1a2430 80%, transparent);
+  color: #d5dde5;
+  cursor: pointer;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+
+.icon-picker__item:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, #d4a24c 45%, transparent);
+}
+
+.icon-picker__item.is-selected {
+  border-color: #f4f7fa;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #d4a24c 55%, white);
+}
+
+.icon-picker__glyph-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #0f151c;
+  color: #e8eef4;
+  overflow: hidden;
+}
+
+.icon-picker__glyph {
+  width: 78%;
+  height: 78%;
+}
+
+.icon-picker__label {
+  font-size: 0.75rem;
+  color: #9aa8b5;
+}
