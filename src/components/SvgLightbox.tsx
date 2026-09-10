@@ -13,6 +13,7 @@ import {
   clampSvgScale,
   computeFitScale,
 } from '../svgLightboxMath'
+import { createLightSvgObjectUrl } from '../prepareSvgForLightRendering'
 import './SvgLightbox.css'
 
 type Props = {
@@ -44,8 +45,7 @@ export function SvgLightbox({ svg, onClose }: Props) {
   }, [fitMode])
 
   useEffect(() => {
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-    const next = URL.createObjectURL(blob)
+    const next = createLightSvgObjectUrl(svg)
     setUrl(next)
     setNatural({ w: 0, h: 0 })
     setScale(1)

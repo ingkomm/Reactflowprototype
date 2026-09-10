@@ -12,8 +12,6 @@
 .shard-markdown-preview {
   position: fixed;
   z-index: 41;
-  width: min(420px, calc(100vw - 16px));
-  max-height: min(520px, calc(100vh - 16px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -22,6 +20,36 @@
   background: color-mix(in srgb, #121820 96%, transparent);
   border: 1px solid color-mix(in srgb, #9eb0c2 28%, transparent);
   box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* Temporary right-click preview: centered, capped like DailyLogEditorModal. */
+.shard-markdown-preview:not(.is-pinned) {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(800px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+
+.shard-markdown-preview:not(.is-pinned) .shard-markdown-preview__head {
+  cursor: default;
+  flex: 0 0 auto;
+}
+
+.shard-markdown-preview:not(.is-pinned) .shard-markdown-preview__head:active {
+  cursor: default;
+}
+
+.shard-markdown-preview:not(.is-pinned) .shard-markdown-preview__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .shard-markdown-preview__head {
@@ -30,13 +58,8 @@
   justify-content: space-between;
   gap: 12px;
   color: #eef3f7;
-  cursor: grab;
   user-select: none;
   touch-action: none;
-}
-
-.shard-markdown-preview__head:active {
-  cursor: grabbing;
 }
 
 .shard-markdown-preview__head .btn {
@@ -77,6 +100,9 @@
 
 .shard-markdown-preview.is-pinned {
   z-index: 45;
+  left: auto;
+  top: auto;
+  transform: none;
   /* Whole pin window resize (UI-only; not persisted). */
   resize: both;
   overflow: auto;
@@ -86,6 +112,14 @@
   height: min(520px, calc(100vh - 16px));
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
+}
+
+.shard-markdown-preview.is-pinned .shard-markdown-preview__head {
+  cursor: grab;
+}
+
+.shard-markdown-preview.is-pinned .shard-markdown-preview__head:active {
+  cursor: grabbing;
 }
 
 .shard-markdown-preview.is-pinned .shard-markdown-preview__body {

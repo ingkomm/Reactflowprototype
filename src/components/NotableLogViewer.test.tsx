@@ -218,13 +218,58 @@ describe('NotableLogViewer interactions', () => {
     view.unmount()
   })
 
-  it('moves on header drag, ignores close button, and has no video resize handle', () => {
+  it('non-pinned preview does not drag; pinned moves from header and has no video resize handle', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+
+    const transient = mount(
+      <NotableLogViewer
+        open
+        x={40}
+        y={50}
+        nodeLabel="Drill"
+        markdown={'## Sum'}
+        logs={sampleLogs}
+        onClose={() => undefined}
+      />,
+    )
+    const transientPanel = transient.host.querySelector(
+      '[data-testid="notable-log-viewer"]',
+    ) as HTMLElement
+    expect(transientPanel.className).toContain('is-preview')
+    expect(transientPanel.style.left).toBe('')
+    expect(transientPanel.style.top).toBe('')
+    const transientHead = transient.host.querySelector(
+      '[data-testid="notable-log-viewer-head"]',
+    ) as HTMLElement
+    act(() => {
+      transientHead.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 80,
+          clientY: 60,
+          button: 0,
+          pointerId: 1,
+        }),
+      )
+      transientHead.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 140,
+          pointerId: 1,
+        }),
+      )
+    })
+    expect(transientPanel.style.left).toBe('')
+    transient.unmount()
 
     const view = mount(
       <NotableLogViewer
         open
+        pinned
+        modal={false}
+        closeOnEscape={false}
         x={40}
         y={50}
         nodeLabel="Drill"
@@ -303,7 +348,7 @@ describe('NotableLogViewer interactions', () => {
     expect(view.host.querySelector('[data-testid="notable-video-player"]')).toBeTruthy()
     expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeNull()
     expect(view.host.textContent).not.toContain('영상 크기 조절')
-    expect(panel.getAttribute('data-resizable')).toBe('false')
+    expect(panel.getAttribute('data-resizable')).toBe('true')
 
     view.unmount()
   })
@@ -366,13 +411,56 @@ describe('NotableLogViewer interactions', () => {
 })
 
 describe('ShardMarkdownPreview header drag', () => {
-  it('moves panel from header drag and does not start drag from close', () => {
+  it('non-pinned preview stays centered without drag; pinned moves from header', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+
+    const transient = mount(
+      <ShardMarkdownPreview
+        open
+        x={30}
+        y={40}
+        nodeLabel="Shard A"
+        markdown={'## Hello'}
+        onClose={() => undefined}
+      />,
+    )
+    const transientPanel = transient.host.querySelector(
+      '[data-testid="shard-markdown-preview"]',
+    ) as HTMLElement
+    expect(transientPanel.className).toContain('is-preview')
+    expect(transientPanel.style.left).toBe('')
+    const transientHead = transient.host.querySelector(
+      '[data-testid="shard-markdown-preview-head"]',
+    ) as HTMLElement
+    act(() => {
+      transientHead.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 50,
+          clientY: 50,
+          button: 0,
+          pointerId: 1,
+        }),
+      )
+      transientHead.dispatchEvent(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 160,
+          clientY: 110,
+          pointerId: 1,
+        }),
+      )
+    })
+    expect(transientPanel.style.left).toBe('')
+    transient.unmount()
 
     const view = mount(
       <ShardMarkdownPreview
         open
+        pinned
+        modal={false}
+        closeOnEscape={false}
         x={30}
         y={40}
         nodeLabel="Shard A"

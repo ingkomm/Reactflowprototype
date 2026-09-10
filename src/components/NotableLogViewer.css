@@ -12,10 +12,6 @@
 .notable-log-viewer {
   position: fixed;
   z-index: 41;
-  width: max-content;
-  max-width: calc(100vw - 16px);
-  max-height: calc(100vh - 16px);
-  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -24,6 +20,48 @@
   background: color-mix(in srgb, #121820 96%, transparent);
   border: 1px solid color-mix(in srgb, #9eb0c2 28%, transparent);
   box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* Temporary right-click preview: centered, capped like DailyLogEditorModal. */
+.notable-log-viewer:not(.is-pinned) {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(800px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+
+.notable-log-viewer:not(.is-pinned) .notable-log-viewer__head {
+  cursor: default;
+  flex: 0 0 auto;
+}
+
+.notable-log-viewer:not(.is-pinned) .notable-log-viewer__head:active {
+  cursor: default;
+}
+
+.notable-log-viewer:not(.is-pinned) .notable-log-viewer__summary {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 30%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.notable-log-viewer:not(.is-pinned) .notable-log-viewer__timeline {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.notable-log-viewer:not(.is-pinned) .notable-log-viewer__playlist {
+  max-height: none;
 }
 
 .notable-log-viewer__head {
@@ -32,13 +70,8 @@
   justify-content: space-between;
   gap: 12px;
   color: #eef3f7;
-  cursor: grab;
   user-select: none;
   touch-action: none;
-}
-
-.notable-log-viewer__head:active {
-  cursor: grabbing;
 }
 
 .notable-log-viewer__head .btn {
@@ -305,6 +338,9 @@
 
 .notable-log-viewer.is-pinned {
   z-index: 45;
+  left: auto;
+  top: auto;
+  transform: none;
   /* Whole pin window resize (UI-only; not persisted). */
   resize: both;
   overflow: auto;
@@ -314,6 +350,14 @@
   min-height: 280px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
+}
+
+.notable-log-viewer.is-pinned .notable-log-viewer__head {
+  cursor: grab;
+}
+
+.notable-log-viewer.is-pinned .notable-log-viewer__head:active {
+  cursor: grabbing;
 }
 
 .notable-log-viewer.is-pinned .notable-log-viewer__summary {

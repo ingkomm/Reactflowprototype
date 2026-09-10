@@ -301,4 +301,27 @@ describe('Timeline label + horizontal overflow', () => {
     expect(css).toMatch(/\.notable-log-viewer__memo\s*\{[^}]*text-overflow:\s*ellipsis/s)
     expect(css).not.toMatch(/-webkit-line-clamp:\s*2/)
   })
+
+  it('non-pinned preview CSS centers and caps size like Daily Log editor modal', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const { dirname, join } = await import('node:path')
+    const notable = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'NotableLogViewer.css'),
+      'utf8',
+    )
+    const shard = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'ShardMarkdownPreview.css'),
+      'utf8',
+    )
+    for (const css of [notable, shard]) {
+      expect(css).toMatch(/:not\(\.is-pinned\)\s*\{[^}]*left:\s*50%/s)
+      expect(css).toMatch(/:not\(\.is-pinned\)\s*\{[^}]*top:\s*50%/s)
+      expect(css).toMatch(/:not\(\.is-pinned\)\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\)/s)
+      expect(css).toMatch(/width:\s*min\(800px,\s*calc\(100vw - 32px\)\)/)
+      expect(css).toMatch(/max-height:\s*calc\(100vh - 32px\)/)
+    }
+    expect(notable).toMatch(/\.is-pinned\s*\{[^}]*transform:\s*none/s)
+    expect(shard).toMatch(/\.is-pinned\s*\{[^}]*transform:\s*none/s)
+  })
 })

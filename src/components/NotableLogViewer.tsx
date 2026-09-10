@@ -92,6 +92,19 @@ export function NotableLogViewer({
 
   if (!open) return null
 
+  const panelStyle = pinned
+    ? { left: position.x, top: position.y, zIndex: zIndex ?? undefined }
+    : { zIndex: zIndex ?? undefined }
+
+  const pinAtPanel = () => {
+    if (!onPin) return
+    const rect = panelRef.current?.getBoundingClientRect()
+    onPin({
+      x: rect?.left ?? position.x,
+      y: rect?.top ?? position.y,
+    })
+  }
+
   return (
     <>
       {showModal ? (
@@ -104,10 +117,10 @@ export function NotableLogViewer({
       ) : null}
       <div
         ref={panelRef}
-        className={`notable-log-viewer${pinned ? ' is-pinned' : ''}`}
+        className={`notable-log-viewer${pinned ? ' is-pinned' : ' is-preview'}`}
         role="dialog"
         aria-label={`${nodeLabel} Notable Viewer`}
-        style={{ left: position.x, top: position.y, zIndex: zIndex ?? undefined }}
+        style={panelStyle}
         data-testid="notable-log-viewer"
         data-pinned={pinned ? 'true' : 'false'}
         data-resizable={pinned ? 'true' : 'false'}
@@ -116,7 +129,7 @@ export function NotableLogViewer({
         <header
           className="notable-log-viewer__head"
           data-testid="notable-log-viewer-head"
-          {...headerDragProps}
+          {...(pinned ? headerDragProps : {})}
         >
           <div>
             <p className="notable-log-viewer__kind">Notable{pinned ? ' · Pin' : ''}</p>
@@ -128,7 +141,7 @@ export function NotableLogViewer({
                 type="button"
                 className="btn btn--ghost"
                 data-testid="viewer-pin"
-                onClick={() => onPin({ x: position.x, y: position.y })}
+                onClick={pinAtPanel}
               >
                 Pin
               </button>

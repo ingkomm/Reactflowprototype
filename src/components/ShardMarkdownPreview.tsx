@@ -57,6 +57,18 @@ export function ShardMarkdownPreview({
   if (!open) return null
 
   const hasContent = Boolean(markdown?.trim())
+  const panelStyle = pinned
+    ? { left: position.x, top: position.y, zIndex: zIndex ?? undefined }
+    : { zIndex: zIndex ?? undefined }
+
+  const pinAtPanel = () => {
+    if (!onPin) return
+    const rect = panelRef.current?.getBoundingClientRect()
+    onPin({
+      x: rect?.left ?? position.x,
+      y: rect?.top ?? position.y,
+    })
+  }
 
   return (
     <>
@@ -70,19 +82,19 @@ export function ShardMarkdownPreview({
       ) : null}
       <div
         ref={panelRef}
-        className={`shard-markdown-preview${pinned ? ' is-pinned' : ''}`}
+        className={`shard-markdown-preview${pinned ? ' is-pinned' : ' is-preview'}`}
         role="dialog"
         aria-label={`${nodeLabel} Markdown 미리보기`}
         data-testid="shard-markdown-preview"
         data-pinned={pinned ? 'true' : 'false'}
         data-resizable={pinned ? 'true' : 'false'}
-        style={{ left: position.x, top: position.y, zIndex: zIndex ?? undefined }}
+        style={panelStyle}
         onPointerDownCapture={onActivate}
       >
         <header
           className="shard-markdown-preview__head"
           data-testid="shard-markdown-preview-head"
-          {...headerDragProps}
+          {...(pinned ? headerDragProps : {})}
         >
           <div>
             <p className="shard-markdown-preview__kind">Shard{pinned ? ' · Pin' : ''}</p>
@@ -94,7 +106,7 @@ export function ShardMarkdownPreview({
                 type="button"
                 className="btn btn--ghost"
                 data-testid="viewer-pin"
-                onClick={() => onPin({ x: position.x, y: position.y })}
+                onClick={pinAtPanel}
               >
                 Pin
               </button>

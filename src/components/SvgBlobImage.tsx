@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { isSafeSvgForBlobImage } from '../svgFence'
+import { createLightSvgObjectUrl } from '../prepareSvgForLightRendering'
 
 type Props = {
   source: string
@@ -14,8 +15,8 @@ export function SvgBlobImage({ source }: Props) {
       setUrl(null)
       return
     }
-    const blob = new Blob([source.trim()], { type: 'image/svg+xml' })
-    const objectUrl = URL.createObjectURL(blob)
+    // Persistence/source stays unchanged; Blob uses Light-forced rendering copy only.
+    const objectUrl = createLightSvgObjectUrl(source)
     setUrl(objectUrl)
     return () => {
       URL.revokeObjectURL(objectUrl)

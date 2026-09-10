@@ -302,8 +302,10 @@ describe('transient vs pinned viewer chrome', () => {
       />,
     )
     const panel = view.host.querySelector('[data-testid="shard-markdown-preview"]') as HTMLElement
-    expect(panel.style.left).toMatch(/px/)
-    expect(panel.style.top).toMatch(/px/)
+    // Non-pinned preview is CSS-centered; cursor coords are not applied as left/top.
+    expect(panel.className).toContain('is-preview')
+    expect(panel.style.left).toBe('')
+    expect(panel.style.top).toBe('')
     const pin = view.host.querySelector('[data-testid="viewer-pin"]') as HTMLButtonElement
     act(() => {
       pin.click()
