@@ -1,13 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { TrainingLog, VideoMedia } from '../types'
 import {
   createDailyLog,
-  formatPracticeDate,
+  dailyLogTimelineLabel,
   sortedDailyLogs,
   upsertDailyLog,
 } from '../dailyLog'
 import { createVideoMedia } from '../videoMedia'
-import { tryPasteSvgIntoTextarea } from '../markdownSvgPaste'
+import {
+  DailyLogEditorModal,
+  type DailyLogEditorDraft,
+  type DailyLogEditorMode,
+} from './DailyLogEditorModal'
 import './DailyLogPanel.css'
 
 type Props = {
@@ -58,142 +62,79 @@ function mediaFromUrl(url: string): VideoMedia[] | null {
   return [created]
 }
 
-type EditFormProps = {
-  log: TrainingLog
-  onSave: (log: TrainingLog) => string | null
-  onCancel: () => void
-}
-
-function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
-  const [editDate, setEditDate] = useState(log.date)
-  const [editNote, setEditNote] = useState(log.note ?? '')
-  const [editVideoUrl, setEditVideoUrl] = useState(videoUrlFromLog(log))
-  const [editError, setEditError] = useState<string | null>(null)
-
-  const handleSave = () => {
-    const media = resolveDailyLogMediaEdit(log.media, editVideoUrl)
-    if (media === null) {
-      setEditError('유효한 http(s) 동영상 URL을 입력하세요.')
-      return
-    }
-    const next = createDailyLog(editDate, editNote, media.length ? media : undefined)
-    next.id = log.id
-    const error = onSave(next)
-    if (error) {
-      setEditError(error)
-      return
-    }
-    setEditError(null)
-  }
-
-  return (
-    <>
-      <label className="field">
-        <span>날짜</span>
-        <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
-      </label>
-      <label className="field">
-        <span>동영상 URL (선택)</span>
-        <input
-          value={editVideoUrl}
-          onChange={(e) => setEditVideoUrl(e.target.value)}
-          placeholder="https://..."
-        />
-      </label>
-      <label className="field">
-        <span>Memo (Markdown, 선택)</span>
-        <textarea
-          className="daily-log-panel__memo"
-          wrap="soft"
-          value={editNote}
-          onChange={(e) => setEditNote(e.target.value)}
-          onPaste={(e) => {
-            tryPasteSvgIntoTextarea(e, editNote, setEditNote)
-          }}
-          rows={2}
-        />
-      </label>
-      {editError && (
-        <p className="daily-log-panel__error" role="alert">
-          {editError}
-        </p>
-      )}
-      <div className="daily-log-card__actions">
-        <button type="button" className="btn btn--ghost" onClick={handleSave}>
-          저장
-        </button>
-        <button type="button" className="btn btn--ghost" onClick={onCancel}>
-          취소
-        </button>
-      </div>
-    </>
-  )
-}
+type EditorState =
+  | { open: false }
+  | { open: true; mode: 'add' }
+  | { open: true; mode: 'edit'; log: TrainingLog }
 
 export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsumed }: Props) {
-  const [draftDate, setDraftDate] = useState(formatPracticeDate())
-  const [draftNote, setDraftNote] = useState('')
-  const [draftVideoUrl, setDraftVideoUrl] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-
-  const activeEditingId = focusLogId ?? editingId
+  const [editor, setEditor] = useState<EditorState>({ open: false })
   const practiceEntries = logs.length
-  const orderedLogs = sortedDailyLogs(logs)
+  const orderedLogs = useMemo(() => sortedDailyLogs(logs), [logs])
 
-  const buildLog = (
-    id: string | undefined,
-    date: string,
-    note: string,
-    videoUrl: string,
-  ): TrainingLog | null => {
-    const media = mediaFromUrl(videoUrl)
-    if (media === null) return null
-    const log = createDailyLog(date, note, media.length ? media : undefined)
-    if (id) log.id = id
-    return log
-  }
-
-  const handleAdd = () => {
-    const log = buildLog(undefined, draftDate, draftNote, draftVideoUrl)
-    if (!log) {
-      setFormError('유효한 http(s) 동영상 URL을 입력하세요.')
-      return
-    }
-    const result = upsertDailyLog(logs, log)
-    if (result.error) {
-      setFormError(result.error)
-      return
-    }
-    onChangeLogs(result.logs)
-    setDraftDate(formatPracticeDate())
-    setDraftNote('')
-    setDraftVideoUrl('')
-    setFormError(null)
-  }
-
-  const startEdit = (log: TrainingLog) => {
+  useEffect(() => {
+    if (!focusLogId) return
+    const target = logs.find((log) => log.id === focusLogId)
     onFocusLogConsumed?.()
-    setEditingId(log.id)
-  }
+    if (target) {
+      setEditor({ open: true, mode: 'edit', log: target })
+    }
+  }, [focusLogId, logs, onFocusLogConsumed])
 
-  const closeEdit = () => {
+  const closeEditor = () => setEditor({ open: false })
+
+  const openAdd = () => setEditor({ open: true, mode: 'add' })
+
+  const openEdit = (log: TrainingLog) => {
     onFocusLogConsumed?.()
-    setEditingId(null)
+    setEditor({ open: true, mode: 'edit', log })
   }
 
-  const saveEdit = (log: TrainingLog): string | null => {
+  const handleSave = (draft: DailyLogEditorDraft): string | null => {
+    if (editor.open && editor.mode === 'edit') {
+      const media = resolveDailyLogMediaEdit(editor.log.media, draft.videoUrl)
+      if (media === null) return '유효한 http(s) 동영상 URL을 입력하세요.'
+      const next = createDailyLog(draft.date, draft.note, media.length ? media : undefined)
+      next.id = editor.log.id
+      const result = upsertDailyLog(logs, next)
+      if (result.error) return result.error
+      onChangeLogs(result.logs)
+      closeEditor()
+      return null
+    }
+
+    const media = mediaFromUrl(draft.videoUrl)
+    if (media === null) return '유효한 http(s) 동영상 URL을 입력하세요.'
+    const log = createDailyLog(draft.date, draft.note, media.length ? media : undefined)
     const result = upsertDailyLog(logs, log)
     if (result.error) return result.error
     onChangeLogs(result.logs)
-    closeEdit()
+    closeEditor()
     return null
   }
 
   const removeLog = (logId: string) => {
     onChangeLogs(logs.filter((log) => log.id !== logId))
-    if (activeEditingId === logId) closeEdit()
+    if (editor.open && editor.mode === 'edit' && editor.log.id === logId) {
+      closeEditor()
+    }
   }
+
+  const editorMode: DailyLogEditorMode = editor.open && editor.mode === 'edit' ? 'edit' : 'add'
+  const editorKey =
+    editor.open && editor.mode === 'edit'
+      ? `edit-${editor.log.id}`
+      : editor.open
+        ? 'add'
+        : 'closed'
+  const editorInitial: DailyLogEditorDraft | null =
+    editor.open && editor.mode === 'edit'
+      ? {
+          date: editor.log.date,
+          note: editor.log.note ?? '',
+          videoUrl: videoUrlFromLog(editor.log),
+        }
+      : null
 
   return (
     <div className="daily-log-panel">
@@ -202,95 +143,56 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
         <span className="daily-log-panel__summary">총 {practiceEntries}회</span>
       </div>
 
-      <div className="daily-log-card daily-log-card--form">
-        <h4 className="daily-log-card__title">기록 추가</h4>
-        <label className="field">
-          <span>날짜</span>
-          <input type="date" value={draftDate} onChange={(e) => setDraftDate(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>동영상 URL (선택)</span>
-          <input
-            value={draftVideoUrl}
-            onChange={(e) => setDraftVideoUrl(e.target.value)}
-            placeholder="https://..."
-          />
-        </label>
-        <label className="field">
-          <span>Memo (Markdown, 선택)</span>
-          <textarea
-            className="daily-log-panel__memo"
-            wrap="soft"
-            value={draftNote}
-            onChange={(e) => setDraftNote(e.target.value)}
-            onPaste={(e) => {
-              tryPasteSvgIntoTextarea(e, draftNote, setDraftNote)
-            }}
-            placeholder="짧은 생각, 메모, 연습 메모 모두 OK"
-            rows={2}
-          />
-        </label>
-        {formError && (
-          <p className="daily-log-panel__error" role="alert">
-            {formError}
-          </p>
-        )}
-        <button type="button" className="btn btn--ghost" onClick={handleAdd}>
-          기록 추가
-        </button>
-      </div>
+      <button
+        type="button"
+        className="btn btn--ghost daily-log-panel__add"
+        data-testid="daily-log-open-add"
+        onClick={openAdd}
+      >
+        기록 추가
+      </button>
 
       {orderedLogs.length === 0 ? (
         <p className="inspector__empty">기록 없음</p>
       ) : (
-        <ul className="daily-log-list">
-          {orderedLogs.map((log) => {
-            const isEditing = activeEditingId === log.id
-            return (
-              <li key={log.id} className="daily-log-card">
-                {isEditing ? (
-                  <DailyLogEditForm
-                    key={log.id}
-                    log={log}
-                    onSave={saveEdit}
-                    onCancel={closeEdit}
-                  />
-                ) : (
-                  <>
-                    <div className="daily-log-card__head">
-                      <strong className="daily-log-card__date">{log.date}</strong>
-                      <div className="daily-log-card__actions">
-                        <button type="button" className="btn btn--ghost" onClick={() => startEdit(log)}>
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--icon"
-                          onClick={() => removeLog(log.id)}
-                          aria-label="기록 삭제"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                    {log.note ? <p className="daily-log-card__note">{log.note}</p> : null}
-                    {log.media?.[0]?.url ? (
-                      <a
-                        className="daily-log-card__video"
-                        href={log.media[0].url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                      >
-                        {log.media[0].title || log.media[0].url}
-                      </a>
-                    ) : null}
-                  </>
-                )}
-              </li>
-            )
-          })}
+        <ul className="daily-log-list" aria-label="Daily Log list">
+          {orderedLogs.map((log) => (
+            <li key={log.id} className="daily-log-card">
+              <div className="daily-log-card__head">
+                <strong className="daily-log-card__date">{log.date}</strong>
+                <div className="daily-log-card__actions">
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    data-testid={`daily-log-edit-${log.id}`}
+                    onClick={() => openEdit(log)}
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--icon"
+                    onClick={() => removeLog(log.id)}
+                    aria-label="기록 삭제"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <p className="daily-log-card__preview">{dailyLogTimelineLabel(log)}</p>
+            </li>
+          ))}
         </ul>
       )}
+
+      <DailyLogEditorModal
+        key={editorKey}
+        open={editor.open}
+        mode={editorMode}
+        initial={editorInitial}
+        onClose={closeEditor}
+        onSave={handleSave}
+      />
     </div>
   )
 }

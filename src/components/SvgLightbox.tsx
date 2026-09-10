@@ -184,6 +184,7 @@ export function SvgLightbox({ svg, onClose }: Props) {
       />
       <div className="svg-lightbox__panel">
         <div className="svg-lightbox__toolbar" role="toolbar" aria-label="SVG zoom">
+          <span className="svg-lightbox__label">SVG Viewer</span>
           <button
             type="button"
             className="svg-lightbox__btn"
