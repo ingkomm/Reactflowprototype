@@ -55,6 +55,19 @@ Google Fonts는 npm 패키지(`@fontsource/*`)로 번들에 포함되며 런타�
 - 이미지 심볼: 512KB (PNG/JPEG/WebP/GIF만 — SVG 가져오기 비활성화)
 - 오르빗 용량: 1–24
 
+## Desktop (optional Tauri 2 shell)
+
+기존 웹앱을 감싸는 **선택적** desktop shell입니다. Web target(`npm run dev` / `npm run build` / GitHub Pages)은 그대로입니다.
+
+```bash
+npm run tauri:dev    # Vite dev server + native window
+npm run tauri:build  # Vite production build + desktop bundle
+```
+
+Prerequisite: [Rust](https://www.rust-lang.org/tools/install) and [Tauri 2 system dependencies](https://v2.tauri.app/start/prerequisites/) for your OS (Linux: WebKitGTK 4.1, etc.).
+
+Persistence remains browser `localStorage` inside the WebView. Move data between Web and Desktop with JSON export/import — there is no automatic migration.
+
 ## GitHub Pages
 
 `main` 브랜치 push 시 `.github/workflows/pages.yml`이 빌드·배포합니다.  
