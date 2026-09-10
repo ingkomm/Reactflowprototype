@@ -73,7 +73,9 @@
 
 .markdown-view__svg-wrap {
   margin: 0 0 0.75em;
+  width: fit-content;
   max-width: 100%;
+  align-self: flex-start;
   overflow: auto;
   padding: 12px;
   border-radius: 8px;
@@ -83,6 +85,7 @@
 
 .markdown-view__svg {
   display: block;
+  width: auto;
   max-width: 100%;
   height: auto;
 }
