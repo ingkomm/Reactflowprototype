@@ -3,6 +3,10 @@
   font-size: 0.9rem;
   line-height: 1.55;
   overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .markdown-view__empty {
@@ -73,10 +77,11 @@
 
 .markdown-view__svg-wrap {
   margin: 0 0 0.75em;
-  width: 100%;
+  width: fit-content;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  align-self: flex-start;
+  overflow: visible;
 }
 
 .markdown-view__svg {

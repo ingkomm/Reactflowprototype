@@ -1,86 +1,63 @@
 .svg-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.svg-preview__controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-  min-width: 0;
-}
-
-.svg-preview__btn {
-  appearance: none;
-  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
-  background: color-mix(in srgb, var(--panel) 88%, #fff 12%);
-  color: var(--text);
-  border-radius: 6px;
-  min-width: 2rem;
-  height: 1.85rem;
-  padding: 0 0.55rem;
-  font: inherit;
-  font-size: 0.85rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.svg-preview__btn:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-}
-
-.svg-preview__btn--fit {
-  margin-left: 0.15rem;
-}
-
-.svg-preview__zoom {
-  min-width: 3.25rem;
-  text-align: center;
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--text) 78%, transparent);
-}
-
-.svg-preview__viewport {
   position: relative;
-  width: 100%;
+  display: inline-block;
+  width: fit-content;
   max-width: 100%;
   min-width: 0;
-  height: min(70vh, 520px);
+  align-self: flex-start;
   overflow: hidden;
-  overscroll-behavior: contain;
+  padding: 12px;
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border: 1px solid color-mix(in srgb, #c5ced6 55%, transparent);
   background:
     linear-gradient(180deg, #ffffff 0%, #f7f7f4 100%),
     #ffffff;
-  touch-action: none;
-  user-select: none;
+  box-sizing: border-box;
+  cursor: zoom-in;
 }
 
-.svg-preview__viewport--pannable {
-  cursor: grab;
-}
-
-.svg-preview__viewport--dragging {
-  cursor: grabbing;
-}
-
-.svg-preview__img {
-  position: absolute;
-  top: 0;
-  left: 0;
+.svg-preview .markdown-view__svg {
   display: block;
-  max-width: none;
   width: auto;
+  max-width: 100%;
   height: auto;
-  transform-origin: 0 0;
   pointer-events: none;
-  -webkit-user-drag: none;
   user-select: none;
+  -webkit-user-drag: none;
+}
+
+.svg-preview__expand {
+  appearance: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #5a6570 35%, transparent);
+  background: color-mix(in srgb, #ffffff 88%, #dfe6ec 12%);
+  color: #2a3340;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.svg-preview:hover .svg-preview__expand,
+.svg-preview:focus-within .svg-preview__expand {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.svg-preview__expand:hover,
+.svg-preview__expand:focus-visible {
+  border-color: color-mix(in srgb, #d4a24c 60%, transparent);
+  outline: none;
 }

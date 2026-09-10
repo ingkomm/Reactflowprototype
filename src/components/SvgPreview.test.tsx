@@ -5,13 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
-  SVG_PREVIEW_MAX_SCALE,
-  SVG_PREVIEW_MIN_SCALE,
-  SVG_PREVIEW_SCALE_STEP,
-  SvgPreview,
+  SVG_LIGHTBOX_MAX_SCALE,
+  SVG_LIGHTBOX_MIN_SCALE,
+  SVG_LIGHTBOX_SCALE_STEP,
   clampSvgPan,
   computeFitScale,
-} from './SvgPreview'
+} from '../svgLightboxMath'
+import { SvgPreview } from './SvgPreview'
+import { SvgLightbox } from './SvgLightbox'
 import { NotableLogViewer } from './NotableLogViewer'
 import { createDailyLog } from '../dailyLog'
 
@@ -52,22 +53,89 @@ describe('computeFitScale / clampSvgPan', () => {
   })
 
   it('keeps zoom range and step constants in the requested band', () => {
-    expect(SVG_PREVIEW_MIN_SCALE).toBe(0.5)
-    expect(SVG_PREVIEW_MAX_SCALE).toBe(4)
-    expect(SVG_PREVIEW_SCALE_STEP).toBe(0.25)
+    expect(SVG_LIGHTBOX_MIN_SCALE).toBe(0.5)
+    expect(SVG_LIGHTBOX_MAX_SCALE).toBe(4)
+    expect(SVG_LIGHTBOX_SCALE_STEP).toBe(0.25)
   })
 })
 
-describe('SvgPreview zoom / pan', () => {
+describe('SvgPreview simple preview + lightbox entry', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    document.body.querySelectorAll('[data-testid="svg-lightbox"]').forEach((el) => el.remove())
+  })
+
+  it('renders intrinsic preview without inline zoom controls', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => 'blob:svg-preview'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    })
+
+    const view = mount(<SvgPreview svg={SIMPLE_SVG} />)
+    expect(view.host.querySelector('[data-testid="svg-preview"]')).toBeTruthy()
+    expect(view.host.querySelector('[data-testid="markdown-svg-image"]')).toBeTruthy()
+    expect(view.host.querySelector('.svg-preview__controls')).toBeNull()
+    expect(view.host.querySelector('[aria-label="Zoom in"]')).toBeNull()
+    expect(view.host.querySelector('.svg-preview__expand')).toBeTruthy()
+    expect(document.body.querySelector('[data-testid="svg-lightbox"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('opens lightbox on expand click and double-click; Esc closes', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => 'blob:svg-preview'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    })
+
+    const view = mount(<SvgPreview svg={SIMPLE_SVG} />)
+    const expand = view.host.querySelector('[data-testid="svg-preview-expand"]') as HTMLButtonElement
+    act(() => {
+      expand.click()
+    })
+    expect(document.body.querySelector('[data-testid="svg-lightbox"]')).toBeTruthy()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(document.body.querySelector('[data-testid="svg-lightbox"]')).toBeNull()
+
+    const preview = view.host.querySelector('[data-testid="svg-preview"]') as HTMLElement
+    act(() => {
+      preview.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+    expect(document.body.querySelector('[data-testid="svg-lightbox"]')).toBeTruthy()
+
+    act(() => {
+      ;(document.body.querySelector('[data-testid="svg-lightbox-close"]') as HTMLButtonElement).click()
+    })
+    expect(document.body.querySelector('[data-testid="svg-lightbox"]')).toBeNull()
+    view.unmount()
+  })
+})
+
+describe('SvgLightbox zoom / pan', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.querySelectorAll('[data-testid="svg-lightbox"]').forEach((el) => el.remove())
   })
 
   it('starts fitted, zooms with +/- and Fit, pans via pointer drag, revokes blob URL', () => {
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
       writable: true,
-      value: vi.fn(() => 'blob:svg-preview'),
+      value: vi.fn(() => 'blob:svg-lightbox'),
     })
     Object.defineProperty(URL, 'revokeObjectURL', {
       configurable: true,
@@ -81,9 +149,11 @@ describe('SvgPreview zoom / pan', () => {
       Element.prototype.releasePointerCapture = () => undefined
     }
 
-    const view = mount(<SvgPreview svg={SIMPLE_SVG} />)
-    const viewport = view.host.querySelector('.svg-preview__viewport') as HTMLDivElement
-    const img = view.host.querySelector('[data-testid="markdown-svg-image"]') as HTMLImageElement
+    const onClose = vi.fn()
+    const view = mount(<SvgLightbox svg={SIMPLE_SVG} onClose={onClose} />)
+    const lightbox = document.body.querySelector('[data-testid="svg-lightbox"]') as HTMLElement
+    const viewport = lightbox.querySelector('.svg-lightbox__viewport') as HTMLDivElement
+    const img = lightbox.querySelector('[data-testid="svg-lightbox-image"]') as HTMLImageElement
     expect(viewport).toBeTruthy()
     expect(img).toBeTruthy()
 
@@ -96,13 +166,14 @@ describe('SvgPreview zoom / pan', () => {
       img.dispatchEvent(new Event('load'))
     })
 
-    const zoomLabel = () => view.host.querySelector('.svg-preview__zoom')?.textContent
+    const zoomLabel = () => lightbox.querySelector('.svg-lightbox__zoom')?.textContent
     expect(zoomLabel()).toBe('50%')
 
-    const buttons = [...view.host.querySelectorAll('.svg-preview__btn')] as HTMLButtonElement[]
-    const zoomOut = buttons.find((b) => b.getAttribute('aria-label') === 'Zoom out')!
-    const zoomIn = buttons.find((b) => b.getAttribute('aria-label') === 'Zoom in')!
-    const fit = buttons.find((b) => b.textContent === 'Fit')!
+    const zoomOut = lightbox.querySelector('[aria-label="Zoom out"]') as HTMLButtonElement
+    const zoomIn = lightbox.querySelector('[aria-label="Zoom in"]') as HTMLButtonElement
+    const fit = [...lightbox.querySelectorAll('.svg-lightbox__btn')].find(
+      (b) => b.textContent === 'Fit',
+    ) as HTMLButtonElement
 
     act(() => {
       zoomIn.click()
@@ -114,7 +185,6 @@ describe('SvgPreview zoom / pan', () => {
     })
     expect(zoomLabel()).toBe('50%')
 
-    // Drive scale to max via repeated zoom-in.
     for (let i = 0; i < 20; i++) {
       act(() => {
         zoomIn.click()
@@ -168,11 +238,8 @@ describe('SvgPreview zoom / pan', () => {
     })
     expect(zoomLabel()).toBe('50%')
 
-    expect(getComputedStyle(viewport).overflow).not.toBe('auto')
-    expect(viewport.className).toContain('svg-preview__viewport')
-
     view.unmount()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:svg-preview')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:svg-lightbox')
   })
 })
 
@@ -216,9 +283,9 @@ describe('Timeline label + horizontal overflow', () => {
     expect(memos[1]?.textContent).toBe('Title')
     expect(memos[2]?.textContent).toBe(long)
     expect(memos[2]?.textContent).not.toContain('\n')
-
-    // Detail still shows full markdown body for the selected (SVG) log.
     expect(view.host.querySelector('[data-testid="markdown-svg-block"]')).toBeTruthy()
+    expect(view.host.querySelector('.svg-preview__controls')).toBeNull()
+    expect(view.host.querySelector('[aria-label="Zoom in"]')).toBeNull()
 
     view.unmount()
   })
