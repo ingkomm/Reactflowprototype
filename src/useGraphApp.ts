@@ -160,10 +160,6 @@ export type BootstrapCommitResult =
   | { ok: true; snapshot: GraphAppSnapshot }
   | { ok: false; message: string }
 
-export type RestoreBackupResult =
-  | { ok: true; snapshot: GraphAppSnapshot }
-  | { ok: false; message: string }
-
 /** Start a blank sheet only after the current document is backed up successfully. */
 export function createNewSheet(current: GraphPersistInput): NewSheetResult {
   const currentDoc = snapshotToDocument(current)
@@ -213,38 +209,6 @@ export function commitBootstrapChoice(choice: BootstrapChoice): BootstrapCommitR
   return { ok: true, snapshot }
 }
 
-/**
- * Apply BACKUP_KEY document as the current sheet.
- * Reads/validates backup first, then swaps current → BACKUP_KEY before applying.
- */
-export function restorePreviousBackup(current: GraphPersistInput): RestoreBackupResult {
-  const previous = restoreBackupFromStorage()
-  if (!previous.ok) {
-    if (previous.reason === 'missing') {
-      return { ok: false, message: '복원할 이전 문서 백업이 없습니다.' }
-    }
-    return { ok: false, message: '이전 문서 백업이 손상되어 복원할 수 없습니다.' }
-  }
-
-  const swapped = backupDocumentToStorage(snapshotToDocument(current))
-  if (!swapped.ok) {
-    return {
-      ok: false,
-      message: `복원 전 현재 문서 백업 실패 — ${storageFailureMessage(swapped.reason)}`,
-    }
-  }
-
-  const saved = saveDocumentToStorage(previous.document)
-  if (!saved.ok) {
-    return {
-      ok: false,
-      message: `이전 문서를 저장할 수 없습니다 — ${storageFailureMessage(saved.reason)}`,
-    }
-  }
-
-  return { ok: true, snapshot: snapshotFromDocument(previous.document) }
-}
-
 export type ImportJsonResult =
   | { ok: true; snapshot: GraphAppSnapshot }
   | { ok: false; message: string }
@@ -291,6 +255,15 @@ export async function importGraphJsonFile(
     return {
       ok: false,
       message: `불러오기를 취소했습니다. 현재 문서 백업 실패 — ${storageFailureMessage(backedUp.reason)}`,
+    }
+  }
+
+  // Persist imported document immediately — do not rely on debounced autosave.
+  const saved = saveDocumentToStorage(snapshotToDocument(snapshot))
+  if (!saved.ok) {
+    return {
+      ok: false,
+      message: `불러오기를 적용할 수 없습니다. 가져온 문서 저장 실패 — ${storageFailureMessage(saved.reason)}`,
     }
   }
 
