@@ -11,6 +11,14 @@ type Props = {
 export function VideoEmbed({ media }: Props) {
   const [loaded, setLoaded] = useState(false)
   const [localError, setLocalError] = useState(false)
+  const [activeMediaId, setActiveMediaId] = useState(media.id)
+
+  // Same VideoEmbed instance can be reused when Viewer/Pin swaps active media.
+  if (media.id !== activeMediaId) {
+    setActiveMediaId(media.id)
+    setLoaded(false)
+    setLocalError(false)
+  }
 
   if (isLocalVideoMedia(media)) {
     const src = resolveLocalVideoPlaybackUrl(media.url)
