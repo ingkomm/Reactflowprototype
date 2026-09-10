@@ -139,8 +139,8 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
   return (
     <div className="daily-log-panel">
       <div className="inspector__section-head">
-        <h3>연습 기록</h3>
-        <span className="daily-log-panel__summary">총 {practiceEntries}회</span>
+        <h3>Daily Log</h3>
+        <span className="daily-log-panel__summary">총 {practiceEntries}개</span>
       </div>
 
       <button

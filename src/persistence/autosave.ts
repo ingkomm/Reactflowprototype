@@ -26,8 +26,13 @@ export function readBootstrapChoice(): BootstrapChoice | null {
   return null
 }
 
-export function writeBootstrapChoice(choice: BootstrapChoice): void {
-  localStorage.setItem(BOOTSTRAP_KEY, choice)
+export function writeBootstrapChoice(choice: BootstrapChoice): StorageSaveResult {
+  try {
+    localStorage.setItem(BOOTSTRAP_KEY, choice)
+    return { ok: true }
+  } catch {
+    return { ok: false, reason: 'quota' }
+  }
 }
 
 export function hasStoredDocument(): boolean {
@@ -94,4 +99,9 @@ export function restoreBackupFromStorage(): StorageLoadResult {
   } catch {
     return { ok: false, reason: 'corrupt' }
   }
+}
+
+export function storageFailureMessage(reason: 'quota' | 'too_large' | undefined): string {
+  if (reason === 'too_large') return '문서가 너무 커서 저장할 수 없습니다.'
+  return '로컬 저장에 실패했습니다 (용량 부족 등).'
 }

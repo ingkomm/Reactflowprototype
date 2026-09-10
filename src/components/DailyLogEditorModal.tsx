@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatPracticeDate } from '../dailyLog'
 import { tryPasteSvgIntoTextarea } from '../markdownSvgPaste'
@@ -31,12 +31,40 @@ function seedDraft(initial?: DailyLogEditorDraft | null): DailyLogEditorDraft {
   )
 }
 
+export function isDailyLogDraftDirty(
+  current: DailyLogEditorDraft,
+  initial: DailyLogEditorDraft,
+): boolean {
+  return (
+    current.date !== initial.date ||
+    current.note !== initial.note ||
+    current.videoUrl !== initial.videoUrl
+  )
+}
+
 export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Props) {
   const seed = seedDraft(initial)
+  const initialRef = useRef(seed)
   const [date, setDate] = useState(seed.date)
   const [note, setNote] = useState(seed.note)
   const [videoUrl, setVideoUrl] = useState(seed.videoUrl)
   const [error, setError] = useState<string | null>(null)
+  const draftRef = useRef({ date, note, videoUrl })
+
+  useEffect(() => {
+    draftRef.current = { date, note, videoUrl }
+  }, [date, note, videoUrl])
+
+  const requestClose = () => {
+    const dirty = isDailyLogDraftDirty({ date, note, videoUrl }, initialRef.current)
+    if (
+      dirty &&
+      !window.confirm('작성 중인 내용을 버릴까요?\n확인하면 변경 내용이 사라집니다.')
+    ) {
+      return
+    }
+    onClose()
+  }
 
   useEffect(() => {
     if (!open) return
@@ -45,6 +73,13 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
       e.preventDefault()
       e.stopPropagation()
       e.stopImmediatePropagation()
+      const dirty = isDailyLogDraftDirty(draftRef.current, initialRef.current)
+      if (
+        dirty &&
+        !window.confirm('작성 중인 내용을 버릴까요?\n확인하면 변경 내용이 사라집니다.')
+      ) {
+        return
+      }
       onClose()
     }
     window.addEventListener('keydown', onKey, true)
@@ -72,7 +107,7 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
         type="button"
         className="daily-log-editor-modal__backdrop"
         aria-label="닫기"
-        onClick={onClose}
+        onClick={requestClose}
       />
       <div className="daily-log-editor-modal__panel">
         <header className="daily-log-editor-modal__head">
@@ -81,7 +116,7 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
             type="button"
             className="btn btn--ghost"
             data-testid="daily-log-editor-close"
-            onClick={onClose}
+            onClick={requestClose}
           >
             닫기
           </button>
@@ -128,7 +163,7 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
         </div>
 
         <footer className="daily-log-editor-modal__footer">
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
+          <button type="button" className="btn btn--ghost" onClick={requestClose}>
             취소
           </button>
           <button

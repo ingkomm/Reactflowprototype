@@ -6,8 +6,10 @@ import {
   loadDocumentFromStorage,
   restoreBackupFromStorage,
   saveDocumentToStorage,
+  writeBootstrapChoice,
   STORAGE_KEY,
   BACKUP_KEY,
+  BOOTSTRAP_KEY,
 } from '../persistence/autosave'
 
 describe('autosave persistence', () => {
@@ -65,5 +67,20 @@ describe('autosave persistence', () => {
     expect(restored.ok).toBe(true)
     if (!restored.ok) return
     expect(restored.document.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
+  })
+
+  it('writeBootstrapChoice returns ok/false without throwing', () => {
+    expect(writeBootstrapChoice('demo')).toEqual({ ok: true })
+    expect(localStorage.getItem(BOOTSTRAP_KEY)).toBe('demo')
+
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('quota')
+      },
+      removeItem: () => undefined,
+      clear: () => undefined,
+    })
+    expect(writeBootstrapChoice('empty')).toEqual({ ok: false, reason: 'quota' })
   })
 })

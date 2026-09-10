@@ -104,11 +104,13 @@ import {
   createNewSheet,
   importGraphJsonFile,
   resolveInitialGraphState,
+  restorePreviousBackup,
   sanitizeFlowEdges,
   useGraphAutosave,
   type SaveFailureReason,
   type SaveStatus,
 } from './useGraphApp'
+import { hasBackupDocument } from './persistence/autosave'
 import { clampOrbitTierCapacity } from './limits'
 import { extractDailyLogsFromNodeData, absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
 import './App.css'
@@ -272,6 +274,7 @@ export default function App() {
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [backupAvailable, setBackupAvailable] = useState(() => hasBackupDocument())
   const [pinnedVideoNodeIds, setPinnedVideoNodeIds] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
   const [pinnedViewers, setPinnedViewers] = useState<PinnedViewerEntry[]>([])
@@ -361,7 +364,12 @@ export default function App() {
 
   const handleBootstrap = useCallback(
     (choice: 'empty' | 'demo') => {
-      const snapshot = commitBootstrapChoice(choice)
+      const result = commitBootstrapChoice(choice)
+      if (!result.ok) {
+        setImportError(result.message)
+        return
+      }
+      const snapshot = result.snapshot
       resetHistory()
       setCustomSymbols(snapshot.customSymbols)
       setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
@@ -372,6 +380,8 @@ export default function App() {
       setEdges(sanitizeFlowEdges(snapshot.nodes, snapshot.edges))
       setSelectedId(snapshot.nodes[0]?.id ?? null)
       setBootstrapPending(false)
+      setImportError(null)
+      setBackupAvailable(hasBackupDocument())
     },
     [resetHistory, setEdges, setNodes, stack],
   )
@@ -1418,6 +1428,7 @@ export default function App() {
       setPinnedViewers([])
       setPinnedViewerBounds({})
       setPinnedVideoNodeIds([])
+      setBackupAvailable(hasBackupDocument())
     },
     [
       customSymbols,
@@ -1436,15 +1447,20 @@ export default function App() {
 
   const handleNewSheet = useCallback(() => {
     const confirmed = window.confirm(
-      '새 시트를 만들까요?\n현재 작업 내용은 지워지고 빈 시트로 바뀝니다.',
+      '새 시트를 만들까요?\n현재 작업 내용은 지워지고 빈 시트로 바뀝니다.\n이전 문서는 백업으로 보관됩니다.',
     )
     if (!confirmed) return
-    const snapshot = createNewSheet({
+    const result = createNewSheet({
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     })
+    if (!result.ok) {
+      setImportError(result.message)
+      return
+    }
+    const snapshot = result.snapshot
     resetHistory()
     setCustomSymbols(snapshot.customSymbols)
     setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
@@ -1462,6 +1478,59 @@ export default function App() {
     setPinnedViewers([])
     setPinnedViewerBounds({})
     setPinnedVideoNodeIds([])
+    setBackupAvailable(hasBackupDocument())
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    resetHistory,
+    setEdges,
+    setNodes,
+    stack,
+    voidHighlightEnabled,
+  ])
+
+  const handleRestoreBackup = useCallback(() => {
+    if (!hasBackupDocument()) {
+      setImportError('복원할 이전 문서 백업이 없습니다.')
+      setBackupAvailable(false)
+      return
+    }
+    const confirmed = window.confirm(
+      '이전 문서 백업을 복원할까요?\n현재 문서는 백업으로 교체됩니다.',
+    )
+    if (!confirmed) return
+    const result = restorePreviousBackup({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    if (!result.ok) {
+      setImportError(result.message)
+      setBackupAvailable(hasBackupDocument())
+      return
+    }
+    const snapshot = result.snapshot
+    resetHistory()
+    setCustomSymbols(snapshot.customSymbols)
+    setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+    setNodes(stack(snapshot.nodes))
+    setEdges(snapshot.edges)
+    setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+    setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
+    setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+    setSelectedId(snapshot.nodes[0]?.id ?? null)
+    setStorageCorrupt(false)
+    setImportError(null)
+    setSaveStatus('saved')
+    setSaveFailureReason(null)
+    setContextMenu(null)
+    setPinnedViewers([])
+    setPinnedViewerBounds({})
+    setPinnedVideoNodeIds([])
+    setBackupAvailable(hasBackupDocument())
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -1888,7 +1957,7 @@ export default function App() {
               <div className="topbar__brand">
                 <span className="topbar__mark" aria-hidden />
                 <div>
-                  <p className="topbar__eyebrow">연습 우선 · 로컬 우선 트래커</p>
+                  <p className="topbar__eyebrow">로컬 우선 · 컨텍스트 트래커</p>
                   <h1>Passive Tree v0.1</h1>
                 </div>
               </div>
@@ -1947,6 +2016,17 @@ export default function App() {
                 >
                   JSON 불러오기
                 </button>
+                {backupAvailable ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    data-testid="restore-backup"
+                    onClick={handleRestoreBackup}
+                    title="이전 문서 백업 복원"
+                  >
+                    이전 문서 복원
+                  </button>
+                ) : null}
                 {saveStatus === 'failed' && (
                   <span
                     className="topbar__save-status topbar__save-status--failed"

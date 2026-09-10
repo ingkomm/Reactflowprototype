@@ -15,6 +15,7 @@ import {
   readBootstrapChoice,
   restoreBackupFromStorage,
   saveDocumentToStorage,
+  storageFailureMessage,
   writeBootstrapChoice,
   type BootstrapChoice,
   type StorageSaveResult,
@@ -151,21 +152,97 @@ export function useGraphAutosave(
   }, [enabled, flush])
 }
 
+export type NewSheetResult =
+  | { ok: true; snapshot: GraphAppSnapshot }
+  | { ok: false; message: string }
 
-/** Start a blank sheet (silently snapshots previous document for crash recovery). */
-export function createNewSheet(current: GraphPersistInput): GraphAppSnapshot {
-  backupDocumentToStorage(snapshotToDocument(current))
-  writeBootstrapChoice('empty')
+export type BootstrapCommitResult =
+  | { ok: true; snapshot: GraphAppSnapshot }
+  | { ok: false; message: string }
+
+export type RestoreBackupResult =
+  | { ok: true; snapshot: GraphAppSnapshot }
+  | { ok: false; message: string }
+
+/** Start a blank sheet only after the current document is backed up successfully. */
+export function createNewSheet(current: GraphPersistInput): NewSheetResult {
+  const currentDoc = snapshotToDocument(current)
+  const backedUp = backupDocumentToStorage(currentDoc)
+  if (!backedUp.ok) {
+    return {
+      ok: false,
+      message: `새 시트를 만들 수 없습니다. 현재 문서 백업 실패 — ${storageFailureMessage(backedUp.reason)}`,
+    }
+  }
+
+  const bootstrap = writeBootstrapChoice('empty')
+  if (!bootstrap.ok) {
+    return {
+      ok: false,
+      message: `새 시트를 만들 수 없습니다. 시작 설정 저장 실패 — ${storageFailureMessage(bootstrap.reason)}`,
+    }
+  }
+
   const snapshot = flowFromBootstrap('empty')
-  saveDocumentToStorage(snapshotToDocument(snapshot))
-  return snapshot
+  const saved = saveDocumentToStorage(snapshotToDocument(snapshot))
+  if (!saved.ok) {
+    return {
+      ok: false,
+      message: `새 시트를 저장할 수 없습니다 — ${storageFailureMessage(saved.reason)}`,
+    }
+  }
+  return { ok: true, snapshot }
 }
 
-export function commitBootstrapChoice(choice: BootstrapChoice): GraphAppSnapshot {
-  writeBootstrapChoice(choice)
+export function commitBootstrapChoice(choice: BootstrapChoice): BootstrapCommitResult {
+  const written = writeBootstrapChoice(choice)
+  if (!written.ok) {
+    return {
+      ok: false,
+      message: `시작 설정을 저장할 수 없습니다 — ${storageFailureMessage(written.reason)}`,
+    }
+  }
   const snapshot = flowFromBootstrap(choice)
-  saveDocumentToStorage(snapshotToDocument(snapshot))
-  return snapshot
+  const saved = saveDocumentToStorage(snapshotToDocument(snapshot))
+  if (!saved.ok) {
+    return {
+      ok: false,
+      message: `문서를 저장할 수 없습니다 — ${storageFailureMessage(saved.reason)}`,
+    }
+  }
+  return { ok: true, snapshot }
+}
+
+/**
+ * Apply BACKUP_KEY document as the current sheet.
+ * Reads/validates backup first, then swaps current → BACKUP_KEY before applying.
+ */
+export function restorePreviousBackup(current: GraphPersistInput): RestoreBackupResult {
+  const previous = restoreBackupFromStorage()
+  if (!previous.ok) {
+    if (previous.reason === 'missing') {
+      return { ok: false, message: '복원할 이전 문서 백업이 없습니다.' }
+    }
+    return { ok: false, message: '이전 문서 백업이 손상되어 복원할 수 없습니다.' }
+  }
+
+  const swapped = backupDocumentToStorage(snapshotToDocument(current))
+  if (!swapped.ok) {
+    return {
+      ok: false,
+      message: `복원 전 현재 문서 백업 실패 — ${storageFailureMessage(swapped.reason)}`,
+    }
+  }
+
+  const saved = saveDocumentToStorage(previous.document)
+  if (!saved.ok) {
+    return {
+      ok: false,
+      message: `이전 문서를 저장할 수 없습니다 — ${storageFailureMessage(saved.reason)}`,
+    }
+  }
+
+  return { ok: true, snapshot: snapshotFromDocument(previous.document) }
 }
 
 export type ImportJsonResult =
@@ -191,22 +268,31 @@ export async function importGraphJsonFile(
     return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
   }
 
-  backupDocumentToStorage(snapshotToDocument(current))
-
   const parsed = parseGraphDocumentJson(text)
   if (!parsed.ok) {
     return { ok: false, message: parsed.message }
   }
 
-  const imported = documentToFlowState(parsed.document)
-  return {
-    ok: true,
-    snapshot: {
+  let snapshot: GraphAppSnapshot
+  try {
+    const imported = documentToFlowState(parsed.document)
+    snapshot = {
       nodes: imported.nodes,
       edges: sanitizeFlowEdges(imported.nodes, imported.edges),
       customSymbols: imported.customSymbols,
       settings: imported.settings,
-    },
+    }
+  } catch {
+    return { ok: false, message: 'JSON은 파싱됐지만 그래프로 변환할 수 없습니다.' }
   }
-}
 
+  const backedUp = backupDocumentToStorage(snapshotToDocument(current))
+  if (!backedUp.ok) {
+    return {
+      ok: false,
+      message: `불러오기를 취소했습니다. 현재 문서 백업 실패 — ${storageFailureMessage(backedUp.reason)}`,
+    }
+  }
+
+  return { ok: true, snapshot }
+}

@@ -336,7 +336,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
           )}
           {showBands && (
             <p className="passive-node__tooltip-meta">
-              연습 {totalLogged}회 · 밴드 {done}/{visibleBandCount}
+              기록 {totalLogged}개 · 밴드 {done}/{visibleBandCount}
               {activeFill >= 0 && activeFill < visibleBandCount
                 ? ` · ${fills[activeFill]}/${bandGoals[activeFill]}`
                 : ''}

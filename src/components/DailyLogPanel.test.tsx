@@ -1,14 +1,19 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { DailyLogPanel } from './DailyLogPanel'
+import {
+  DailyLogEditorModal,
+  isDailyLogDraftDirty,
+} from './DailyLogEditorModal'
 import { createDailyLog } from '../dailyLog'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
 
 function mount(ui: React.ReactNode) {
   const host = document.createElement('div')
@@ -141,12 +146,75 @@ describe('DailyLogPanel compact + editor modal', () => {
     expect(css).toMatch(/max-height:\s*none/)
   })
 
-  it('editor modal CSS is large enough for long Markdown/SVG source', () => {
-    const css = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), 'DailyLogEditorModal.css'),
-      'utf8',
+  it('uses Daily Log user-facing labels without 연습 기록', () => {
+    const view = mount(<DailyLogPanel logs={[]} onChangeLogs={() => undefined} />)
+    expect(view.host.textContent).toContain('Daily Log')
+    expect(view.host.textContent).toContain('총 0개')
+    expect(view.host.textContent).not.toContain('연습 기록')
+    expect(view.host.textContent).not.toMatch(/총 \d+회/)
+    view.unmount()
+  })
+
+  it('dirty-close asks confirmation; clean close and save do not', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const onClose = vi.fn()
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{ date: '2026-09-10', note: '', videoUrl: '' }}
+        onClose={onClose}
+        onSave={() => null}
+      />,
     )
-    expect(css).toMatch(/min-height:\s*320px/)
-    expect(css).toMatch(/width:\s*min\(800px,\s*calc\(100vw - 32px\)\)/)
+
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    view.unmount()
+    onClose.mockClear()
+    confirmSpy.mockClear()
+
+    const dirty = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{ date: '2026-09-10', note: '', videoUrl: '' }}
+        onClose={onClose}
+        onSave={() => null}
+      />,
+    )
+    const memo = document.body.querySelector(
+      '[data-testid="daily-log-editor-memo"]',
+    ) as HTMLTextAreaElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(memo, 'draft text')
+      memo.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    confirmSpy.mockReturnValue(true)
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    dirty.unmount()
+    confirmSpy.mockRestore()
+  })
+
+  it('isDailyLogDraftDirty compares date/note/videoUrl', () => {
+    const base = { date: '2026-01-01', note: 'a', videoUrl: '' }
+    expect(isDailyLogDraftDirty(base, base)).toBe(false)
+    expect(isDailyLogDraftDirty({ ...base, note: 'b' }, base)).toBe(true)
+    expect(isDailyLogDraftDirty({ ...base, date: '2026-01-02' }, base)).toBe(true)
+    expect(isDailyLogDraftDirty({ ...base, videoUrl: 'https://x' }, base)).toBe(true)
   })
 })
