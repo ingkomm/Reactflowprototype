@@ -36,6 +36,7 @@ import { useCustomSymbols } from '../customSymbolContext.shared'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { DailyLogPanel } from './DailyLogPanel'
+import { tryPasteSvgIntoTextarea } from '../markdownSvgPaste'
 import './Inspector.css'
 
 export type OrbitMember = {
@@ -533,6 +534,11 @@ export function Inspector({
             rows={12}
             value={data.markdown ?? ''}
             onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
+            onPaste={(e) => {
+              tryPasteSvgIntoTextarea(e, data.markdown ?? '', (next) =>
+                onChangeMarkdown(nodeId, next),
+              )
+            }}
             placeholder="Shard 메모 (Markdown)"
           />
         </label>
@@ -545,6 +551,11 @@ export function Inspector({
             rows={8}
             value={data.markdown ?? ''}
             onChange={(e) => onChangeMarkdown(nodeId, e.target.value)}
+            onPaste={(e) => {
+              tryPasteSvgIntoTextarea(e, data.markdown ?? '', (next) =>
+                onChangeMarkdown(nodeId, next),
+              )
+            }}
             placeholder="이 Notable에 대한 현재 종합 설명"
           />
         </label>

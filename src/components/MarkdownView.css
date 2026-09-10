@@ -70,3 +70,15 @@
 .markdown-view a {
   color: #7fd9cb;
 }
+
+.markdown-view__svg-wrap {
+  margin: 0 0 0.75em;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.markdown-view__svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}

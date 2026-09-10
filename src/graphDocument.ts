@@ -155,8 +155,9 @@ function normalizeTrainingLog(value: unknown): TrainingLog | null {
     id: value.id.trim(),
     date: value.date.trim(),
   }
+  // TrainingLog.note is Markdown body — do not apply MAX_STRING_LENGTH (500).
   if (typeof value.note === 'string' && value.note.trim()) {
-    log.note = clampPersistedString(value.note.trim())
+    log.note = value.note.trim()
   }
   if (media.length > 0) log.media = media
   return log

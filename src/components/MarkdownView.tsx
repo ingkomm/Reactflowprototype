@@ -1,4 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
+import { isSafeSvgForBlobImage, parseSvgFenceInfo } from '../svgFence'
+import { SvgBlobImage } from './SvgBlobImage'
 import './MarkdownView.css'
 
 type Props = {
@@ -115,6 +117,7 @@ export function MarkdownView({
     }
 
     if (line.startsWith('```')) {
+      const fenceInfo = parseSvgFenceInfo(line)
       const codeLines: string[] = []
       i += 1
       while (i < lines.length && !(lines[i] ?? '').startsWith('```')) {
@@ -122,11 +125,20 @@ export function MarkdownView({
         i += 1
       }
       if (i < lines.length) i += 1
-      blocks.push(
-        <pre key={key++} className="markdown-view__pre">
-          <code>{codeLines.join('\n')}</code>
-        </pre>,
-      )
+      const codeBody = codeLines.join('\n')
+      if (fenceInfo === 'svg' && isSafeSvgForBlobImage(codeBody)) {
+        blocks.push(
+          <div key={key++} className="markdown-view__svg-wrap" data-testid="markdown-svg-block">
+            <SvgBlobImage source={codeBody} />
+          </div>,
+        )
+      } else {
+        blocks.push(
+          <pre key={key++} className="markdown-view__pre">
+            <code>{codeBody}</code>
+          </pre>,
+        )
+      }
       continue
     }
 

@@ -7,6 +7,7 @@ import {
   upsertDailyLog,
 } from '../dailyLog'
 import { createVideoMedia } from '../videoMedia'
+import { tryPasteSvgIntoTextarea } from '../markdownSvgPaste'
 import './DailyLogPanel.css'
 
 type Props = {
@@ -105,6 +106,9 @@ function DailyLogEditForm({ log, onSave, onCancel }: EditFormProps) {
           className="daily-log-panel__memo"
           value={editNote}
           onChange={(e) => setEditNote(e.target.value)}
+          onPaste={(e) => {
+            tryPasteSvgIntoTextarea(e, editNote, setEditNote)
+          }}
           rows={2}
         />
       </label>
@@ -217,6 +221,9 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
             className="daily-log-panel__memo"
             value={draftNote}
             onChange={(e) => setDraftNote(e.target.value)}
+            onPaste={(e) => {
+              tryPasteSvgIntoTextarea(e, draftNote, setDraftNote)
+            }}
             placeholder="짧은 생각, 메모, 연습 메모 모두 OK"
             rows={2}
           />
