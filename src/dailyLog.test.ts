@@ -3,6 +3,7 @@ import {
   countPracticeEntries,
   createDailyLog,
   dailyLogSummary,
+  dailyLogTimelineLabel,
   memoPreview,
   migrateLegacyTrainingLogs,
   normalizeDailyLogs,
@@ -114,6 +115,42 @@ describe('dailyLog legacy helpers', () => {
     ])
     expect(dailyLogSummary(createDailyLog('2025-01-08', 'hello'))).toBe('hello')
     expect(memoPreview('x'.repeat(80), 10)).toContain('…')
+  })
+})
+
+describe('dailyLogTimelineLabel', () => {
+  it('returns first meaningful line and strips heading/bullet prefixes', () => {
+    expect(
+      dailyLogTimelineLabel(createDailyLog('2026-01-01', 'first line\n\nsecond line')),
+    ).toBe('first line')
+    expect(
+      dailyLogTimelineLabel(createDailyLog('2026-01-01', '\n\n  meaningful  \nmore')),
+    ).toBe('meaningful')
+    expect(dailyLogTimelineLabel(createDailyLog('2026-01-01', '# 제목\nbody'))).toBe('제목')
+    expect(dailyLogTimelineLabel(createDailyLog('2026-01-01', '## Heading'))).toBe('Heading')
+    expect(dailyLogTimelineLabel(createDailyLog('2026-01-01', '- 항목\n- other'))).toBe('항목')
+    expect(dailyLogTimelineLabel(createDailyLog('2026-01-01', '* item'))).toBe('item')
+  })
+
+  it('labels SVG fence / raw svg opening as SVG', () => {
+    expect(
+      dailyLogTimelineLabel(
+        createDailyLog('2026-01-01', '```svg\n<svg xmlns="http://www.w3.org/2000/svg"/>\n```'),
+      ),
+    ).toBe('SVG')
+    expect(
+      dailyLogTimelineLabel(
+        createDailyLog('2026-01-01', '\n\n<svg xmlns="http://www.w3.org/2000/svg" width="10"/>'),
+      ),
+    ).toBe('SVG')
+  })
+
+  it('falls back to dailyLogSummary when note is missing', () => {
+    const withVideo = createDailyLog('2026-01-01', undefined, [
+      { id: 'v1', url: 'https://youtu.be/aaaaaaaaaaa', title: 'Clip' },
+    ])
+    expect(dailyLogTimelineLabel(withVideo)).toBe('Clip')
+    expect(dailyLogTimelineLabel(createDailyLog('2026-01-01'))).toBe('날짜 기록')
   })
 })
 

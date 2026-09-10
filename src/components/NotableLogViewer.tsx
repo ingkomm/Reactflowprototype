@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { TrainingLog, VideoMedia } from '../types'
-import { dailyLogSummary, sortedDailyLogs } from '../dailyLog'
+import { dailyLogTimelineLabel, sortedDailyLogs } from '../dailyLog'
 import { useFloatingPanelDrag } from '../useFloatingPanelDrag'
 import type { ViewerPanelBounds } from '../pinnedViewer'
 import { MarkdownView } from './MarkdownView'
@@ -169,7 +169,7 @@ export function NotableLogViewer({
                         >
                           <span className="notable-log-viewer__date">{log.date}</span>
                           <span className="notable-log-viewer__memo">
-                            {log.note?.trim() || dailyLogSummary(log)}
+                            {dailyLogTimelineLabel(log)}
                           </span>
                           {logHasVideo(log) ? (
                             <span className="notable-log-viewer__tag">영상</span>

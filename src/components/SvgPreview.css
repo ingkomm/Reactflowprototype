@@ -1,0 +1,86 @@
+.svg-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.svg-preview__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.svg-preview__btn {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  background: color-mix(in srgb, var(--panel) 88%, #fff 12%);
+  color: var(--text);
+  border-radius: 6px;
+  min-width: 2rem;
+  height: 1.85rem;
+  padding: 0 0.55rem;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.svg-preview__btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.svg-preview__btn--fit {
+  margin-left: 0.15rem;
+}
+
+.svg-preview__zoom {
+  min-width: 3.25rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+}
+
+.svg-preview__viewport {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: min(70vh, 520px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7f7f4 100%),
+    #ffffff;
+  touch-action: none;
+  user-select: none;
+}
+
+.svg-preview__viewport--pannable {
+  cursor: grab;
+}
+
+.svg-preview__viewport--dragging {
+  cursor: grabbing;
+}
+
+.svg-preview__img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  max-width: none;
+  width: auto;
+  height: auto;
+  transform-origin: 0 0;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}

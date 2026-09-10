@@ -141,3 +141,27 @@ export function dailyLogSummary(log: TrainingLog): string {
   if (log.media?.[0]?.url) return log.media[0].title || '동영상 기록'
   return '날짜 기록'
 }
+
+/** First meaningful line for Timeline index (does not mutate note source). */
+export function dailyLogTimelineLabel(log: TrainingLog): string {
+  const note = log.note?.trim()
+  if (!note) return dailyLogSummary(log)
+
+  const lines = note.split(/\r?\n/)
+  let first = ''
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed) {
+      first = trimmed
+      break
+    }
+  }
+  if (!first) return dailyLogSummary(log)
+
+  if (/^```svg\b/i.test(first) || /^<svg[\s>]/i.test(first)) {
+    return 'SVG'
+  }
+
+  const cleaned = first.replace(/^#{1,6}\s+/, '').replace(/^[-*]\s+/, '').trim()
+  return cleaned || first
+}

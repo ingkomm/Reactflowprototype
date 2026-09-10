@@ -60,10 +60,15 @@
   grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
   gap: 10px;
   min-height: 280px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .notable-log-viewer__playlist {
-  overflow: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
   max-height: min(480px, calc(100vh - 120px));
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
@@ -77,10 +82,19 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.notable-log-viewer__list > li {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .notable-log-viewer__item {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -93,6 +107,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .notable-log-viewer__item:hover,
@@ -109,16 +124,20 @@
 .notable-log-viewer__date {
   font-size: 0.86rem;
   font-weight: 600;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .notable-log-viewer__memo {
   font-size: 0.82rem;
   line-height: 1.35;
   color: #d5e2ec;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .notable-log-viewer__tag {

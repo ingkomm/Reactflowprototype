@@ -73,14 +73,10 @@
 
 .markdown-view__svg-wrap {
   margin: 0 0 0.75em;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
-  align-self: flex-start;
-  overflow: auto;
-  padding: 12px;
-  border-radius: 8px;
-  background: #ffffff;
-  border: 1px solid color-mix(in srgb, #c5ced6 55%, transparent);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .markdown-view__svg {

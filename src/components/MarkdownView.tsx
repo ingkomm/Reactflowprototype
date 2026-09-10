@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { isSafeSvgForBlobImage, parseSvgFenceInfo } from '../svgFence'
-import { SvgBlobImage } from './SvgBlobImage'
+import { SvgPreview } from './SvgPreview'
 import './MarkdownView.css'
 
 type Props = {
@@ -129,7 +129,7 @@ export function MarkdownView({
       if (fenceInfo === 'svg' && isSafeSvgForBlobImage(codeBody)) {
         blocks.push(
           <div key={key++} className="markdown-view__svg-wrap" data-testid="markdown-svg-block">
-            <SvgBlobImage source={codeBody} />
+            <SvgPreview svg={codeBody} />
           </div>,
         )
       } else {
