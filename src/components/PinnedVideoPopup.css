@@ -1,0 +1,217 @@
+.pinned-video-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+  overflow: hidden;
+}
+
+.pinned-video-popup {
+  z-index: 1;
+}
+
+.pinned-video-layer__links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.pinned-video-layer__link {
+  stroke: color-mix(in srgb, #6cb6ea 70%, white);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  fill: none;
+}
+
+.pinned-video-layer__dot {
+  fill: color-mix(in srgb, #6cb6ea 75%, white);
+}
+
+.pinned-video-popup {
+  --player-width: 320px;
+  --player-height: 180px;
+  position: absolute;
+  overflow: visible;
+  pointer-events: auto;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #6cb6ea 35%, transparent);
+  background: color-mix(in srgb, #0d1218 92%, #1a3040);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #6cb6ea 12%, transparent),
+    0 16px 40px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+
+.pinned-video-popup__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pinned-video-popup__head:active {
+  cursor: grabbing;
+}
+
+.pinned-video-popup__eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f93a6;
+}
+
+.pinned-video-popup__title {
+  margin: 2px 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.pinned-video-popup__empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #9aa8b5;
+}
+
+.pinned-video-popup__log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.pinned-video-popup__log-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
+  background: #0a0e14;
+  color: #eef3f7;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pinned-video-popup__log-card.is-active {
+  border-color: color-mix(in srgb, #6cb6ea 55%, transparent);
+  background: color-mix(in srgb, #1a3040 70%, #0a0e14);
+}
+
+.pinned-video-popup__log-date {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.pinned-video-popup__log-summary {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #b7c4d0;
+  white-space: pre-wrap;
+}
+
+.pinned-video-popup__log-tag {
+  font-size: 0.68rem;
+  color: #7fd9cb;
+}
+
+.pinned-video-popup__detail {
+  display: grid;
+  gap: 8px;
+}
+
+.pinned-video-popup__memo {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #d5e2ec;
+  white-space: pre-wrap;
+}
+
+.pinned-video-popup__select-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7f93a6;
+}
+
+.pinned-video-popup__select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #8fa0b0 24%, transparent);
+  background: #0a0e14;
+  color: #e8eef3;
+  font-size: 0.8rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.pinned-video-popup__player {
+  width: var(--player-width);
+  height: var(--player-height);
+}
+
+.pinned-video-popup__player .video-embed {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.pinned-video-popup__player .video-embed iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.pinned-video-popup__resize {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background:
+    linear-gradient(
+      135deg,
+      transparent 45%,
+      color-mix(in srgb, #6cb6ea 70%, white) 46%,
+      color-mix(in srgb, #6cb6ea 70%, white) 54%,
+      transparent 55%
+    ),
+    linear-gradient(
+      135deg,
+      transparent 62%,
+      color-mix(in srgb, #6cb6ea 55%, white) 63%,
+      color-mix(in srgb, #6cb6ea 55%, white) 71%,
+      transparent 72%
+    );
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.passive-node.is-video-pinned .passive-node__ring {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, #6cb6ea 70%, white),
+    0 0 12px color-mix(in srgb, #6cb6ea 35%, transparent);
+}
