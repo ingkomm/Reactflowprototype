@@ -247,29 +247,21 @@
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;
-  /* VideoEmbed owns aspect-ratio — do not force 16:9 here. */
+  /* VideoEmbed owns aspect-ratio + fit-within-bounds — do not force 16:9 or portrait width here. */
   border-radius: 8px;
   overflow: hidden;
   background: #0a0e14;
   border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
 }
 
-/*
- * Notable presentation policy: target video height ≈ 747px
- * (matches prior 9:16 @ 420px width). Width = height × VideoEmbed aspect.
- * Shrink to available width when the viewport is too narrow — never horizontal scroll.
- */
 .notable-log-viewer__player .video-embed,
 .notable-log-viewer__player .video-embed--placeholder {
   position: relative;
-  width: min(100%, calc(747px * var(--video-aspect-ratio, 1.7777778)));
+  /* Inherit VideoEmbed fit-within-bounds (max-width: 100%; max-height: 80vh). */
+  width: auto;
   height: auto;
-  margin-inline: auto;
-}
-
-/* Same height policy for all aspects — do not re-apply portrait width caps here. */
-.notable-log-viewer__player .video-embed--portrait {
-  width: min(100%, calc(747px * var(--video-aspect-ratio, 0.5625)));
+  max-width: 100%;
+  max-height: 80vh;
   margin-inline: auto;
 }
 

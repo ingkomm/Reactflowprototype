@@ -2,16 +2,15 @@
    Do not set a generic 16/9 here — parents must not re-force it either. */
 .video-embed {
   position: relative;
-  width: 100%;
+  /* Obsidian-like fit within bounds: grow as large as possible inside both caps. */
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 80vh;
+  margin-inline: auto;
   background: #0a0e14;
   border-radius: 8px;
   overflow: hidden;
-}
-
-/* Portrait (resolved aspect < 1): cap width so tall ratios do not fill wide columns. */
-.video-embed--portrait {
-  width: min(100%, 420px);
-  margin-inline: auto;
 }
 
 .video-embed iframe {

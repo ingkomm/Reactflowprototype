@@ -35,18 +35,19 @@ describe('video aspect ownership (CSS regression)', () => {
     expect(css).toMatch(/\.floating-video-popup__player\s*\{[^}]*height\s*:\s*auto/s)
   })
 
-  it('keeps VideoEmbed portrait cap; Notable uses height-based policy without :has portrait mirror', () => {
+  it('uses fit-within-bounds sizing; no portrait 420 / Notable :has / height-target policies', () => {
     const embed = readCss('VideoEmbed.css')
-    expect(embed).toMatch(/\.video-embed--portrait\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s)
-    expect(embed).toMatch(/margin-inline\s*:\s*auto/)
+    expect(embed).toMatch(/\.video-embed\s*\{[^}]*max-width\s*:\s*100%/s)
+    expect(embed).toMatch(/\.video-embed\s*\{[^}]*max-height\s*:\s*80vh/s)
+    expect(embed).not.toMatch(/\.video-embed--portrait\s*\{[^}]*420px/s)
+    expect(embed).toMatch(/\.video-embed--local video\s*\{[^}]*object-fit\s*:\s*contain/s)
     const pin = readCss('FloatingVideoPopup.css')
     const notable = readCss('NotableLogViewer.css')
-    // FloatingVideoPopup path is out of scope for Notable Pin; keep it free of a 420 chrome rule.
     expect(pin).not.toMatch(/420px/)
-    // Notable must not detect portrait via :has — height policy + VideoEmbed aspect only.
     expect(notable).not.toMatch(/\.notable-log-viewer__player:has\(\.video-embed--portrait\)/)
+    expect(notable).not.toMatch(/747px/)
     expect(notable).toMatch(
-      /\.notable-log-viewer__player \.video-embed[^{]*\{[^}]*747px \* var\(--video-aspect-ratio/s,
+      /\.notable-log-viewer__player \.video-embed[^{]*\{[^}]*max-height\s*:\s*80vh/s,
     )
     expect(pin).not.toMatch(/\.floating-video-popup__player \.video-embed\s*\{[^}]*^\s*width\s*:\s*100%/ms)
     expect(notable).not.toMatch(
