@@ -272,7 +272,7 @@
 .notable-log-viewer__player .video-embed,
 .notable-log-viewer__player .video-embed--placeholder {
   position: relative;
-  width: 100%;
+  /* Leave width to VideoEmbed (full-bleed or portrait capped). */
   height: auto;
 }
 

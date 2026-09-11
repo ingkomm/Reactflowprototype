@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import type { VideoMedia } from '../types'
 import { resolveLocalVideoPlaybackUrl } from '../platform/localVideo'
 import {
@@ -21,8 +21,6 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
   const [localError, setLocalError] = useState(false)
   const [localAspectRatio, setLocalAspectRatio] = useState<number | null>(null)
   const [activeMediaId, setActiveMediaId] = useState(media.id)
-  const frameRef = useRef<HTMLDivElement | null>(null)
-
   // Same VideoEmbed instance can be reused when Viewer/Pin swaps active media.
   if (media.id !== activeMediaId) {
     setActiveMediaId(media.id)
@@ -32,6 +30,9 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
   }
 
   const aspect = resolveVideoAspectRatio(media, localAspectRatio)
+  // Portrait (aspect < 1) caps display width so 9:16 does not dominate wide columns.
+  const isPortrait = aspect < 1
+  const frameClass = `video-embed${isPortrait ? ' video-embed--portrait' : ''}`
   const frameStyle = { aspectRatio: aspect } satisfies CSSProperties
 
   useEffect(() => {
@@ -64,27 +65,14 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
       if (videoWidth <= 0 || videoHeight <= 0) return
       const ratio = videoWidth / videoHeight
       setLocalAspectRatio(ratio)
-      // Temporary Desktop debug: compare intrinsic vs rendered outer frame.
-      requestAnimationFrame(() => {
-        const rect = frameRef.current?.getBoundingClientRect()
-        console.debug('[VideoEmbed local aspect]', {
-          mediaId: media.id,
-          videoWidth,
-          videoHeight,
-          aspectRatio: ratio,
-          outerWidth: rect?.width ?? null,
-          outerHeight: rect?.height ?? null,
-          outerRatio: rect && rect.height > 0 ? rect.width / rect.height : null,
-        })
-      })
     }
 
     return (
       <div
-        ref={frameRef}
-        className="video-embed video-embed--local"
+        className={`${frameClass} video-embed--local`}
         data-testid="video-embed-local"
         data-aspect-ratio={String(aspect)}
+        data-portrait={isPortrait ? 'true' : undefined}
         style={frameStyle}
       >
         <video
@@ -105,9 +93,10 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
     if (!loaded) {
       return (
         <div
-          className="video-embed video-embed--placeholder"
+          className={`${frameClass} video-embed--placeholder`}
           data-testid="video-embed-youtube-placeholder"
           data-aspect-ratio={String(aspect)}
+          data-portrait={isPortrait ? 'true' : undefined}
           style={frameStyle}
         >
           <button
@@ -123,9 +112,10 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
     }
     return (
       <div
-        className="video-embed"
+        className={frameClass}
         data-testid="video-embed-youtube"
         data-aspect-ratio={String(aspect)}
+        data-portrait={isPortrait ? 'true' : undefined}
         style={frameStyle}
       >
         <iframe

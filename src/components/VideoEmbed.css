@@ -8,6 +8,12 @@
   overflow: hidden;
 }
 
+/* Portrait (resolved aspect < 1): cap width so tall ratios do not fill wide columns. */
+.video-embed--portrait {
+  width: min(100%, 420px);
+  margin-inline: auto;
+}
+
 .video-embed iframe {
   position: absolute;
   inset: 0;

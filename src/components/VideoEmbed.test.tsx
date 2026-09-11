@@ -270,4 +270,75 @@ describe('VideoEmbed media identity state reset', () => {
     view.unmount()
   })
 
+
+  it('applies portrait width class when resolved aspect is below 1 (Shorts)', () => {
+    const media = {
+      id: 'shorts-portrait',
+      url: 'https://www.youtube.com/shorts/abcdefghijk',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const view = mount(<VideoEmbed media={media} />)
+    const frame = view.host.querySelector('[data-testid="video-embed-youtube-placeholder"]') as HTMLElement
+    expect(frame.className).toContain('video-embed--portrait')
+    expect(frame.getAttribute('data-portrait')).toBe('true')
+    expect(Number(frame.getAttribute('data-aspect-ratio'))).toBeCloseTo(9 / 16, 5)
+    view.unmount()
+  })
+
+  it('does not apply portrait class for landscape YouTube / square local', () => {
+    const yt = {
+      id: 'yt-land',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const view = mount(<VideoEmbed media={yt} />)
+    const frame = view.host.querySelector('[data-testid="video-embed-youtube-placeholder"]') as HTMLElement
+    expect(frame.className).not.toContain('video-embed--portrait')
+    expect(frame.getAttribute('data-portrait')).toBeNull()
+    view.unmount()
+
+    const local = {
+      id: 'local-square',
+      url: '/videos/square.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const view2 = mount(<VideoEmbed media={local} />)
+    const video = view2.host.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1080 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 1080 })
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    const localFrame = view2.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(Number(localFrame.getAttribute('data-aspect-ratio'))).toBeCloseTo(1, 5)
+    expect(localFrame.className).not.toContain('video-embed--portrait')
+    view2.unmount()
+  })
+
+  it('applies portrait class for local intrinsic portrait after metadata', () => {
+    const media = {
+      id: 'local-port',
+      url: '/videos/portrait.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const view = mount(<VideoEmbed media={media} />)
+    const before = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    // Fallback 16:9 before metadata — not portrait yet.
+    expect(before.className).not.toContain('video-embed--portrait')
+    const video = view.host.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1080 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 1920 })
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    const after = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(after.className).toContain('video-embed--portrait')
+    expect(after.getAttribute('data-portrait')).toBe('true')
+    view.unmount()
+  })
+
 })
