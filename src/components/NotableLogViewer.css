@@ -24,7 +24,7 @@
   min-width: 0;
 }
 
-/* Temporary right-click preview: centered, capped like DailyLogEditorModal. */
+/* Temporary right-click preview: centered window only (content layout is shared). */
 .notable-log-viewer:not(.is-pinned) {
   left: 50%;
   top: 50%;
@@ -37,31 +37,10 @@
 
 .notable-log-viewer:not(.is-pinned) .notable-log-viewer__head {
   cursor: default;
-  flex: 0 0 auto;
 }
 
 .notable-log-viewer:not(.is-pinned) .notable-log-viewer__head:active {
   cursor: default;
-}
-
-.notable-log-viewer:not(.is-pinned) .notable-log-viewer__summary {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 30%;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.notable-log-viewer:not(.is-pinned) .notable-log-viewer__timeline {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.notable-log-viewer:not(.is-pinned) .notable-log-viewer__playlist {
-  max-height: none;
 }
 
 .notable-log-viewer__head {
@@ -69,6 +48,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex: 0 0 auto;
   color: #eef3f7;
   user-select: none;
   touch-action: none;
@@ -102,7 +82,8 @@
   max-width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  max-height: min(480px, calc(100vh - 120px));
+  /* Shared Preview/Pin: fill timeline column; do not re-cap in pinned mode. */
+  max-height: none;
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
   background: #0f151c;
@@ -302,6 +283,23 @@
   min-width: 0;
 }
 
+/* Shared Preview/Pin content layout (Pin must not invent a second layout). */
+.notable-log-viewer__summary {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 30%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.notable-log-viewer__timeline {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .notable-log-viewer__section-title {
   margin: 0;
   font-size: 0.72rem;
@@ -336,6 +334,7 @@
   flex-shrink: 0;
 }
 
+/* Pin = same content layout as Preview; only window capability differs. */
 .notable-log-viewer.is-pinned {
   z-index: 45;
   left: auto;
@@ -359,23 +358,4 @@
 
 .notable-log-viewer.is-pinned .notable-log-viewer__head:active {
   cursor: grabbing;
-}
-
-.notable-log-viewer.is-pinned .notable-log-viewer__summary {
-  flex: 0 0 auto;
-}
-
-.notable-log-viewer.is-pinned .notable-log-viewer__timeline {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
-
-.notable-log-viewer.is-pinned .notable-log-viewer__playlist {
-  max-height: none;
-}
-
-.notable-log-viewer.is-pinned .notable-log-viewer__layout {
-  min-height: 0;
-  height: 100%;
 }
