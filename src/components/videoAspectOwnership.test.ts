@@ -35,20 +35,26 @@ describe('video aspect ownership (CSS regression)', () => {
     expect(css).toMatch(/\.floating-video-popup__player\s*\{[^}]*height\s*:\s*auto/s)
   })
 
-  it('uses fit-within-bounds sizing; no portrait 420 / Notable :has / height-target policies', () => {
+  it('defines portrait max-width on VideoEmbed and mirrors it on Notable player via :has', () => {
     const embed = readCss('VideoEmbed.css')
-    expect(embed).toMatch(/\.video-embed\s*\{[^}]*max-width\s*:\s*100%/s)
-    expect(embed).toMatch(/\.video-embed\s*\{[^}]*max-height\s*:\s*80vh/s)
-    expect(embed).not.toMatch(/\.video-embed--portrait\s*\{[^}]*420px/s)
-    expect(embed).toMatch(/\.video-embed--local video\s*\{[^}]*object-fit\s*:\s*contain/s)
+    expect(embed).toMatch(/\.video-embed\s*\{[^}]*^\s*width\s*:\s*100%/ms)
+    expect(embed).toMatch(/\.video-embed--portrait\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s)
+    expect(embed).toMatch(/margin-inline\s*:\s*auto/)
+    expect(embed).not.toMatch(/max-height\s*:\s*80vh/)
     const pin = readCss('FloatingVideoPopup.css')
     const notable = readCss('NotableLogViewer.css')
+    // FloatingVideoPopup path is out of scope for Notable Pin; keep it free of a 420 chrome rule.
     expect(pin).not.toMatch(/420px/)
-    expect(notable).not.toMatch(/\.notable-log-viewer__player:has\(\.video-embed--portrait\)/)
-    expect(notable).not.toMatch(/747px/)
     expect(notable).toMatch(
-      /\.notable-log-viewer__player \.video-embed[^{]*\{[^}]*max-height\s*:\s*80vh/s,
+      /\.notable-log-viewer__player:has\(\.video-embed--portrait\)\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s,
     )
+    expect(notable).toMatch(
+      /\.notable-log-viewer__player:has\(\.video-embed--portrait\)\s*\{[^}]*margin-inline\s*:\s*auto/s,
+    )
+    expect(notable).not.toMatch(/747px/)
+    expect(notable).not.toMatch(/max-height\s*:\s*80vh/)
+    expect(notable).toMatch(/\.notable-log-viewer\s*\{[^}]*width\s*:\s*min\(800px,\s*calc\(100vw - 32px\)\)/s)
+    expect(notable).not.toMatch(/\.notable-log-viewer\s*\{[^}]*width\s*:\s*fit-content/s)
     expect(pin).not.toMatch(/\.floating-video-popup__player \.video-embed\s*\{[^}]*^\s*width\s*:\s*100%/ms)
     expect(notable).not.toMatch(
       /\.notable-log-viewer__player \.video-embed[^{]*\{[^}]*^\s*width\s*:\s*100%/ms,

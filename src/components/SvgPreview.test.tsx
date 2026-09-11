@@ -325,8 +325,8 @@ describe('Timeline label + horizontal overflow', () => {
       expect(css).not.toMatch(/\.is-pinned\s*\{[^}]*[^-\w]height\s*:/s)
       expect(css).not.toMatch(/\.is-pinned\s*\{[^}]*resize\s*:\s*both/s)
     }
-    // Notable grows with landscape video; Shard keeps fixed preview width.
-    expect(notable).toMatch(/width:\s*fit-content/)
+    // Stable viewer shell width (media must not drive shell via fit-content).
+    expect(notable).toMatch(/width:\s*min\(800px,\s*calc\(100vw - 32px\)\)/)
     expect(shard).toMatch(/width:\s*min\(800px,\s*calc\(100vw - 32px\)\)/)
     expect(notable).toMatch(/\.is-pinned\s*\{[^}]*transform:\s*none/s)
     expect(shard).toMatch(/\.is-pinned\s*\{[^}]*transform:\s*none/s)

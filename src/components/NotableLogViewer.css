@@ -22,10 +22,8 @@
   box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
   box-sizing: border-box;
   min-width: 0;
-  /* Shared Preview/Pin window geometry (Pin must not force a new size).
-     Grow with landscape video; portrait must not force a wide shell. */
-  width: fit-content;
-  min-width: min(800px, calc(100vw - 32px));
+  /* Shared Preview/Pin window geometry (Pin must not force a new size). */
+  width: min(800px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
 }
@@ -73,7 +71,7 @@
 
 .notable-log-viewer__layout {
   display: grid;
-  grid-template-columns: minmax(160px, 220px) minmax(0, max-content);
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
   gap: 10px;
   min-height: 280px;
   min-width: 0;
@@ -244,25 +242,26 @@
 
 .notable-log-viewer__player {
   position: relative;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
-  margin-inline: auto;
-  /* VideoEmbed owns aspect-ratio + fit-within-bounds — do not force 16:9 or portrait width here. */
+  /* VideoEmbed owns aspect-ratio — do not force 16:9 here. */
   border-radius: 8px;
   overflow: hidden;
   background: #0a0e14;
   border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
 }
 
+/* Portrait embeds already self-cap at 420px; shrink the black player chrome to match. */
+.notable-log-viewer__player:has(.video-embed--portrait) {
+  width: min(100%, 420px);
+  margin-inline: auto;
+}
+
 .notable-log-viewer__player .video-embed,
 .notable-log-viewer__player .video-embed--placeholder {
   position: relative;
-  /* Inherit VideoEmbed fit-within-bounds (max-width: 100%; max-height: 80vh). */
-  width: auto;
+  /* Leave width to VideoEmbed (full-bleed or portrait capped). */
   height: auto;
-  max-width: 100%;
-  max-height: 80vh;
-  margin-inline: auto;
 }
 
 .notable-log-viewer__player .video-embed iframe {
