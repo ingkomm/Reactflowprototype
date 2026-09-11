@@ -55,13 +55,13 @@ describe('video aspect ownership (CSS regression)', () => {
     )
   })
 
-  it('caps Notable Pin window resize at 720px (not full viewport)', () => {
+  it('allows Notable Pin window resize up to the viewport (not a 720px ceiling)', () => {
     const notable = readCss('NotableLogViewer.css')
     expect(notable).toMatch(
-      /\.notable-log-viewer\.is-pinned\s*\{[^}]*max-width\s*:\s*min\(720px\s*,\s*calc\(100vw - 16px\)\)/s,
+      /\.notable-log-viewer\.is-pinned\s*\{[^}]*max-width\s*:\s*calc\(100vw - 16px\)\s*;/s,
     )
     expect(notable).not.toMatch(
-      /\.notable-log-viewer\.is-pinned\s*\{[^}]*max-width\s*:\s*calc\(100vw - 16px\)\s*;/s,
+      /\.notable-log-viewer\.is-pinned\s*\{[^}]*max-width\s*:\s*min\(720px\s*,\s*calc\(100vw - 16px\)\)/s,
     )
   })
 })
