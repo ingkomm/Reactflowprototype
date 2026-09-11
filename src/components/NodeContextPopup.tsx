@@ -13,10 +13,10 @@ type Props = {
   x: number
   y: number
   nodeLabel: string
-  canPinVideos?: boolean
-  isVideoPinned?: boolean
+  canFloatVideos?: boolean
+  isFloatingVideo?: boolean
   onClose: () => void
-  onToggleVideoPin?: () => void
+  onToggleFloatingVideo?: () => void
 }
 
 /** Generic right-click menu for non-Shard/non-Notable nodes (e.g. Mastery pin). */
@@ -25,10 +25,10 @@ export function NodeContextPopup({
   x,
   y,
   nodeLabel,
-  canPinVideos = false,
-  isVideoPinned = false,
+  canFloatVideos = false,
+  isFloatingVideo = false,
   onClose,
-  onToggleVideoPin,
+  onToggleFloatingVideo,
 }: Props) {
   const { panelRef, position, headerDragProps } = useFloatingPanelDrag(x, y)
 
@@ -67,10 +67,10 @@ export function NodeContextPopup({
           <strong>{nodeLabel}</strong>
         </header>
 
-        {canPinVideos && onToggleVideoPin ? (
+        {canFloatVideos && onToggleFloatingVideo ? (
           <footer className="node-context-popup__foot">
-            <button type="button" className="btn btn--ghost" onClick={onToggleVideoPin}>
-              {isVideoPinned ? '동영상 핀 해제' : '동영상 핀'}
+            <button type="button" className="btn btn--ghost" onClick={onToggleFloatingVideo}>
+              {isFloatingVideo ? '영상 닫기' : '영상 띄우기'}
             </button>
           </footer>
         ) : (

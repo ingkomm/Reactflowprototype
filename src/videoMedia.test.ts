@@ -9,7 +9,7 @@ import {
   isSafeHttpUrl,
   isValidLocalVideoPath,
   validateVideoMedia,
-  canPinNodeVideos,
+  canFloatNodeVideos,
   isYouTubeShortsUrl,
   resolveVideoAspectRatio,
   DEFAULT_VIDEO_ASPECT,
@@ -109,13 +109,13 @@ describe('videoMedia', () => {
   })
 })
 
-describe('canPinNodeVideos', () => {
+describe('canFloatNodeVideos', () => {
   it('allows Notable only (Mastery is contentless)', () => {
-    expect(canPinNodeVideos('notable')).toBe(true)
-    expect(canPinNodeVideos('mastery')).toBe(false)
-    expect(canPinNodeVideos('voidMastery')).toBe(false)
-    expect(canPinNodeVideos('shard')).toBe(false)
-    expect(canPinNodeVideos('connect')).toBe(false)
+    expect(canFloatNodeVideos('notable')).toBe(true)
+    expect(canFloatNodeVideos('mastery')).toBe(false)
+    expect(canFloatNodeVideos('voidMastery')).toBe(false)
+    expect(canFloatNodeVideos('shard')).toBe(false)
+    expect(canFloatNodeVideos('connect')).toBe(false)
   })
 })
 

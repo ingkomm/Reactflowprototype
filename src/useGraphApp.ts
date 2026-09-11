@@ -35,7 +35,7 @@ export type GraphAppSnapshot = {
 }
 
 export type GraphPersistInput = GraphAppSnapshot & {
-  pinnedVideoNodeIds?: string[]
+  floatingVideoNodeIds?: string[]
 }
 
 export type SaveStatus = 'idle' | 'saved' | 'failed'

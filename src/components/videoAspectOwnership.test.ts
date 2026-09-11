@@ -28,20 +28,20 @@ describe('video aspect ownership (CSS regression)', () => {
     expect(css).not.toMatch(/\.video-embed\s*\{[^}]*aspect-ratio/s)
   })
 
-  it('does not unset VideoEmbed aspect-ratio with !important in PinnedVideoPopup.css', () => {
-    const css = readCss('PinnedVideoPopup.css')
+  it('does not unset VideoEmbed aspect-ratio with !important in FloatingVideoPopup.css', () => {
+    const css = readCss('FloatingVideoPopup.css')
     expect(css).not.toMatch(/aspect-ratio\s*:\s*unset\s*!important/)
     expect(css).not.toMatch(/object-fit\s*:\s*cover/)
-    expect(css).toMatch(/\.pinned-video-popup__player\s*\{[^}]*height\s*:\s*auto/s)
+    expect(css).toMatch(/\.floating-video-popup__player\s*\{[^}]*height\s*:\s*auto/s)
   })
 
   it('defines portrait max-width on VideoEmbed and mirrors it on Notable player via :has', () => {
     const embed = readCss('VideoEmbed.css')
     expect(embed).toMatch(/\.video-embed--portrait\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s)
     expect(embed).toMatch(/margin-inline\s*:\s*auto/)
-    const pin = readCss('PinnedVideoPopup.css')
+    const pin = readCss('FloatingVideoPopup.css')
     const notable = readCss('NotableLogViewer.css')
-    // PinnedVideoPopup path is out of scope for Notable Pin; keep it free of a 420 chrome rule.
+    // FloatingVideoPopup path is out of scope for Notable Pin; keep it free of a 420 chrome rule.
     expect(pin).not.toMatch(/420px/)
     expect(notable).toMatch(
       /\.notable-log-viewer__player:has\(\.video-embed--portrait\)\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s,
@@ -49,7 +49,7 @@ describe('video aspect ownership (CSS regression)', () => {
     expect(notable).toMatch(
       /\.notable-log-viewer__player:has\(\.video-embed--portrait\)\s*\{[^}]*margin-inline\s*:\s*auto/s,
     )
-    expect(pin).not.toMatch(/\.pinned-video-popup__player \.video-embed\s*\{[^}]*^\s*width\s*:\s*100%/ms)
+    expect(pin).not.toMatch(/\.floating-video-popup__player \.video-embed\s*\{[^}]*^\s*width\s*:\s*100%/ms)
     expect(notable).not.toMatch(
       /\.notable-log-viewer__player \.video-embed[^{]*\{[^}]*^\s*width\s*:\s*100%/ms,
     )

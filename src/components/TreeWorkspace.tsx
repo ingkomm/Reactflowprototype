@@ -38,8 +38,8 @@ import type { NodeTemplatePayload } from '../nodeTemplate'
 import { readPalettePayload } from '../nodeTemplate'
 import { NODE_SIZE } from '../orbit'
 import type { PowerFlowMeta } from '../power'
-import { PinnedVideoPopup } from './PinnedVideoPopup'
-import { VideoPinProvider } from '../VideoPinContext'
+import { FloatingVideoPopup } from './FloatingVideoPopup'
+import { FloatingVideoProvider } from '../FloatingVideoContext'
 import { GRAPH_EDGE_Z } from '../graphLayers'
 
 const nodeTypes = { passive: PassiveNode }
@@ -84,8 +84,8 @@ export type TreeWorkspaceProps = {
   onPaneClick: () => void
   onNodeClick: NodeMouseHandler
   onNodeContextMenu?: NodeMouseHandler
-  pinnedVideoNodeIds: string[]
-  onClosePinnedVideo: (nodeId: string) => void
+  floatingVideoNodeIds: string[]
+  onCloseFloatingVideo: (nodeId: string) => void
   onPinnedLogSelect?: (nodeId: string, logId: string) => void
   onNodeDragStart: OnNodeDrag<PassiveFlowNode>
   onNodeDrag: OnNodeDrag<PassiveFlowNode>
@@ -141,8 +141,8 @@ export function TreeWorkspace({
   onPaneClick,
   onNodeClick,
   onNodeContextMenu,
-  pinnedVideoNodeIds,
-  onClosePinnedVideo,
+  floatingVideoNodeIds,
+  onCloseFloatingVideo,
   onPinnedLogSelect,
   onNodeDragStart,
   onNodeDrag,
@@ -237,7 +237,7 @@ export function TreeWorkspace({
       <section ref={canvasWrapperRef} className="canvas-pane" aria-label="Passive tree canvas">
         <PowerProvider poweredIds={poweredIds} flowMeta={powerFlowMeta}>
           <VoidHighlightProvider enabled={voidHighlightEnabled}>
-            <VideoPinProvider pinnedNodeIds={pinnedVideoNodeIds}>
+            <FloatingVideoProvider floatingNodeIds={floatingVideoNodeIds}>
             <ReactFlow
               nodes={flowNodes}
               edges={edges}
@@ -289,17 +289,17 @@ export function TreeWorkspace({
                 maskColor="rgba(8, 12, 16, 0.7)"
               />
             </ReactFlow>
-            {pinnedVideoNodeIds.map((nodeId, index) => (
-              <PinnedVideoPopup
+            {floatingVideoNodeIds.map((nodeId, index) => (
+              <FloatingVideoPopup
                 key={nodeId}
-                pinnedNodeId={nodeId}
+                floatingNodeId={nodeId}
                 stackIndex={index}
                 containerRef={canvasWrapperRef}
-                onClose={onClosePinnedVideo}
+                onClose={onCloseFloatingVideo}
                 onSelectLog={onPinnedLogSelect}
               />
             ))}
-            </VideoPinProvider>
+            </FloatingVideoProvider>
           </VoidHighlightProvider>
         </PowerProvider>
 

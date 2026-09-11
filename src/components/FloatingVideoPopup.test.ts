@@ -8,7 +8,7 @@ import {
   pinnedPlayerHeight,
   resolvePinnedMaxPlayerWidth,
   resolvePinnedPlayerAspect,
-} from './PinnedVideoPopup'
+} from './FloatingVideoPopup'
 
 describe('resolvePinnedPlayerAspect', () => {
   it('falls back to 16:9 while media aspect is unknown', () => {

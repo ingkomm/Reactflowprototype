@@ -25,7 +25,7 @@ import {
   downloadGraphDocument,
   serializeGraphDocument,
 } from './graphDocument'
-import { createVideoMediaId, canPinNodeVideos } from './videoMedia'
+import { createVideoMediaId, canFloatNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
 import {
   isDesktopGraphExportSupported,
@@ -277,7 +277,7 @@ export default function App() {
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
-  const [pinnedVideoNodeIds, setPinnedVideoNodeIds] = useState<string[]>([])
+  const [floatingVideoNodeIds, setFloatingVideoNodeIds] = useState<string[]>([])
   const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
   const [pinnedViewers, setPinnedViewers] = useState<PinnedViewerEntry[]>([])
   const [pinnedViewerBounds, setPinnedViewerBounds] = useState<Record<string, ViewerPanelBounds>>({})
@@ -466,7 +466,7 @@ export default function App() {
         eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)),
       )
       setSelectedId((cur) => (cur && removeIds.has(cur) ? null : cur))
-      setPinnedVideoNodeIds((cur) => cur.filter((id) => !removeIds.has(id)))
+      setFloatingVideoNodeIds((cur) => cur.filter((id) => !removeIds.has(id)))
       setPinnedViewers((cur) => prunePinnedViewers(cur, nodesRef.current.map((n) => n.id).filter((id) => !removeIds.has(id))))
       setPinnedViewerBounds((cur) => {
         let changed = false
@@ -1438,7 +1438,7 @@ export default function App() {
       setContextMenu(null)
       setPinnedViewers([])
       setPinnedViewerBounds({})
-      setPinnedVideoNodeIds([])
+      setFloatingVideoNodeIds([])
     },
     [
       customSymbols,
@@ -1487,7 +1487,7 @@ export default function App() {
     setContextMenu(null)
     setPinnedViewers([])
     setPinnedViewerBounds({})
-    setPinnedVideoNodeIds([])
+    setFloatingVideoNodeIds([])
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -1505,7 +1505,7 @@ export default function App() {
     (nodeId: string) => {
       if (nodeId === INITIAL_NODE_ID) return
       commit()
-      setPinnedVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
+      setFloatingVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
       setPinnedViewers((cur) => closePinnedViewer(cur, nodeId))
       setPinnedViewerBounds((cur) => {
         if (!(nodeId in cur)) return cur
@@ -1616,17 +1616,17 @@ export default function App() {
     setFocusLogId(logId)
   }, [])
 
-  const handleToggleContextVideoPin = useCallback(() => {
+  const handleToggleContextFloatingVideo = useCallback(() => {
     if (!contextMenu) return
     const nodeId = contextMenu.nodeId
-    setPinnedVideoNodeIds((cur) =>
+    setFloatingVideoNodeIds((cur) =>
       cur.includes(nodeId) ? cur.filter((id) => id !== nodeId) : [...cur, nodeId],
     )
     setContextMenu(null)
   }, [contextMenu])
 
-  const onClosePinnedVideo = useCallback((nodeId: string) => {
-    setPinnedVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
+  const onCloseFloatingVideo = useCallback((nodeId: string) => {
+    setFloatingVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
   }, [])
 
   const onNodeDragStart = useCallback(
@@ -2035,8 +2035,8 @@ export default function App() {
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
               onNodeContextMenu={onNodeContextMenu}
-              pinnedVideoNodeIds={pinnedVideoNodeIds}
-              onClosePinnedVideo={onClosePinnedVideo}
+              floatingVideoNodeIds={floatingVideoNodeIds}
+              onCloseFloatingVideo={onCloseFloatingVideo}
               onPinnedLogSelect={handlePinnedLogSelect}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
@@ -2161,10 +2161,10 @@ export default function App() {
                     x={contextMenu.x}
                     y={contextMenu.y}
                     nodeLabel={data.label}
-                    canPinVideos={canPinNodeVideos(data.kind)}
-                    isVideoPinned={pinnedVideoNodeIds.includes(contextMenu.nodeId)}
+                    canFloatVideos={canFloatNodeVideos(data.kind)}
+                    isFloatingVideo={floatingVideoNodeIds.includes(contextMenu.nodeId)}
                     onClose={closeMenu}
-                    onToggleVideoPin={handleToggleContextVideoPin}
+                    onToggleFloatingVideo={handleToggleContextFloatingVideo}
                   />
                 )
               })()

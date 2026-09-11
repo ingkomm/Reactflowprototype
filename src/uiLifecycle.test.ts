@@ -9,7 +9,7 @@ function afterExport(state: {
   contextMenu: unknown
   pinnedViewers: PinnedViewerEntry[]
   pinnedViewerBounds: Record<string, unknown>
-  pinnedVideoNodeIds: string[]
+  floatingVideoNodeIds: string[]
 }) {
   return state
 }
@@ -19,13 +19,13 @@ function afterImportSuccess(_state: {
   contextMenu: unknown
   pinnedViewers: PinnedViewerEntry[]
   pinnedViewerBounds: Record<string, unknown>
-  pinnedVideoNodeIds: string[]
+  floatingVideoNodeIds: string[]
 }) {
   return {
     contextMenu: null,
     pinnedViewers: [] as PinnedViewerEntry[],
     pinnedViewerBounds: {},
-    pinnedVideoNodeIds: [] as string[],
+    floatingVideoNodeIds: [] as string[],
   }
 }
 
@@ -36,7 +36,7 @@ describe('export/import UI lifecycle', () => {
       contextMenu: { nodeId: 'a', x: 0, y: 0 },
       pinnedViewers: pinned,
       pinnedViewerBounds: { a: { x: 0, y: 0, width: 10, height: 10 } },
-      pinnedVideoNodeIds: ['v1'],
+      floatingVideoNodeIds: ['v1'],
     }
     expect(afterExport(before)).toEqual(before)
   })
@@ -47,13 +47,13 @@ describe('export/import UI lifecycle', () => {
       contextMenu: { nodeId: 'a', x: 0, y: 0 },
       pinnedViewers: pinned,
       pinnedViewerBounds: { a: { x: 0, y: 0, width: 10, height: 10 } },
-      pinnedVideoNodeIds: ['v1'],
+      floatingVideoNodeIds: ['v1'],
     }
     expect(afterImportSuccess(before)).toEqual({
       contextMenu: null,
       pinnedViewers: [],
       pinnedViewerBounds: {},
-      pinnedVideoNodeIds: [],
+      floatingVideoNodeIds: [],
     })
   })
 })

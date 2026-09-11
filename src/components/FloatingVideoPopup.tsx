@@ -17,10 +17,10 @@ import { extractDailyLogsFromNodeData } from '../dailyLogNode'
 import { NODE_SIZE } from '../orbit'
 import { isLocalVideoMedia, isYouTubeShortsUrl } from '../videoMedia'
 import { VideoEmbed } from './VideoEmbed'
-import './PinnedVideoPopup.css'
+import './FloatingVideoPopup.css'
 
 type Props = {
-  pinnedNodeId: string
+  floatingNodeId: string
   stackIndex: number
   containerRef: RefObject<HTMLElement | null>
   onClose: (nodeId: string) => void
@@ -29,9 +29,9 @@ type Props = {
 
 const DEFAULT_PLAYER_WIDTH = 320
 export const MIN_PLAYER_WIDTH = 200
-/** Landscape / square pin resize ceiling (matches prior Pin behavior). */
+/** Landscape / square floating-video resize ceiling (matches prior behavior). */
 export const MAX_PLAYER_WIDTH = 720
-/** Portrait (aspect < 1) pin resize ceiling — aligned with VideoEmbed portrait cap. */
+/** Portrait (aspect < 1) floating-video resize ceiling — aligned with VideoEmbed portrait cap. */
 export const PORTRAIT_MAX_PLAYER_WIDTH = 420
 /** Fallback until VideoEmbed reports the media aspect (and for resize math). */
 export const DEFAULT_PIN_ASPECT = 16 / 9
@@ -61,12 +61,12 @@ export function pinnedPlayerHeight(width: number, aspect: number): number {
   return width / aspect
 }
 
-export function PinnedVideoPopup(props: Props) {
-  return <PinnedVideoPopupInner key={`${props.pinnedNodeId}-${props.stackIndex}`} {...props} />
+export function FloatingVideoPopup(props: Props) {
+  return <FloatingVideoPopupInner key={`${props.floatingNodeId}-${props.stackIndex}`} {...props} />
 }
 
-function PinnedVideoPopupInner({
-  pinnedNodeId,
+function FloatingVideoPopupInner({
+  floatingNodeId,
   stackIndex,
   containerRef,
   onClose,
@@ -100,8 +100,8 @@ function PinnedVideoPopupInner({
   const aspectRef = useRef(DEFAULT_PIN_ASPECT)
 
   const node = useMemo(
-    () => nodes.find((n) => n.id === pinnedNodeId) ?? null,
-    [nodes, pinnedNodeId],
+    () => nodes.find((n) => n.id === floatingNodeId) ?? null,
+    [nodes, floatingNodeId],
   )
 
   const data = (node?.data as PassiveNodeData | undefined) ?? null
@@ -225,7 +225,7 @@ function PinnedVideoPopupInner({
 
   const handleLogClick = (logId: string) => {
     setActiveLogId(logId)
-    onSelectLog?.(pinnedNodeId, logId)
+    onSelectLog?.(floatingNodeId, logId)
   }
 
   const resizeTitle = isLocalActive
@@ -235,21 +235,21 @@ function PinnedVideoPopupInner({
       : '드래그해서 크기 조절 (16:9 유지)'
 
   return (
-    <div className="pinned-video-layer" aria-live="polite">
-      <svg className="pinned-video-layer__links" aria-hidden>
+    <div className="floating-video-layer" aria-live="polite">
+      <svg className="floating-video-layer__links" aria-hidden>
         <line
           x1={layout.nodeCenter.x}
           y1={layout.nodeCenter.y}
           x2={layout.anchorX}
           y2={layout.anchorY}
-          className="pinned-video-layer__link"
+          className="floating-video-layer__link"
         />
-        <circle cx={layout.nodeCenter.x} cy={layout.nodeCenter.y} r={5} className="pinned-video-layer__dot" />
-        <circle cx={layout.anchorX} cy={layout.anchorY} r={4} className="pinned-video-layer__dot" />
+        <circle cx={layout.nodeCenter.x} cy={layout.nodeCenter.y} r={5} className="floating-video-layer__dot" />
+        <circle cx={layout.anchorX} cy={layout.anchorY} r={4} className="floating-video-layer__dot" />
       </svg>
 
       <div
-        className="pinned-video-popup"
+        className="floating-video-popup"
         style={
           {
             left: layout.popupLeft,
@@ -264,43 +264,43 @@ function PinnedVideoPopupInner({
         data-player-aspect={String(playerAspect)}
       >
         <header
-          className="pinned-video-popup__head"
+          className="floating-video-popup__head"
           onPointerDown={(event) => beginDrag('move', event)}
         >
           <div>
-            <p className="pinned-video-popup__eyebrow">Pinned Daily Log · 드래그로 이동</p>
-            <h3 className="pinned-video-popup__title">{data.label}</h3>
+            <p className="floating-video-popup__eyebrow">Floating Daily Log · 드래그로 이동</p>
+            <h3 className="floating-video-popup__title">{data.label}</h3>
           </div>
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => onClose(pinnedNodeId)}
+            onClick={() => onClose(floatingNodeId)}
             onPointerDown={(event) => event.stopPropagation()}
-            aria-label="핀 해제"
+            aria-label="영상 닫기"
           >
             ×
           </button>
         </header>
 
         {logs.length === 0 ? (
-          <p className="pinned-video-popup__empty">이 노드에 Daily Log가 없습니다.</p>
+          <p className="floating-video-popup__empty">이 노드에 Daily Log가 없습니다.</p>
         ) : (
           <>
-            <ul className="pinned-video-popup__log-list">
+            <ul className="floating-video-popup__log-list">
               {logs.map((log) => {
                 const selected = log.id === resolvedLogId
                 return (
                   <li key={log.id}>
                     <button
                       type="button"
-                      className={`pinned-video-popup__log-card${selected ? ' is-active' : ''}`}
+                      className={`floating-video-popup__log-card${selected ? ' is-active' : ''}`}
                       onClick={() => handleLogClick(log.id)}
                       onPointerDown={(event) => event.stopPropagation()}
                     >
-                      <span className="pinned-video-popup__log-date">{log.date}</span>
-                      <span className="pinned-video-popup__log-summary">{dailyLogSummary(log)}</span>
+                      <span className="floating-video-popup__log-date">{log.date}</span>
+                      <span className="floating-video-popup__log-summary">{dailyLogSummary(log)}</span>
                       {log.media?.[0]?.url ? (
-                        <span className="pinned-video-popup__log-tag">영상</span>
+                        <span className="floating-video-popup__log-tag">영상</span>
                       ) : null}
                     </button>
                   </li>
@@ -309,13 +309,13 @@ function PinnedVideoPopupInner({
             </ul>
 
             {activeLog ? (
-              <div className="pinned-video-popup__detail">
+              <div className="floating-video-popup__detail">
                 {activeLog.note?.trim() ? (
-                  <p className="pinned-video-popup__memo">{activeLog.note.trim()}</p>
+                  <p className="floating-video-popup__memo">{activeLog.note.trim()}</p>
                 ) : null}
                 {activeVideo ? (
                   <div
-                    className={`pinned-video-popup__player${isLocalActive ? ' pinned-video-popup__player--local' : ''}`}
+                    className={`floating-video-popup__player${isLocalActive ? ' floating-video-popup__player--local' : ''}`}
                   >
                     <VideoEmbed media={activeVideo} onAspectRatioChange={setMediaAspect} />
                   </div>
@@ -328,7 +328,7 @@ function PinnedVideoPopupInner({
         {activeVideo ? (
           <button
             type="button"
-            className="pinned-video-popup__resize"
+            className="floating-video-popup__resize"
             aria-label="크기 조절"
             title={resizeTitle}
             onPointerDown={(event) => beginDrag('resize', event)}

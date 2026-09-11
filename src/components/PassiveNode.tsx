@@ -30,7 +30,7 @@ import { useNodePowered } from '../powerContext.shared'
 import { DefaultNodeShape } from './DefaultNodeShape'
 import { CustomSymbolGlyph } from './CustomSymbolGlyph'
 import { useCustomSymbols } from '../customSymbolContext.shared'
-import { useIsVideoPinned } from '../videoPinContext.shared'
+import { useIsFloatingVideo } from '../floatingVideoContext.shared'
 import {
   labelBelowBandOffset,
   masteryNeonLabelOffset,
@@ -55,7 +55,7 @@ const UNPOWERED_GLOW = 'rgba(90, 100, 112, 0.12)'
 
 export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) {
   const { customSymbols, getCustomSymbol, resolveSymbolColor } = useCustomSymbols()
-  const pinnedVideo = useIsVideoPinned(id)
+  const floatingVideo = useIsFloatingVideo(id)
   const nodes = useStore((s) => s.nodes) as PassiveFlowNode[]
   const zoom = useStore((s) => s.transform[2])
   const voidHighlight = useVoidHighlight()
@@ -150,7 +150,7 @@ export function PassiveNode({ id, data, selected }: NodeProps<PassiveFlowNode>) 
       }${
         data.kind === 'void' && data.voidPassing ? ' is-void-passing' : ''
       }${customSymbol ? ' has-custom-symbol' : ''}${
-        pinnedVideo ? ' is-video-pinned' : ''
+        floatingVideo ? ' is-floating-video' : ''
       }${connectGlowClass}`}
       style={
         {

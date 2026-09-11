@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { NotableLogViewer } from './NotableLogViewer'
 import { createDailyLog } from '../dailyLog'
 import { kindUsesDailyLogs } from '../dailyLogNode'
-import { canPinNodeVideos } from '../videoMedia'
+import { canFloatNodeVideos } from '../videoMedia'
 import { ShardMarkdownPreview } from './ShardMarkdownPreview'
 
 function mount(ui: React.ReactNode) {
@@ -51,13 +51,13 @@ const sampleLogs = [
 ]
 
 describe('Mastery contentless gates', () => {
-  it('disables Daily Log and video pin for Mastery kinds', () => {
+  it('disables Daily Log and floating video for Mastery kinds', () => {
     expect(kindUsesDailyLogs('mastery')).toBe(false)
     expect(kindUsesDailyLogs('voidMastery')).toBe(false)
     expect(kindUsesDailyLogs('notable')).toBe(true)
-    expect(canPinNodeVideos('mastery')).toBe(false)
-    expect(canPinNodeVideos('voidMastery')).toBe(false)
-    expect(canPinNodeVideos('notable')).toBe(true)
+    expect(canFloatNodeVideos('mastery')).toBe(false)
+    expect(canFloatNodeVideos('voidMastery')).toBe(false)
+    expect(canFloatNodeVideos('notable')).toBe(true)
   })
 })
 
