@@ -22,16 +22,17 @@
   box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
   box-sizing: border-box;
   min-width: 0;
+  /* Shared Preview/Pin window geometry (Pin must not force a new size). */
+  width: min(800px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
 }
 
-/* Temporary right-click preview: centered, capped like DailyLogEditorModal. */
+/* Temporary right-click preview: centered placement only. */
 .shard-markdown-preview:not(.is-pinned) {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(800px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
   overflow: hidden;
 }
 
@@ -108,8 +109,6 @@
   overflow: auto;
   min-width: 280px;
   min-height: 180px;
-  width: min(420px, calc(100vw - 16px));
-  height: min(520px, calc(100vh - 16px));
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
 }

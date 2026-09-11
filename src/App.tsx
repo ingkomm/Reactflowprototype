@@ -1611,6 +1611,46 @@ export default function App() {
     return nodes.find((n) => n.id === contextMenu.nodeId) ?? null
   }, [contextMenu, nodes])
 
+  /**
+   * Single render list for Shard/Notable viewers.
+   * Preview and Pin must share the same React instance (stable key per nodeId).
+   */
+  const viewerEntries = useMemo(() => {
+    type ViewerRenderEntry = {
+      nodeId: string
+      kind: PinnedViewerKind
+      x: number
+      y: number
+      pinned: boolean
+      zIndex?: number
+    }
+    const pinnedIds = new Set(pinnedViewers.map((entry) => entry.nodeId))
+    const entries: ViewerRenderEntry[] = pinnedViewers.map((entry) => ({
+      nodeId: entry.nodeId,
+      kind: entry.kind,
+      x: entry.x,
+      y: entry.y,
+      pinned: true,
+      zIndex: entry.zIndex,
+    }))
+    if (contextMenu && contextMenuNode) {
+      const data = contextMenuNode.data as PassiveNodeData
+      if (
+        (data.kind === 'shard' || data.kind === 'notable') &&
+        !pinnedIds.has(contextMenu.nodeId)
+      ) {
+        entries.push({
+          nodeId: contextMenu.nodeId,
+          kind: data.kind,
+          x: contextMenu.x,
+          y: contextMenu.y,
+          pinned: false,
+        })
+      }
+    }
+    return entries
+  }, [pinnedViewers, contextMenu, contextMenuNode])
+
   const handlePinnedLogSelect = useCallback((nodeId: string, logId: string) => {
     setSelectedId(nodeId)
     setFocusLogId(logId)
@@ -2072,103 +2112,102 @@ export default function App() {
               nodes={flowNodes}
             />
 
-            {pinnedViewers.map((entry) => {
+            {viewerEntries.map((entry) => {
               const node = nodes.find((n) => n.id === entry.nodeId)
               if (!node) return null
               const data = node.data as PassiveNodeData
+              const viewerKey = `viewer:${entry.nodeId}`
               if (entry.kind === 'shard') {
                 return (
                   <ShardMarkdownPreview
-                    key={`pinned-shard-${entry.nodeId}`}
+                    key={viewerKey}
                     open
-                    pinned
-                    modal={false}
-                    closeOnEscape={false}
+                    pinned={entry.pinned}
+                    modal={!entry.pinned}
+                    closeOnEscape={!entry.pinned}
                     x={entry.x}
                     y={entry.y}
                     zIndex={entry.zIndex}
                     nodeLabel={data.label}
                     markdown={data.markdown}
-                    onClose={() => handleClosePinnedViewer(entry.nodeId)}
-                    onActivate={() => handleActivatePinnedViewer(entry.nodeId)}
-                    onBoundsChange={(bounds) =>
-                      handlePinnedBoundsChange(entry.nodeId, bounds)
+                    onClose={() =>
+                      entry.pinned
+                        ? handleClosePinnedViewer(entry.nodeId)
+                        : setContextMenu(null)
+                    }
+                    onPin={
+                      entry.pinned
+                        ? undefined
+                        : (position) => handlePinViewer(entry.nodeId, 'shard', position)
+                    }
+                    onActivate={
+                      entry.pinned
+                        ? () => handleActivatePinnedViewer(entry.nodeId)
+                        : undefined
+                    }
+                    onBoundsChange={
+                      entry.pinned
+                        ? (bounds) => handlePinnedBoundsChange(entry.nodeId, bounds)
+                        : undefined
                     }
                   />
                 )
               }
               return (
                 <NotableLogViewer
-                  key={`pinned-notable-${entry.nodeId}`}
+                  key={viewerKey}
                   open
-                  pinned
-                  modal={false}
-                  closeOnEscape={false}
+                  pinned={entry.pinned}
+                  modal={!entry.pinned}
+                  closeOnEscape={!entry.pinned}
                   x={entry.x}
                   y={entry.y}
                   zIndex={entry.zIndex}
                   nodeLabel={data.label}
                   markdown={data.markdown}
                   logs={dailyLogsForNode(data)}
-                  onClose={() => handleClosePinnedViewer(entry.nodeId)}
-                  onActivate={() => handleActivatePinnedViewer(entry.nodeId)}
-                  onBoundsChange={(bounds) =>
-                    handlePinnedBoundsChange(entry.nodeId, bounds)
+                  onClose={() =>
+                    entry.pinned
+                      ? handleClosePinnedViewer(entry.nodeId)
+                      : setContextMenu(null)
+                  }
+                  onPin={
+                    entry.pinned
+                      ? undefined
+                      : (position) => handlePinViewer(entry.nodeId, 'notable', position)
+                  }
+                  onActivate={
+                    entry.pinned
+                      ? () => handleActivatePinnedViewer(entry.nodeId)
+                      : undefined
+                  }
+                  onBoundsChange={
+                    entry.pinned
+                      ? (bounds) => handlePinnedBoundsChange(entry.nodeId, bounds)
+                      : undefined
                   }
                 />
               )
             })}
 
-            {contextMenu && contextMenuNode ? (
-              (() => {
-                const data = contextMenuNode.data as PassiveNodeData
-                const closeMenu = () => setContextMenu(null)
-                if (data.kind === 'shard') {
+            {contextMenu && contextMenuNode
+              ? (() => {
+                  const data = contextMenuNode.data as PassiveNodeData
+                  if (data.kind === 'shard' || data.kind === 'notable') return null
                   return (
-                    <ShardMarkdownPreview
+                    <NodeContextPopup
                       open
                       x={contextMenu.x}
                       y={contextMenu.y}
                       nodeLabel={data.label}
-                      markdown={data.markdown}
-                      onClose={closeMenu}
-                      onPin={(position) =>
-                        handlePinViewer(contextMenu.nodeId, 'shard', position)
-                      }
+                      canFloatVideos={canFloatNodeVideos(data.kind)}
+                      isFloatingVideo={floatingVideoNodeIds.includes(contextMenu.nodeId)}
+                      onClose={() => setContextMenu(null)}
+                      onToggleFloatingVideo={handleToggleContextFloatingVideo}
                     />
                   )
-                }
-                if (data.kind === 'notable') {
-                  return (
-                    <NotableLogViewer
-                      key={contextMenu.nodeId}
-                      open
-                      x={contextMenu.x}
-                      y={contextMenu.y}
-                      nodeLabel={data.label}
-                      markdown={data.markdown}
-                      logs={dailyLogsForNode(data)}
-                      onClose={closeMenu}
-                      onPin={(position) =>
-                        handlePinViewer(contextMenu.nodeId, 'notable', position)
-                      }
-                    />
-                  )
-                }
-                return (
-                  <NodeContextPopup
-                    open
-                    x={contextMenu.x}
-                    y={contextMenu.y}
-                    nodeLabel={data.label}
-                    canFloatVideos={canFloatNodeVideos(data.kind)}
-                    isFloatingVideo={floatingVideoNodeIds.includes(contextMenu.nodeId)}
-                    onClose={closeMenu}
-                    onToggleFloatingVideo={handleToggleContextFloatingVideo}
-                  />
-                )
-              })()
-            ) : null}
+                })()
+              : null}
 
             <SymbolKindEditor
               kind={symbolEditorKind ?? 'mastery'}

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi } from 'vitest'
-import { act } from 'react'
+import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { ReactNode } from 'react'
 import {
@@ -313,6 +313,91 @@ describe('transient vs pinned viewer chrome', () => {
     const pos = onPin.mock.calls[0]![0] as { x: number; y: number }
     expect(pos.x).toBeTypeOf('number')
     expect(pos.y).toBeTypeOf('number')
+    view.unmount()
+  })
+
+  it('Pin must not remount the Notable viewer (same panel DOM + selection)', () => {
+    const logs = [
+      createDailyLog('2026-08-01', 'older note'),
+      createDailyLog('2026-09-05', '## newest\n\nbody', [
+        {
+          id: 'vid-a',
+          url: 'https://youtu.be/aaaaaaaaaaa',
+          title: 'First clip',
+        },
+        {
+          id: 'vid-b',
+          url: 'https://youtu.be/bbbbbbbbbbb',
+          title: 'Second clip',
+        },
+      ]),
+      createDailyLog('2026-09-01', 'mid note'),
+    ]
+    const videoLogId = logs[1]!.id
+
+    function Harness() {
+      const [pinned, setPinned] = useState(false)
+      const [xy, setXy] = useState({ x: 40, y: 50 })
+      return (
+        <NotableLogViewer
+          key="viewer:notable-1"
+          open
+          pinned={pinned}
+          modal={!pinned}
+          closeOnEscape={!pinned}
+          x={xy.x}
+          y={xy.y}
+          zIndex={pinned ? 45 : undefined}
+          nodeLabel="Drill"
+          markdown="summary"
+          logs={logs}
+          onClose={() => undefined}
+          onPin={(position) => {
+            setXy(position)
+            setPinned(true)
+          }}
+        />
+      )
+    }
+
+    const view = mount(<Harness />)
+    const beforePanel = view.host.querySelector(
+      '[data-testid="notable-log-viewer"]',
+    ) as HTMLElement
+    expect(beforePanel).toBeTruthy()
+    expect(beforePanel.getAttribute('data-pinned')).toBe('false')
+
+    const videoItem = view.host.querySelector(
+      '[data-testid="notable-video-item-vid-b"]',
+    ) as HTMLButtonElement
+    act(() => {
+      videoItem.click()
+    })
+    expect(videoItem.className).toContain('is-active')
+    expect(
+      view.host
+        .querySelector(`[data-testid="notable-log-item-${videoLogId}"]`)
+        ?.getAttribute('aria-pressed'),
+    ).toBe('true')
+
+    const pin = view.host.querySelector('[data-testid="viewer-pin"]') as HTMLButtonElement
+    act(() => {
+      pin.click()
+    })
+
+    const afterPanel = view.host.querySelector(
+      '[data-testid="notable-log-viewer"]',
+    ) as HTMLElement
+    expect(afterPanel).toBe(beforePanel)
+    expect(afterPanel.getAttribute('data-pinned')).toBe('true')
+    expect(
+      view.host
+        .querySelector(`[data-testid="notable-log-item-${videoLogId}"]`)
+        ?.getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(
+      view.host.querySelector('[data-testid="notable-video-item-vid-b"]')?.className,
+    ).toContain('is-active')
     view.unmount()
   })
 })

@@ -22,16 +22,17 @@
   box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
   box-sizing: border-box;
   min-width: 0;
+  /* Shared Preview/Pin window geometry (Pin must not force a new size). */
+  width: min(800px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
 }
 
-/* Temporary right-click preview: centered window only (content layout is shared). */
+/* Temporary right-click preview: centered placement only. */
 .notable-log-viewer:not(.is-pinned) {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(800px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
   overflow: hidden;
 }
 
@@ -334,7 +335,7 @@
   flex-shrink: 0;
 }
 
-/* Pin = same content layout as Preview; only window capability differs. */
+/* Pin = same geometry as Preview; only window capability differs. */
 .notable-log-viewer.is-pinned {
   z-index: 45;
   left: auto;
@@ -343,8 +344,6 @@
   /* Whole pin window resize (UI-only; not persisted). */
   resize: both;
   overflow: auto;
-  width: min(720px, calc(100vw - 16px));
-  height: min(640px, calc(100vh - 16px));
   min-width: 360px;
   min-height: 280px;
   /* Free CSS resize within the viewport (portrait video width is capped separately). */
