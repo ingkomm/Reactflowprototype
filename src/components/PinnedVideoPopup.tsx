@@ -15,6 +15,7 @@ import type { PassiveNodeData } from '../types'
 import { dailyLogSummary } from '../dailyLog'
 import { extractDailyLogsFromNodeData } from '../dailyLogNode'
 import { NODE_SIZE } from '../orbit'
+import { isLocalVideoMedia } from '../videoMedia'
 import { VideoEmbed } from './VideoEmbed'
 import './PinnedVideoPopup.css'
 
@@ -29,9 +30,23 @@ type Props = {
 const DEFAULT_PLAYER_WIDTH = 320
 const MIN_PLAYER_WIDTH = 200
 const MAX_PLAYER_WIDTH = 720
-const ASPECT = 16 / 9
+/** Fallback / YouTube pin aspect. Local uses intrinsic ratio when known. */
+export const DEFAULT_PIN_ASPECT = 16 / 9
 
 type DragMode = 'move' | 'resize' | null
+
+/** Resolve the aspect ratio used for pin player height and resize. */
+export function resolvePinnedPlayerAspect(
+  isLocal: boolean,
+  localAspect: number | null,
+): number {
+  if (isLocal && localAspect != null && localAspect > 0) return localAspect
+  return DEFAULT_PIN_ASPECT
+}
+
+export function pinnedPlayerHeight(width: number, aspect: number): number {
+  return width / aspect
+}
 
 export function PinnedVideoPopup(props: Props) {
   return <PinnedVideoPopupInner key={`${props.pinnedNodeId}-${props.stackIndex}`} {...props} />
@@ -50,13 +65,15 @@ function PinnedVideoPopupInner({
   const [activeLogId, setActiveLogId] = useState<string | null>(null)
   const [offset, setOffset] = useState({ x: stackIndex * 28, y: stackIndex * 28 })
   const [playerWidth, setPlayerWidth] = useState(DEFAULT_PLAYER_WIDTH)
+  const [localAspect, setLocalAspect] = useState<number | null>(null)
+  const [trackedVideoId, setTrackedVideoId] = useState<string | null>(null)
   const [layout, setLayout] = useState({
     nodeCenter: { x: 0, y: 0 },
     popupLeft: 0,
     popupTop: 0,
     anchorX: 0,
     anchorY: 0,
-    playerHeight: DEFAULT_PLAYER_WIDTH / ASPECT,
+    playerHeight: DEFAULT_PLAYER_WIDTH / DEFAULT_PIN_ASPECT,
   })
   const dragRef = useRef<{
     mode: DragMode
@@ -67,6 +84,7 @@ function PinnedVideoPopupInner({
     originWidth: number
   } | null>(null)
   const endDragRef = useRef<(() => void) | null>(null)
+  const aspectRef = useRef(DEFAULT_PIN_ASPECT)
 
   const node = useMemo(
     () => nodes.find((n) => n.id === pinnedNodeId) ?? null,
@@ -85,6 +103,18 @@ function PinnedVideoPopupInner({
   }, [logs, resolvedLogId])
 
   const activeVideo = activeLog?.media?.[0] ?? null
+  const activeVideoId = activeVideo?.id ?? null
+  // Reset cached local ratio when the pinned media identity changes.
+  if (activeVideoId !== trackedVideoId) {
+    setTrackedVideoId(activeVideoId)
+    setLocalAspect(null)
+  }
+  const isLocalActive = Boolean(activeVideo && isLocalVideoMedia(activeVideo))
+  const playerAspect = resolvePinnedPlayerAspect(isLocalActive, localAspect)
+
+  useEffect(() => {
+    aspectRef.current = playerAspect
+  }, [playerAspect])
 
   useLayoutEffect(() => {
     if (!node || !data) return
@@ -102,7 +132,7 @@ function PinnedVideoPopupInner({
     const baseTop = Math.max(12, nodeCenter.y - 110)
     const popupLeft = baseLeft + offset.x
     const popupTop = baseTop + offset.y
-    const playerHeight = activeLog?.media?.[0] ? playerWidth / ASPECT : 0
+    const playerHeight = activeVideo ? pinnedPlayerHeight(playerWidth, playerAspect) : 0
     setLayout({
       nodeCenter,
       popupLeft,
@@ -112,13 +142,14 @@ function PinnedVideoPopupInner({
       playerHeight,
     })
   }, [
-    activeLog?.media?.[0]?.url,
+    activeVideo,
     containerRef,
     data,
     flowToScreenPosition,
     node,
     offset.x,
     offset.y,
+    playerAspect,
     playerWidth,
     transform,
   ])
@@ -145,7 +176,8 @@ function PinnedVideoPopupInner({
           setOffset({ x: drag.originOffsetX + dx, y: drag.originOffsetY + dy })
           return
         }
-        const delta = Math.max(dx, dy * ASPECT)
+        const aspect = aspectRef.current
+        const delta = Math.max(dx, dy * aspect)
         const next = Math.min(
           MAX_PLAYER_WIDTH,
           Math.max(MIN_PLAYER_WIDTH, drag.originWidth + delta),
@@ -180,6 +212,10 @@ function PinnedVideoPopupInner({
     onSelectLog?.(pinnedNodeId, logId)
   }
 
+  const resizeTitle = isLocalActive
+    ? '드래그해서 크기 조절 (원본 비율 유지)'
+    : '드래그해서 크기 조절 (16:9 유지)'
+
   return (
     <div className="pinned-video-layer" aria-live="polite">
       <svg className="pinned-video-layer__links" aria-hidden>
@@ -208,6 +244,7 @@ function PinnedVideoPopupInner({
         }
         role="dialog"
         aria-label={`${data.label} Daily Log`}
+        data-player-aspect={String(playerAspect)}
       >
         <header
           className="pinned-video-popup__head"
@@ -260,8 +297,10 @@ function PinnedVideoPopupInner({
                   <p className="pinned-video-popup__memo">{activeLog.note.trim()}</p>
                 ) : null}
                 {activeVideo ? (
-                  <div className="pinned-video-popup__player">
-                    <VideoEmbed media={activeVideo} />
+                  <div
+                    className={`pinned-video-popup__player${isLocalActive ? ' pinned-video-popup__player--local' : ''}`}
+                  >
+                    <VideoEmbed media={activeVideo} onAspectRatioChange={setLocalAspect} />
                   </div>
                 ) : null}
               </div>
@@ -274,7 +313,7 @@ function PinnedVideoPopupInner({
             type="button"
             className="pinned-video-popup__resize"
             aria-label="크기 조절"
-            title="드래그해서 크기 조절 (16:9 유지)"
+            title={resizeTitle}
             onPointerDown={(event) => beginDrag('resize', event)}
           />
         ) : null}

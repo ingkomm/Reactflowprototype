@@ -1,4 +1,4 @@
-import { useState, type SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import type { VideoMedia } from '../types'
 import { resolveLocalVideoPlaybackUrl } from '../platform/localVideo'
 import { extractYouTubeId, isLocalVideoMedia, youtubeEmbedUrl } from '../videoMedia'
@@ -6,9 +6,11 @@ import './VideoEmbed.css'
 
 type Props = {
   media: VideoMedia
+  /** Local video only: reports intrinsic width/height ratio (null while unknown / non-local). */
+  onAspectRatioChange?: (ratio: number | null) => void
 }
 
-export function VideoEmbed({ media }: Props) {
+export function VideoEmbed({ media, onAspectRatioChange }: Props) {
   const [loaded, setLoaded] = useState(false)
   const [localError, setLocalError] = useState(false)
   const [localAspectRatio, setLocalAspectRatio] = useState<number | null>(null)
@@ -21,6 +23,14 @@ export function VideoEmbed({ media }: Props) {
     setLocalError(false)
     setLocalAspectRatio(null)
   }
+
+  useEffect(() => {
+    if (!isLocalVideoMedia(media)) {
+      onAspectRatioChange?.(null)
+      return
+    }
+    onAspectRatioChange?.(localAspectRatio)
+  }, [media, localAspectRatio, onAspectRatioChange])
 
   if (isLocalVideoMedia(media)) {
     const src = resolveLocalVideoPlaybackUrl(media.url)

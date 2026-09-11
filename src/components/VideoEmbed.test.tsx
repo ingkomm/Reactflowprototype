@@ -183,4 +183,48 @@ describe('VideoEmbed media identity state reset', () => {
 
     view.unmount()
   })
+
+  it('reports local aspect ratio through onAspectRatioChange', () => {
+    const media = {
+      id: 'local-cb',
+      url: '/videos/portrait.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const seen: Array<number | null> = []
+    const view = mount(
+      <VideoEmbed
+        media={media}
+        onAspectRatioChange={(ratio) => {
+          seen.push(ratio)
+        }}
+      />,
+    )
+    expect(seen.at(-1)).toBeNull()
+
+    const video = view.host.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1080 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 1920 })
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    expect(seen.at(-1)).toBeCloseTo(1080 / 1920, 5)
+
+    view.rerender(
+      <VideoEmbed
+        media={{
+          id: 'local-cb-2',
+          url: '/videos/other.mp4',
+          kind: 'local',
+          provider: 'local',
+        }}
+        onAspectRatioChange={(ratio) => {
+          seen.push(ratio)
+        }}
+      />,
+    )
+    expect(seen.at(-1)).toBeNull()
+
+    view.unmount()
+  })
 })

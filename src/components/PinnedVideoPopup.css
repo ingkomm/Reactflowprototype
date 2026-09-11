@@ -165,15 +165,24 @@
 .pinned-video-popup__player {
   width: var(--player-width);
   height: var(--player-height);
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
 }
 
 .pinned-video-popup__player .video-embed {
   width: 100%;
   height: 100%;
-  aspect-ratio: auto;
+  /* Override VideoEmbed inline aspect-ratio — pin frame already matches media. */
+  aspect-ratio: unset !important;
   border-radius: 8px;
   overflow: hidden;
   background: #000;
+}
+
+.pinned-video-popup__player--local .video-embed--local video {
+  /* Preserve full frame; never crop. */
+  object-fit: contain;
 }
 
 .pinned-video-popup__player .video-embed iframe {
