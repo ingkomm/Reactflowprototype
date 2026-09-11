@@ -118,7 +118,7 @@ describe('VideoEmbed media identity state reset', () => {
     }
     const view = mount(<VideoEmbed media={media} />)
     const frame = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
-    expect(frame.style.aspectRatio).toBe('16 / 9')
+    expect(frame.getAttribute('data-aspect-ratio')).toBe('16/9')
 
     const video = view.host.querySelector('video') as HTMLVideoElement
     Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1668 })
@@ -126,7 +126,8 @@ describe('VideoEmbed media identity state reset', () => {
     act(() => {
       video.dispatchEvent(new Event('loadedmetadata'))
     })
-    expect(Number(frame.style.aspectRatio)).toBeCloseTo(1668 / 2388, 5)
+    const updated = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(Number(updated.getAttribute('data-aspect-ratio'))).toBeCloseTo(1668 / 2388, 5)
 
     view.unmount()
   })
@@ -152,11 +153,11 @@ describe('VideoEmbed media identity state reset', () => {
       video.dispatchEvent(new Event('loadedmetadata'))
     })
     const frameA = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
-    expect(Number(frameA.style.aspectRatio)).toBeCloseTo(1080 / 1920, 5)
+    expect(Number(frameA.getAttribute('data-aspect-ratio'))).toBeCloseTo(1080 / 1920, 5)
 
     view.rerender(<VideoEmbed media={mediaB} />)
     const frameB = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
-    expect(frameB.style.aspectRatio).toBe('16 / 9')
+    expect(frameB.getAttribute('data-aspect-ratio')).toBe('16/9')
 
     view.unmount()
   })

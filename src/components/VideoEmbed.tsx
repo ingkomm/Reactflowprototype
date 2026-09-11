@@ -52,6 +52,7 @@ export function VideoEmbed({ media }: Props) {
       <div
         className="video-embed video-embed--local"
         data-testid="video-embed-local"
+        data-aspect-ratio={localAspectRatio != null ? String(localAspectRatio) : '16/9'}
         style={{
           aspectRatio: localAspectRatio != null ? String(localAspectRatio) : '16 / 9',
         }}
