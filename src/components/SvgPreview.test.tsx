@@ -318,12 +318,16 @@ describe('Timeline label + horizontal overflow', () => {
       expect(css).toMatch(/:not\(\.is-pinned\)\s*\{[^}]*left:\s*50%/s)
       expect(css).toMatch(/:not\(\.is-pinned\)\s*\{[^}]*top:\s*50%/s)
       expect(css).toMatch(/:not\(\.is-pinned\)\s*\{[^}]*transform:\s*translate\(-50%,\s*-50%\)/s)
-      expect(css).toMatch(/width:\s*min\(800px,\s*calc\(100vw - 32px\)\)/)
+      expect(css).toMatch(/max-width:\s*calc\(100vw - 32px\)/)
       expect(css).toMatch(/max-height:\s*calc\(100vh - 32px\)/)
       // Pin must not force a new initial width/height (same instance keeps Preview size).
       expect(css).not.toMatch(/\.is-pinned\s*\{[^}]*[^-\w]width\s*:/s)
       expect(css).not.toMatch(/\.is-pinned\s*\{[^}]*[^-\w]height\s*:/s)
+      expect(css).not.toMatch(/\.is-pinned\s*\{[^}]*resize\s*:\s*both/s)
     }
+    // Notable grows with landscape video; Shard keeps fixed preview width.
+    expect(notable).toMatch(/width:\s*fit-content/)
+    expect(shard).toMatch(/width:\s*min\(800px,\s*calc\(100vw - 32px\)\)/)
     expect(notable).toMatch(/\.is-pinned\s*\{[^}]*transform:\s*none/s)
     expect(shard).toMatch(/\.is-pinned\s*\{[^}]*transform:\s*none/s)
   })

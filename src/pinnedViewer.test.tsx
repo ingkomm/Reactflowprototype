@@ -133,11 +133,11 @@ describe('transient vs pinned viewer chrome', () => {
       pinned.host
         .querySelector('[data-testid="shard-markdown-preview"]')
         ?.getAttribute('data-resizable'),
-    ).toBe('true')
+    ).toBe('false')
     pinned.unmount()
   })
 
-  it('marks pinned Notable as resizable and transient viewers as not', () => {
+  it('marks Preview and Pin viewers as not user-resizable', () => {
     const transientShard = mount(
       <ShardMarkdownPreview
         open
@@ -189,7 +189,7 @@ describe('transient vs pinned viewer chrome', () => {
       pinnedNotable.host
         .querySelector('[data-testid="notable-log-viewer"]')
         ?.getAttribute('data-resizable'),
-    ).toBe('true')
+    ).toBe('false')
     pinnedNotable.unmount()
   })
 

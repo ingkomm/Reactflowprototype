@@ -33,7 +33,11 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
   // Portrait (aspect < 1) caps display width so 9:16 does not dominate wide columns.
   const isPortrait = aspect < 1
   const frameClass = `video-embed${isPortrait ? ' video-embed--portrait' : ''}`
-  const frameStyle = { aspectRatio: aspect } satisfies CSSProperties
+  // --video-aspect-ratio lets parents size by target height without re-detecting aspect.
+  const frameStyle = {
+    aspectRatio: aspect,
+    ['--video-aspect-ratio' as string]: String(aspect),
+  } satisfies CSSProperties
 
   useEffect(() => {
     onAspectRatioChange?.(aspect)

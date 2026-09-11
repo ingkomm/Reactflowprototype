@@ -35,7 +35,7 @@ describe('video aspect ownership (CSS regression)', () => {
     expect(css).toMatch(/\.floating-video-popup__player\s*\{[^}]*height\s*:\s*auto/s)
   })
 
-  it('defines portrait max-width on VideoEmbed and mirrors it on Notable player via :has', () => {
+  it('keeps VideoEmbed portrait cap; Notable uses height-based policy without :has portrait mirror', () => {
     const embed = readCss('VideoEmbed.css')
     expect(embed).toMatch(/\.video-embed--portrait\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s)
     expect(embed).toMatch(/margin-inline\s*:\s*auto/)
@@ -43,11 +43,10 @@ describe('video aspect ownership (CSS regression)', () => {
     const notable = readCss('NotableLogViewer.css')
     // FloatingVideoPopup path is out of scope for Notable Pin; keep it free of a 420 chrome rule.
     expect(pin).not.toMatch(/420px/)
+    // Notable must not detect portrait via :has — height policy + VideoEmbed aspect only.
+    expect(notable).not.toMatch(/\.notable-log-viewer__player:has\(\.video-embed--portrait\)/)
     expect(notable).toMatch(
-      /\.notable-log-viewer__player:has\(\.video-embed--portrait\)\s*\{[^}]*width\s*:\s*min\(100%\s*,\s*420px\)/s,
-    )
-    expect(notable).toMatch(
-      /\.notable-log-viewer__player:has\(\.video-embed--portrait\)\s*\{[^}]*margin-inline\s*:\s*auto/s,
+      /\.notable-log-viewer__player \.video-embed[^{]*\{[^}]*747px \* var\(--video-aspect-ratio/s,
     )
     expect(pin).not.toMatch(/\.floating-video-popup__player \.video-embed\s*\{[^}]*^\s*width\s*:\s*100%/ms)
     expect(notable).not.toMatch(
@@ -55,13 +54,16 @@ describe('video aspect ownership (CSS regression)', () => {
     )
   })
 
-  it('allows Notable Pin window resize up to the viewport (not a 720px ceiling)', () => {
+  it('Pin stays within viewport and is not user-resizable', () => {
     const notable = readCss('NotableLogViewer.css')
+    const shard = readCss('ShardMarkdownPreview.css')
     expect(notable).toMatch(
       /\.notable-log-viewer\.is-pinned\s*\{[^}]*max-width\s*:\s*calc\(100vw - 16px\)\s*;/s,
     )
     expect(notable).not.toMatch(
       /\.notable-log-viewer\.is-pinned\s*\{[^}]*max-width\s*:\s*min\(720px\s*,\s*calc\(100vw - 16px\)\)/s,
     )
+    expect(notable).not.toMatch(/\.notable-log-viewer\.is-pinned\s*\{[^}]*resize\s*:\s*both/s)
+    expect(shard).not.toMatch(/\.shard-markdown-preview\.is-pinned\s*\{[^}]*resize\s*:\s*both/s)
   })
 })

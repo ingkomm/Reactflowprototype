@@ -348,12 +348,12 @@ describe('NotableLogViewer interactions', () => {
     expect(view.host.querySelector('[data-testid="notable-video-player"]')).toBeTruthy()
     expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeNull()
     expect(view.host.textContent).not.toContain('영상 크기 조절')
-    expect(panel.getAttribute('data-resizable')).toBe('true')
+    expect(panel.getAttribute('data-resizable')).toBe('false')
 
     view.unmount()
   })
 
-  it('pinned Notable reports bounds after size change and stays resizable', () => {
+  it('pinned Notable reports bounds after size change and is not user-resizable', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
 
@@ -374,7 +374,7 @@ describe('NotableLogViewer interactions', () => {
       />,
     )
     const panel = view.host.querySelector('[data-testid="notable-log-viewer"]') as HTMLElement
-    expect(panel.getAttribute('data-resizable')).toBe('true')
+    expect(panel.getAttribute('data-resizable')).toBe('false')
     expect(view.host.querySelector('[data-testid="notable-video-resize"]')).toBeNull()
 
     act(() => {

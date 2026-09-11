@@ -123,7 +123,7 @@ export function NotableLogViewer({
         style={panelStyle}
         data-testid="notable-log-viewer"
         data-pinned={pinned ? 'true' : 'false'}
-        data-resizable={pinned ? 'true' : 'false'}
+        data-resizable="false"
         onPointerDownCapture={onActivate}
       >
         <header

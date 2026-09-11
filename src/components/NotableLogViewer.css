@@ -22,8 +22,10 @@
   box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
   box-sizing: border-box;
   min-width: 0;
-  /* Shared Preview/Pin window geometry (Pin must not force a new size). */
-  width: min(800px, calc(100vw - 32px));
+  /* Shared Preview/Pin window geometry (Pin must not force a new size).
+     Grow with landscape video; portrait must not force a wide shell. */
+  width: fit-content;
+  min-width: min(800px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
 }
@@ -71,7 +73,7 @@
 
 .notable-log-viewer__layout {
   display: grid;
-  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  grid-template-columns: minmax(160px, 220px) minmax(0, max-content);
   gap: 10px;
   min-height: 280px;
   min-width: 0;
@@ -242,8 +244,9 @@
 
 .notable-log-viewer__player {
   position: relative;
-  width: 100%;
+  width: fit-content;
   max-width: 100%;
+  margin-inline: auto;
   /* VideoEmbed owns aspect-ratio — do not force 16:9 here. */
   border-radius: 8px;
   overflow: hidden;
@@ -251,17 +254,23 @@
   border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
 }
 
-/* Portrait embeds already self-cap at 420px; shrink the black player chrome to match. */
-.notable-log-viewer__player:has(.video-embed--portrait) {
-  width: min(100%, 420px);
-  margin-inline: auto;
-}
-
+/*
+ * Notable presentation policy: target video height ≈ 747px
+ * (matches prior 9:16 @ 420px width). Width = height × VideoEmbed aspect.
+ * Shrink to available width when the viewport is too narrow — never horizontal scroll.
+ */
 .notable-log-viewer__player .video-embed,
 .notable-log-viewer__player .video-embed--placeholder {
   position: relative;
-  /* Leave width to VideoEmbed (full-bleed or portrait capped). */
+  width: min(100%, calc(747px * var(--video-aspect-ratio, 1.7777778)));
   height: auto;
+  margin-inline: auto;
+}
+
+/* Same height policy for all aspects — do not re-apply portrait width caps here. */
+.notable-log-viewer__player .video-embed--portrait {
+  width: min(100%, calc(747px * var(--video-aspect-ratio, 0.5625)));
+  margin-inline: auto;
 }
 
 .notable-log-viewer__player .video-embed iframe {
@@ -335,18 +344,15 @@
   flex-shrink: 0;
 }
 
-/* Pin = same geometry as Preview; only window capability differs. */
+/* Pin = same geometry as Preview; move/tether only (not user-resizable). */
 .notable-log-viewer.is-pinned {
   z-index: 45;
   left: auto;
   top: auto;
   transform: none;
-  /* Whole pin window resize (UI-only; not persisted). */
-  resize: both;
   overflow: auto;
   min-width: 360px;
   min-height: 280px;
-  /* Free CSS resize within the viewport (portrait video width is capped separately). */
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
 }

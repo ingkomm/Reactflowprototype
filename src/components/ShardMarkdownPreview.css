@@ -104,8 +104,7 @@
   left: auto;
   top: auto;
   transform: none;
-  /* Whole pin window resize (UI-only; not persisted). */
-  resize: both;
+  /* Pin = move/tether only (not user-resizable). */
   overflow: auto;
   min-width: 280px;
   min-height: 180px;
