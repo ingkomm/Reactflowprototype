@@ -108,4 +108,78 @@ describe('VideoEmbed media identity state reset', () => {
 
     view.unmount()
   })
+
+  it('updates local container aspect-ratio from video metadata', () => {
+    const media = {
+      id: 'local-ratio',
+      url: '/videos/ipad.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const view = mount(<VideoEmbed media={media} />)
+    const frame = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(frame.style.aspectRatio).toBe('16 / 9')
+
+    const video = view.host.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1668 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 2388 })
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    expect(Number(frame.style.aspectRatio)).toBeCloseTo(1668 / 2388, 5)
+
+    view.unmount()
+  })
+
+  it('resets local aspect-ratio when media.id changes', () => {
+    const mediaA = {
+      id: 'local-a',
+      url: '/videos/a.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const mediaB = {
+      id: 'local-b',
+      url: '/videos/b.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const view = mount(<VideoEmbed media={mediaA} />)
+    const video = view.host.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1080 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 1920 })
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    const frameA = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(Number(frameA.style.aspectRatio)).toBeCloseTo(1080 / 1920, 5)
+
+    view.rerender(<VideoEmbed media={mediaB} />)
+    const frameB = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(frameB.style.aspectRatio).toBe('16 / 9')
+
+    view.unmount()
+  })
+
+  it('keeps YouTube on the fixed 16:9 embed path', () => {
+    const media = {
+      id: 'yt-ratio',
+      url: 'https://youtu.be/dQw4w9WgXcQ',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const view = mount(<VideoEmbed media={media} />)
+    expect(view.host.querySelector('.video-embed--placeholder')).toBeTruthy()
+    act(() => {
+      ;(view.host.querySelector('.video-embed__load-btn') as HTMLButtonElement).click()
+    })
+    const frame = view.host.querySelector('[data-testid="video-embed-youtube"]') as HTMLElement
+    expect(frame).toBeTruthy()
+    expect(frame.className).toContain('video-embed')
+    expect(frame.className).not.toContain('video-embed--local')
+    expect(frame.style.aspectRatio).toBe('')
+    expect(view.host.querySelector('iframe')).toBeTruthy()
+
+    view.unmount()
+  })
 })

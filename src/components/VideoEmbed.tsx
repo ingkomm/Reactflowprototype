@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import type { VideoMedia } from '../types'
 import { resolveLocalVideoPlaybackUrl } from '../platform/localVideo'
 import { extractYouTubeId, isLocalVideoMedia, youtubeEmbedUrl } from '../videoMedia'
@@ -11,6 +11,7 @@ type Props = {
 export function VideoEmbed({ media }: Props) {
   const [loaded, setLoaded] = useState(false)
   const [localError, setLocalError] = useState(false)
+  const [localAspectRatio, setLocalAspectRatio] = useState<number | null>(null)
   const [activeMediaId, setActiveMediaId] = useState(media.id)
 
   // Same VideoEmbed instance can be reused when Viewer/Pin swaps active media.
@@ -18,6 +19,7 @@ export function VideoEmbed({ media }: Props) {
     setActiveMediaId(media.id)
     setLoaded(false)
     setLocalError(false)
+    setLocalAspectRatio(null)
   }
 
   if (isLocalVideoMedia(media)) {
@@ -38,13 +40,28 @@ export function VideoEmbed({ media }: Props) {
         </p>
       )
     }
+
+    const onLocalMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
+      const video = event.currentTarget
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        setLocalAspectRatio(video.videoWidth / video.videoHeight)
+      }
+    }
+
     return (
-      <div className="video-embed video-embed--local" data-testid="video-embed-local">
+      <div
+        className="video-embed video-embed--local"
+        data-testid="video-embed-local"
+        style={{
+          aspectRatio: localAspectRatio != null ? String(localAspectRatio) : '16 / 9',
+        }}
+      >
         <video
           controls
           preload="metadata"
           src={src}
           title={media.title || 'Local video'}
+          onLoadedMetadata={onLocalMetadata}
           onError={() => setLocalError(true)}
         />
       </div>
@@ -69,7 +86,7 @@ export function VideoEmbed({ media }: Props) {
       )
     }
     return (
-      <div className="video-embed">
+      <div className="video-embed" data-testid="video-embed-youtube">
         <iframe
           title={media.title || 'YouTube video'}
           src={youtubeEmbedUrl(youtubeId)}
