@@ -169,3 +169,33 @@ export function collectNodeVideos(data: {
 export function canPinNodeVideos(kind: string): boolean {
   return kind === 'notable'
 }
+
+/** Landscape fallback before local metadata / for standard YouTube. */
+export const DEFAULT_VIDEO_ASPECT = 16 / 9
+/** YouTube Shorts URL path → portrait frame. */
+export const YOUTUBE_SHORTS_ASPECT = 9 / 16
+
+/** True when the URL is a YouTube Shorts path (not inferred from id alone). */
+export function isYouTubeShortsUrl(url: string): boolean {
+  return /youtube\.com\/shorts\//i.test(url.trim())
+}
+
+/**
+ * Width/height ratio for the embed outer frame.
+ * Local uses measured metadata when provided; otherwise 16:9 fallback.
+ * Shorts URLs use 9:16; other YouTube uses 16:9.
+ */
+export function resolveVideoAspectRatio(
+  media: Pick<VideoMedia, 'url' | 'kind' | 'provider'>,
+  localAspect: number | null = null,
+): number {
+  if (isLocalVideoMedia(media)) {
+    if (localAspect != null && localAspect > 0) return localAspect
+    return DEFAULT_VIDEO_ASPECT
+  }
+  if (extractYouTubeId(media.url)) {
+    return isYouTubeShortsUrl(media.url) ? YOUTUBE_SHORTS_ASPECT : DEFAULT_VIDEO_ASPECT
+  }
+  return DEFAULT_VIDEO_ASPECT
+}
+

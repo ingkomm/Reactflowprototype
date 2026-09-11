@@ -10,6 +10,10 @@ import {
   isValidLocalVideoPath,
   validateVideoMedia,
   canPinNodeVideos,
+  isYouTubeShortsUrl,
+  resolveVideoAspectRatio,
+  DEFAULT_VIDEO_ASPECT,
+  YOUTUBE_SHORTS_ASPECT,
 } from './videoMedia'
 
 describe('videoMedia', () => {
@@ -112,5 +116,46 @@ describe('canPinNodeVideos', () => {
     expect(canPinNodeVideos('voidMastery')).toBe(false)
     expect(canPinNodeVideos('shard')).toBe(false)
     expect(canPinNodeVideos('connect')).toBe(false)
+  })
+})
+
+
+describe('resolveVideoAspectRatio', () => {
+  it('uses 16:9 for standard YouTube and unknown local metadata', () => {
+    const yt = {
+      id: 'yt1',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    expect(resolveVideoAspectRatio(yt)).toBe(DEFAULT_VIDEO_ASPECT)
+    const local = {
+      id: 'loc1',
+      url: '/videos/a.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    expect(resolveVideoAspectRatio(local, null)).toBe(DEFAULT_VIDEO_ASPECT)
+  })
+
+  it('uses 9:16 for YouTube Shorts URLs', () => {
+    const shorts = {
+      id: 's1',
+      url: 'https://www.youtube.com/shorts/abcdefghijk',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    expect(isYouTubeShortsUrl(shorts.url)).toBe(true)
+    expect(resolveVideoAspectRatio(shorts)).toBe(YOUTUBE_SHORTS_ASPECT)
+  })
+
+  it('uses measured local intrinsic ratio when provided', () => {
+    const local = {
+      id: 'loc2',
+      url: '/videos/ipad.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    expect(resolveVideoAspectRatio(local, 2360 / 1640)).toBeCloseTo(2360 / 1640)
   })
 })

@@ -15,7 +15,7 @@ import type { PassiveNodeData } from '../types'
 import { dailyLogSummary } from '../dailyLog'
 import { extractDailyLogsFromNodeData } from '../dailyLogNode'
 import { NODE_SIZE } from '../orbit'
-import { isLocalVideoMedia } from '../videoMedia'
+import { isLocalVideoMedia, isYouTubeShortsUrl } from '../videoMedia'
 import { VideoEmbed } from './VideoEmbed'
 import './PinnedVideoPopup.css'
 
@@ -30,17 +30,17 @@ type Props = {
 const DEFAULT_PLAYER_WIDTH = 320
 const MIN_PLAYER_WIDTH = 200
 const MAX_PLAYER_WIDTH = 720
-/** Fallback / YouTube pin aspect. Local uses intrinsic ratio when known. */
+/** Fallback until VideoEmbed reports the media aspect (and for resize math). */
 export const DEFAULT_PIN_ASPECT = 16 / 9
 
 type DragMode = 'move' | 'resize' | null
 
-/** Resolve the aspect ratio used for pin player height and resize. */
-export function resolvePinnedPlayerAspect(
-  isLocal: boolean,
-  localAspect: number | null,
-): number {
-  if (isLocal && localAspect != null && localAspect > 0) return localAspect
+/**
+ * Pin frame aspect follows VideoEmbed's reported ratio for all media types
+ * (local intrinsic, Shorts 9:16, standard YouTube 16:9).
+ */
+export function resolvePinnedPlayerAspect(mediaAspect: number | null): number {
+  if (mediaAspect != null && mediaAspect > 0) return mediaAspect
   return DEFAULT_PIN_ASPECT
 }
 
@@ -65,7 +65,7 @@ function PinnedVideoPopupInner({
   const [activeLogId, setActiveLogId] = useState<string | null>(null)
   const [offset, setOffset] = useState({ x: stackIndex * 28, y: stackIndex * 28 })
   const [playerWidth, setPlayerWidth] = useState(DEFAULT_PLAYER_WIDTH)
-  const [localAspect, setLocalAspect] = useState<number | null>(null)
+  const [mediaAspect, setMediaAspect] = useState<number | null>(null)
   const [trackedVideoId, setTrackedVideoId] = useState<string | null>(null)
   const [layout, setLayout] = useState({
     nodeCenter: { x: 0, y: 0 },
@@ -107,10 +107,11 @@ function PinnedVideoPopupInner({
   // Reset cached local ratio when the pinned media identity changes.
   if (activeVideoId !== trackedVideoId) {
     setTrackedVideoId(activeVideoId)
-    setLocalAspect(null)
+    setMediaAspect(null)
   }
   const isLocalActive = Boolean(activeVideo && isLocalVideoMedia(activeVideo))
-  const playerAspect = resolvePinnedPlayerAspect(isLocalActive, localAspect)
+  const isShortsActive = Boolean(activeVideo && isYouTubeShortsUrl(activeVideo.url))
+  const playerAspect = resolvePinnedPlayerAspect(mediaAspect)
 
   useEffect(() => {
     aspectRef.current = playerAspect
@@ -214,7 +215,9 @@ function PinnedVideoPopupInner({
 
   const resizeTitle = isLocalActive
     ? '드래그해서 크기 조절 (원본 비율 유지)'
-    : '드래그해서 크기 조절 (16:9 유지)'
+    : isShortsActive
+      ? '드래그해서 크기 조절 (9:16 유지)'
+      : '드래그해서 크기 조절 (16:9 유지)'
 
   return (
     <div className="pinned-video-layer" aria-live="polite">
@@ -239,7 +242,6 @@ function PinnedVideoPopupInner({
             width: playerWidth + 24,
             zIndex: 40 + stackIndex,
             '--player-width': `${playerWidth}px`,
-            '--player-height': `${layout.playerHeight}px`,
           } as CSSProperties
         }
         role="dialog"
@@ -300,7 +302,7 @@ function PinnedVideoPopupInner({
                   <div
                     className={`pinned-video-popup__player${isLocalActive ? ' pinned-video-popup__player--local' : ''}`}
                   >
-                    <VideoEmbed media={activeVideo} onAspectRatioChange={setLocalAspect} />
+                    <VideoEmbed media={activeVideo} onAspectRatioChange={setMediaAspect} />
                   </div>
                 ) : null}
               </div>

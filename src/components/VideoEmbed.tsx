@@ -1,13 +1,19 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import type { VideoMedia } from '../types'
 import { resolveLocalVideoPlaybackUrl } from '../platform/localVideo'
-import { extractYouTubeId, isLocalVideoMedia, youtubeEmbedUrl } from '../videoMedia'
+import {
+  extractYouTubeId,
+  isLocalVideoMedia,
+  resolveVideoAspectRatio,
+  youtubeEmbedUrl,
+} from '../videoMedia'
 import './VideoEmbed.css'
+
 
 type Props = {
   media: VideoMedia
-  /** Local video only: reports intrinsic width/height ratio (null while unknown / non-local). */
-  onAspectRatioChange?: (ratio: number | null) => void
+  /** Reports the aspect ratio currently applied to the outer embed frame. */
+  onAspectRatioChange?: (ratio: number) => void
 }
 
 export function VideoEmbed({ media, onAspectRatioChange }: Props) {
@@ -15,6 +21,7 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
   const [localError, setLocalError] = useState(false)
   const [localAspectRatio, setLocalAspectRatio] = useState<number | null>(null)
   const [activeMediaId, setActiveMediaId] = useState(media.id)
+  const frameRef = useRef<HTMLDivElement | null>(null)
 
   // Same VideoEmbed instance can be reused when Viewer/Pin swaps active media.
   if (media.id !== activeMediaId) {
@@ -24,13 +31,12 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
     setLocalAspectRatio(null)
   }
 
+  const aspect = resolveVideoAspectRatio(media, localAspectRatio)
+  const frameStyle = { aspectRatio: aspect } satisfies CSSProperties
+
   useEffect(() => {
-    if (!isLocalVideoMedia(media)) {
-      onAspectRatioChange?.(null)
-      return
-    }
-    onAspectRatioChange?.(localAspectRatio)
-  }, [media, localAspectRatio, onAspectRatioChange])
+    onAspectRatioChange?.(aspect)
+  }, [aspect, onAspectRatioChange])
 
   if (isLocalVideoMedia(media)) {
     const src = resolveLocalVideoPlaybackUrl(media.url)
@@ -53,19 +59,33 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
 
     const onLocalMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
       const video = event.currentTarget
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        setLocalAspectRatio(video.videoWidth / video.videoHeight)
-      }
+      const videoWidth = video.videoWidth
+      const videoHeight = video.videoHeight
+      if (videoWidth <= 0 || videoHeight <= 0) return
+      const ratio = videoWidth / videoHeight
+      setLocalAspectRatio(ratio)
+      // Temporary Desktop debug: compare intrinsic vs rendered outer frame.
+      requestAnimationFrame(() => {
+        const rect = frameRef.current?.getBoundingClientRect()
+        console.debug('[VideoEmbed local aspect]', {
+          mediaId: media.id,
+          videoWidth,
+          videoHeight,
+          aspectRatio: ratio,
+          outerWidth: rect?.width ?? null,
+          outerHeight: rect?.height ?? null,
+          outerRatio: rect && rect.height > 0 ? rect.width / rect.height : null,
+        })
+      })
     }
 
     return (
       <div
+        ref={frameRef}
         className="video-embed video-embed--local"
         data-testid="video-embed-local"
-        data-aspect-ratio={localAspectRatio != null ? String(localAspectRatio) : '16/9'}
-        style={{
-          aspectRatio: localAspectRatio != null ? String(localAspectRatio) : '16 / 9',
-        }}
+        data-aspect-ratio={String(aspect)}
+        style={frameStyle}
       >
         <video
           controls
@@ -84,7 +104,12 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
   if (youtubeId) {
     if (!loaded) {
       return (
-        <div className="video-embed video-embed--placeholder">
+        <div
+          className="video-embed video-embed--placeholder"
+          data-testid="video-embed-youtube-placeholder"
+          data-aspect-ratio={String(aspect)}
+          style={frameStyle}
+        >
           <button
             type="button"
             className="video-embed__load-btn"
@@ -97,7 +122,12 @@ export function VideoEmbed({ media, onAspectRatioChange }: Props) {
       )
     }
     return (
-      <div className="video-embed" data-testid="video-embed-youtube">
+      <div
+        className="video-embed"
+        data-testid="video-embed-youtube"
+        data-aspect-ratio={String(aspect)}
+        style={frameStyle}
+      >
         <iframe
           title={media.title || 'YouTube video'}
           src={youtubeEmbedUrl(youtubeId)}

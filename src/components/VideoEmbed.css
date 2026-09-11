@@ -1,7 +1,8 @@
+/* Aspect ratio is owned by VideoEmbed via inline style (media-specific).
+   Do not set a generic 16/9 here — parents must not re-force it either. */
 .video-embed {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
   background: #0a0e14;
   border-radius: 8px;
   overflow: hidden;
@@ -39,7 +40,6 @@
   place-items: center;
   gap: 0.5rem;
   min-height: 120px;
-  aspect-ratio: 16 / 9;
   background: color-mix(in srgb, var(--ink) 6%, transparent);
   border-radius: 8px;
 }
@@ -57,4 +57,13 @@
   margin: 0;
   font-size: 0.72rem;
   color: var(--muted);
+}
+
+.video-embed__link {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.video-embed__link a {
+  color: #6cb6ea;
 }

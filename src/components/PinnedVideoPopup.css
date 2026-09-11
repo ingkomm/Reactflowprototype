@@ -164,7 +164,8 @@
 
 .pinned-video-popup__player {
   width: var(--player-width);
-  height: var(--player-height);
+  /* Height comes from VideoEmbed aspect-ratio — do not force a fixed height. */
+  height: auto;
   overflow: hidden;
   border-radius: 8px;
   background: #000;
@@ -172,23 +173,18 @@
 
 .pinned-video-popup__player .video-embed {
   width: 100%;
-  height: 100%;
-  /* Override VideoEmbed inline aspect-ratio — pin frame already matches media. */
-  aspect-ratio: unset !important;
+  /* Keep VideoEmbed's media-specific aspect-ratio; do not unset it. */
   border-radius: 8px;
   overflow: hidden;
   background: #000;
 }
 
 .pinned-video-popup__player--local .video-embed--local video {
-  /* Preserve full frame; never crop. */
   object-fit: contain;
 }
 
 .pinned-video-popup__player .video-embed iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
+  /* fill handled by VideoEmbed.css */
 }
 
 .pinned-video-popup__resize {

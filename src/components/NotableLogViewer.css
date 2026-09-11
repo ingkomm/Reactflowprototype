@@ -262,7 +262,7 @@
   position: relative;
   width: 100%;
   max-width: 100%;
-  aspect-ratio: 16 / 9;
+  /* VideoEmbed owns aspect-ratio — do not force 16:9 here. */
   border-radius: 8px;
   overflow: hidden;
   background: #0a0e14;
@@ -271,19 +271,13 @@
 
 .notable-log-viewer__player .video-embed,
 .notable-log-viewer__player .video-embed--placeholder {
-  position: absolute;
-  inset: 0;
+  position: relative;
   width: 100%;
-  height: 100%;
-  min-height: 0;
+  height: auto;
 }
 
 .notable-log-viewer__player .video-embed iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
+  /* iframe fill is handled by VideoEmbed.css */
 }
 
 @media (max-width: 640px) {

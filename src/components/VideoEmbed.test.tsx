@@ -118,7 +118,7 @@ describe('VideoEmbed media identity state reset', () => {
     }
     const view = mount(<VideoEmbed media={media} />)
     const frame = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
-    expect(frame.getAttribute('data-aspect-ratio')).toBe('16/9')
+    expect(Number(frame.getAttribute('data-aspect-ratio'))).toBeCloseTo(16 / 9, 5)
 
     const video = view.host.querySelector('video') as HTMLVideoElement
     Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1668 })
@@ -157,7 +157,7 @@ describe('VideoEmbed media identity state reset', () => {
 
     view.rerender(<VideoEmbed media={mediaB} />)
     const frameB = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
-    expect(frameB.getAttribute('data-aspect-ratio')).toBe('16/9')
+    expect(Number(frameB.getAttribute('data-aspect-ratio'))).toBeCloseTo(16 / 9, 5)
 
     view.unmount()
   })
@@ -178,7 +178,7 @@ describe('VideoEmbed media identity state reset', () => {
     expect(frame).toBeTruthy()
     expect(frame.className).toContain('video-embed')
     expect(frame.className).not.toContain('video-embed--local')
-    expect(frame.style.aspectRatio).toBe('')
+    expect(parseFloat(frame.style.aspectRatio)).toBeCloseTo(16 / 9, 5)
     expect(view.host.querySelector('iframe')).toBeTruthy()
 
     view.unmount()
@@ -200,7 +200,7 @@ describe('VideoEmbed media identity state reset', () => {
         }}
       />,
     )
-    expect(seen.at(-1)).toBeNull()
+    expect(seen.at(-1)).toBeCloseTo(16 / 9, 5)
 
     const video = view.host.querySelector('video') as HTMLVideoElement
     Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 1080 })
@@ -223,8 +223,51 @@ describe('VideoEmbed media identity state reset', () => {
         }}
       />,
     )
-    expect(seen.at(-1)).toBeNull()
+    expect(seen.at(-1)).toBeCloseTo(16 / 9, 5)
 
     view.unmount()
   })
+
+  it('YouTube Shorts uses 9:16 outer frame', () => {
+    const media = {
+      id: 'shorts-1',
+      url: 'https://www.youtube.com/shorts/abcdefghijk',
+      kind: 'youtube' as const,
+      provider: 'youtube' as const,
+    }
+    const view = mount(<VideoEmbed media={media} />)
+    const frame = view.host.querySelector('[data-testid="video-embed-youtube-placeholder"]') as HTMLElement
+    expect(Number(frame.getAttribute('data-aspect-ratio'))).toBeCloseTo(9 / 16, 5)
+    expect(parseFloat(frame.style.aspectRatio)).toBeCloseTo(9 / 16, 5)
+    act(() => {
+      ;(view.host.querySelector('.video-embed__load-btn') as HTMLButtonElement).click()
+    })
+    const embed = view.host.querySelector('[data-testid="video-embed-youtube"]') as HTMLElement
+    expect(Number(embed.getAttribute('data-aspect-ratio'))).toBeCloseTo(9 / 16, 5)
+    expect(parseFloat(embed.style.aspectRatio)).toBeCloseTo(9 / 16, 5)
+    view.unmount()
+  })
+
+  it('local metadata updates outer frame away from 16:9', () => {
+    const media = {
+      id: 'local-ipad',
+      url: '/videos/ipad.mp4',
+      kind: 'local' as const,
+      provider: 'local' as const,
+    }
+    const view = mount(<VideoEmbed media={media} />)
+    const frame = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(Number(frame.getAttribute('data-aspect-ratio'))).toBeCloseTo(16 / 9, 5)
+    const video = view.host.querySelector('video') as HTMLVideoElement
+    Object.defineProperty(video, 'videoWidth', { configurable: true, get: () => 2360 })
+    Object.defineProperty(video, 'videoHeight', { configurable: true, get: () => 1640 })
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    const updated = view.host.querySelector('[data-testid="video-embed-local"]') as HTMLElement
+    expect(Number(updated.getAttribute('data-aspect-ratio'))).toBeCloseTo(2360 / 1640, 5)
+    expect(parseFloat(updated.style.aspectRatio)).toBeCloseTo(2360 / 1640, 5)
+    view.unmount()
+  })
+
 })
