@@ -87,7 +87,7 @@ describe('SvgPreview simple preview + lightbox entry', () => {
     view.unmount()
   })
 
-  it('opens lightbox on expand click and double-click; Esc closes', () => {
+  it('opens lightbox on expand click and single preview click; Esc closes', () => {
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
       writable: true,
@@ -113,7 +113,7 @@ describe('SvgPreview simple preview + lightbox entry', () => {
 
     const preview = view.host.querySelector('[data-testid="svg-preview"]') as HTMLElement
     act(() => {
-      preview.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+      preview.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(document.body.querySelector('[data-testid="svg-lightbox"]')).toBeTruthy()
 

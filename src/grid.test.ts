@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_GRID_SNAP_SCALE,
   normalizeGridSnapScale,
+  snapNodeCenter,
   snapNodeTopLeft,
   snapToCanvasGrid,
 } from './grid'
@@ -21,6 +22,25 @@ describe('grid snap scale', () => {
   it('snaps positions using the selected scale', () => {
     expect(snapToCanvasGrid(24, 10)).toBe(20)
     expect(snapNodeTopLeft({ x: 24, y: 36 }, 10)).toEqual({ x: 20, y: 40 })
+  })
+
+  it('snaps node center onto grid intersections', () => {
+    const gap = 20
+    const size = 40
+    const snapped = snapNodeCenter({ x: 13, y: 27 }, size, gap)
+    expect((snapped.x + size / 2) % gap).toBe(0)
+    expect((snapped.y + size / 2) % gap).toBe(0)
+    expect(snapped).toEqual({ x: 20, y: 20 })
+
+    const connectSize = 22
+    const connectSnapped = snapNodeCenter({ x: 11, y: 9 }, connectSize, gap)
+    expect(connectSnapped.x + connectSize / 2).toBe(20)
+    expect(connectSnapped.y + connectSize / 2).toBe(20)
+
+    const masterySize = 76
+    const masterySnapped = snapNodeCenter({ x: 33, y: 41 }, masterySize, 10)
+    expect((masterySnapped.x + masterySize / 2) % 10).toBe(0)
+    expect((masterySnapped.y + masterySize / 2) % 10).toBe(0)
   })
 })
 

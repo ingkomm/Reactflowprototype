@@ -34,3 +34,21 @@ export function snapNodeTopLeft(
     y: snapToCanvasGrid(position.y, gap),
   }
 }
+
+/**
+ * Snap so the node's geometric center lands on a grid intersection.
+ * Returns the React Flow top-left position for that snapped center.
+ */
+export function snapNodeCenter(
+  position: { x: number; y: number },
+  nodeSize: number,
+  gap: number = DEFAULT_GRID_SNAP_SCALE,
+) {
+  const half = nodeSize / 2
+  const snappedCenterX = snapToCanvasGrid(position.x + half, gap)
+  const snappedCenterY = snapToCanvasGrid(position.y + half, gap)
+  return {
+    x: snappedCenterX - half,
+    y: snappedCenterY - half,
+  }
+}

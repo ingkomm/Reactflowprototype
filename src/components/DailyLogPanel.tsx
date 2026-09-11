@@ -209,7 +209,7 @@ export function DailyLogPanel({ logs, onChangeLogs, focusLogId, onFocusLogConsum
                 <div className="daily-log-card__actions">
                   <button
                     type="button"
-                    className="btn btn--ghost"
+                    className="btn"
                     data-testid={`daily-log-edit-${log.id}`}
                     onClick={() => openEdit(log)}
                   >

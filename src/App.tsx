@@ -37,7 +37,7 @@ import {
   DEFAULT_GRID_SNAP_SCALE,
   GRID_SNAP_SCALE_OPTIONS,
   normalizeGridSnapScale,
-  snapNodeTopLeft,
+  snapNodeCenter,
 } from './grid'
 import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, rootPowerLinkEdge, orbitLinkEdge } from './graphFactory'
 import { isRootSocketOccupied } from './rootGeometry'
@@ -59,6 +59,7 @@ import {
   isMasteryOrbitLocked,
   isOrbitMemberKind,
   layoutMasteryOrbit,
+  NODE_SIZE,
   normalizeOrbitTier,
   normalizeOrbitTierCount,
   normalizeAngleDelta,
@@ -1364,7 +1365,7 @@ export default function App() {
     (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
       const kind = template.kind
       let position = flowPosition
-      if (gridSnapEnabled) position = snapNodeTopLeft(position, gridSnapScale)
+      if (gridSnapEnabled) position = snapNodeCenter(position, NODE_SIZE[kind], gridSnapScale)
       commit()
       const id = createNodeId()
       const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`, {
@@ -1537,6 +1538,15 @@ export default function App() {
     setContextMenu(null)
     setSelectedId(node.id)
   }, [])
+
+  const onNodeDoubleClick = useCallback(
+    (_: ReactMouseEvent, node: Node) => {
+      const data = node.data as PassiveNodeData
+      if (data.kind !== 'connect') return
+      changeConnectEnabled(node.id, data.connectEnabled === false)
+    },
+    [changeConnectEnabled],
+  )
 
   const nextPinnedZ = useCallback(() => {
     pinnedZCounterRef.current += 1
@@ -1732,7 +1742,9 @@ export default function App() {
       const data = node.data as PassiveNodeData
 
       if (isMasteryKind(data.kind)) {
-        const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
+        const position = gridSnapEnabled
+          ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+          : node.position
         setNodes((nds) => {
           const synced = nds.map((n) =>
             n.id === node.id ? { ...n, position } : n,
@@ -1803,7 +1815,9 @@ export default function App() {
 
       if (isMasteryKind(data.kind)) {
         setNodes((nds) => {
-          const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
+          const position = gridSnapEnabled
+            ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+            : node.position
           const synced = nds.map((n) => (n.id === node.id ? { ...n, position } : n))
           const laid = layoutMasteryOrbit(synced, node.id)
           return stack(applyRootBoundaryEject(laid, node.id))
@@ -1815,7 +1829,9 @@ export default function App() {
         setNodes((nds) => {
           let next = nds.map((n) => {
             if (n.id !== node.id) return n
-            const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
+            const position = gridSnapEnabled
+              ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+              : node.position
             return { ...n, position }
           })
           return stack(applyRootBoundaryEject(next, node.id))
@@ -1827,7 +1843,9 @@ export default function App() {
         setNodes((nds) => {
           let next = nds.map((n) => {
             if (n.id !== node.id) return n
-            const position = gridSnapEnabled ? snapNodeTopLeft(node.position, gridSnapScale) : node.position
+            const position = gridSnapEnabled
+              ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+              : node.position
             return { ...n, position }
           })
           return stack(applyRootBoundaryEject(next, node.id))
@@ -1860,7 +1878,7 @@ export default function App() {
         )
         const attach = findOrbitAttachTarget(atPointer, dragged)
         if (!attach) {
-          finalPosition = snapNodeTopLeft(node.position, gridSnapScale)
+          finalPosition = snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
         }
       }
 
@@ -2058,6 +2076,7 @@ export default function App() {
               poweredIds={poweredIds}
               powerFlowMeta={powerFlowMeta}
               voidHighlightEnabled={voidHighlightEnabled}
+              gridSnapEnabled={gridSnapEnabled}
               gridSnapScale={gridSnapScale}
               selectedNode={selectedNode}
               selectedData={selectedData}
@@ -2074,6 +2093,7 @@ export default function App() {
               onSelectionChange={onSelectionChange}
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
+              onNodeDoubleClick={onNodeDoubleClick}
               onNodeContextMenu={onNodeContextMenu}
               floatingVideoNodeIds={floatingVideoNodeIds}
               onCloseFloatingVideo={onCloseFloatingVideo}

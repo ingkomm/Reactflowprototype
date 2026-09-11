@@ -258,7 +258,7 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn--ghost"
             data-testid="daily-log-editor-save"
             onClick={handleSave}
           >

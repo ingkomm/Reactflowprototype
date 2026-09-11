@@ -10,7 +10,7 @@ type Props = {
 
 /**
  * Document-inline SVG preview (intrinsic size, no zoom/pan).
- * Double-click or hover expand opens a viewport-level SvgLightbox.
+ * Single-click or hover expand opens a viewport-level SvgLightbox.
  */
 export function SvgPreview({ svg, className }: Props) {
   const [open, setOpen] = useState(false)
@@ -23,7 +23,7 @@ export function SvgPreview({ svg, className }: Props) {
       <div
         className={['svg-preview', className].filter(Boolean).join(' ')}
         data-testid="svg-preview"
-        onDoubleClick={(e) => {
+        onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
           openLightbox()

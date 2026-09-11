@@ -66,6 +66,7 @@ export type TreeWorkspaceProps = {
   poweredIds: Set<string>
   powerFlowMeta: PowerFlowMeta
   voidHighlightEnabled: boolean
+  gridSnapEnabled?: boolean
   gridSnapScale?: number
   selectedNode: PassiveFlowNode | null
   selectedData: PassiveNodeData | null
@@ -83,6 +84,7 @@ export type TreeWorkspaceProps = {
   onSelectionChange: OnSelectionChangeFunc
   onPaneClick: () => void
   onNodeClick: NodeMouseHandler
+  onNodeDoubleClick?: NodeMouseHandler
   onNodeContextMenu?: NodeMouseHandler
   floatingVideoNodeIds: string[]
   onCloseFloatingVideo: (nodeId: string) => void
@@ -123,6 +125,7 @@ export function TreeWorkspace({
   poweredIds,
   powerFlowMeta,
   voidHighlightEnabled,
+  gridSnapEnabled = false,
   gridSnapScale = 20,
   selectedNode,
   selectedData,
@@ -140,6 +143,7 @@ export function TreeWorkspace({
   onSelectionChange,
   onPaneClick,
   onNodeClick,
+  onNodeDoubleClick,
   onNodeContextMenu,
   floatingVideoNodeIds,
   onCloseFloatingVideo,
@@ -250,6 +254,7 @@ export function TreeWorkspace({
               onSelectionChange={onSelectionChange}
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
+              onNodeDoubleClick={onNodeDoubleClick}
               onNodeContextMenu={onNodeContextMenu}
               onNodeDragStart={onNodeDragStart}
               onNodeDrag={onNodeDrag}
@@ -279,7 +284,14 @@ export function TreeWorkspace({
                 restoreSelection={restoreFlowSelection}
               />
               <ZoomKeyboardController />
-              <Background variant={BackgroundVariant.Dots} gap={gridSnapScale} size={1.2} color="#1c2430" />
+              {gridSnapEnabled ? (
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={gridSnapScale}
+                  size={1.75}
+                  color="#4a5a6c"
+                />
+              ) : null}
               <Controls position="top-left" />
               <MiniMap
                 pannable
