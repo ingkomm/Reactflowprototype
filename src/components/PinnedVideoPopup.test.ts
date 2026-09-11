@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_PIN_ASPECT,
+  MAX_PLAYER_WIDTH,
+  MIN_PLAYER_WIDTH,
+  PORTRAIT_MAX_PLAYER_WIDTH,
+  clampPinnedPlayerWidth,
   pinnedPlayerHeight,
+  resolvePinnedMaxPlayerWidth,
   resolvePinnedPlayerAspect,
 } from './PinnedVideoPopup'
 
@@ -20,6 +25,31 @@ describe('resolvePinnedPlayerAspect', () => {
   it('ignores non-positive ratios', () => {
     expect(resolvePinnedPlayerAspect(0)).toBe(DEFAULT_PIN_ASPECT)
     expect(resolvePinnedPlayerAspect(-1)).toBe(DEFAULT_PIN_ASPECT)
+  })
+})
+
+describe('resolvePinnedMaxPlayerWidth / clampPinnedPlayerWidth', () => {
+  it('caps portrait (aspect < 1) at 420', () => {
+    expect(resolvePinnedMaxPlayerWidth(9 / 16)).toBe(PORTRAIT_MAX_PLAYER_WIDTH)
+    expect(resolvePinnedMaxPlayerWidth(0.5)).toBe(420)
+  })
+
+  it('keeps landscape / square at 720', () => {
+    expect(resolvePinnedMaxPlayerWidth(16 / 9)).toBe(MAX_PLAYER_WIDTH)
+    expect(resolvePinnedMaxPlayerWidth(1)).toBe(MAX_PLAYER_WIDTH)
+    expect(resolvePinnedMaxPlayerWidth(4 / 3)).toBe(720)
+  })
+
+  it('clamps an oversized landscape width down when switching to portrait', () => {
+    expect(clampPinnedPlayerWidth(600, 9 / 16)).toBe(420)
+    expect(clampPinnedPlayerWidth(720, 0.75)).toBe(420)
+  })
+
+  it('preserves landscape resize room up to 720 and floor at 200', () => {
+    expect(clampPinnedPlayerWidth(600, 16 / 9)).toBe(600)
+    expect(clampPinnedPlayerWidth(800, 16 / 9)).toBe(720)
+    expect(clampPinnedPlayerWidth(100, 16 / 9)).toBe(MIN_PLAYER_WIDTH)
+    expect(clampPinnedPlayerWidth(100, 9 / 16)).toBe(MIN_PLAYER_WIDTH)
   })
 })
 

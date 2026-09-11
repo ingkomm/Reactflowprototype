@@ -28,8 +28,11 @@ type Props = {
 }
 
 const DEFAULT_PLAYER_WIDTH = 320
-const MIN_PLAYER_WIDTH = 200
-const MAX_PLAYER_WIDTH = 720
+export const MIN_PLAYER_WIDTH = 200
+/** Landscape / square pin resize ceiling (matches prior Pin behavior). */
+export const MAX_PLAYER_WIDTH = 720
+/** Portrait (aspect < 1) pin resize ceiling — aligned with VideoEmbed portrait cap. */
+export const PORTRAIT_MAX_PLAYER_WIDTH = 420
 /** Fallback until VideoEmbed reports the media aspect (and for resize math). */
 export const DEFAULT_PIN_ASPECT = 16 / 9
 
@@ -42,6 +45,16 @@ type DragMode = 'move' | 'resize' | null
 export function resolvePinnedPlayerAspect(mediaAspect: number | null): number {
   if (mediaAspect != null && mediaAspect > 0) return mediaAspect
   return DEFAULT_PIN_ASPECT
+}
+
+/** Max Pin player width for the current resolved aspect (portrait shares VideoEmbed's 420 cap). */
+export function resolvePinnedMaxPlayerWidth(aspect: number): number {
+  return aspect < 1 ? PORTRAIT_MAX_PLAYER_WIDTH : MAX_PLAYER_WIDTH
+}
+
+export function clampPinnedPlayerWidth(width: number, aspect: number): number {
+  const max = resolvePinnedMaxPlayerWidth(aspect)
+  return Math.min(max, Math.max(MIN_PLAYER_WIDTH, width))
 }
 
 export function pinnedPlayerHeight(width: number, aspect: number): number {
@@ -117,6 +130,12 @@ function PinnedVideoPopupInner({
     aspectRef.current = playerAspect
   }, [playerAspect])
 
+  // Landscape→portrait media switch: shrink an oversized Pin to the portrait ceiling.
+  const maxPlayerWidth = resolvePinnedMaxPlayerWidth(playerAspect)
+  if (playerWidth > maxPlayerWidth) {
+    setPlayerWidth(maxPlayerWidth)
+  }
+
   useLayoutEffect(() => {
     if (!node || !data) return
     const size = NODE_SIZE[data.kind] ?? 52
@@ -179,11 +198,7 @@ function PinnedVideoPopupInner({
         }
         const aspect = aspectRef.current
         const delta = Math.max(dx, dy * aspect)
-        const next = Math.min(
-          MAX_PLAYER_WIDTH,
-          Math.max(MIN_PLAYER_WIDTH, drag.originWidth + delta),
-        )
-        setPlayerWidth(next)
+        setPlayerWidth(clampPinnedPlayerWidth(drag.originWidth + delta, aspect))
       }
 
       const handleUp = () => {
