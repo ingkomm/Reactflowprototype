@@ -33,3 +33,69 @@ export function waitMs(ms: number): Promise<void> {
     window.setTimeout(resolve, ms)
   })
 }
+
+/** Layer visibility during sheet transitions (nav.mode alone is not enough). */
+export function shouldShowUniverseLayer(
+  navMode: 'universe' | 'galaxy',
+  phase: SheetTransition['phase'],
+): boolean {
+  return (
+    navMode === 'universe' ||
+    phase === 'entering-galaxy' ||
+    phase === 'leaving-galaxy'
+  )
+}
+
+export function shouldShowGalaxyLayer(
+  navMode: 'universe' | 'galaxy',
+  phase: SheetTransition['phase'],
+): boolean {
+  // Only after enterGalaxy has switched nav to galaxy (target graph loaded).
+  // Do NOT key off entering-galaxy alone — that would mount the Galaxy layer
+  // while the hidden canvas still holds the previous graph.
+  void phase
+  return navMode === 'galaxy'
+}
+
+/**
+ * Universe → Galaxy enter sequence:
+ * lock → load target graph → center Root → one transition wait → idle.
+ * Target must load before the visual wait so stale canvas never animates in.
+ */
+export async function runEnterGalaxyTransition(options: {
+  galaxyId: string
+  originPct: { x: number; y: number }
+  setUniverseEditing: (editing: boolean) => void
+  setEntering: (galaxyId: string, originPct: { x: number; y: number }) => void
+  enterGalaxy: (galaxyId: string) => Promise<boolean>
+  bumpCenterOnRootToken: () => void
+  setIdle: () => void
+  durationMs?: () => number
+  wait?: (ms: number) => Promise<void>
+}): Promise<boolean> {
+  const {
+    galaxyId,
+    originPct,
+    setUniverseEditing,
+    setEntering,
+    enterGalaxy,
+    bumpCenterOnRootToken,
+    setIdle,
+    durationMs = sheetTransitionDurationMs,
+    wait = waitMs,
+  } = options
+
+  setUniverseEditing(false)
+  setEntering(galaxyId, originPct)
+
+  const entered = await enterGalaxy(galaxyId)
+  if (!entered) {
+    setIdle()
+    return false
+  }
+
+  bumpCenterOnRootToken()
+  await wait(durationMs())
+  setIdle()
+  return true
+}

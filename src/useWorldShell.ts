@@ -85,10 +85,10 @@ export function useWorldShell(options: {
   )
 
   const enterGalaxy = useCallback(
-    async (galaxyId: string) => {
-      if (!worldState) return
+    async (galaxyId: string): Promise<boolean> => {
+      if (!worldState) return false
       const target = getGalaxyById(worldState.world, galaxyId)
-      if (!target) return
+      if (!target) return false
 
       cancelPendingAutosave()
 
@@ -101,7 +101,7 @@ export function useWorldShell(options: {
         )
         if (!saved.ok) {
           setError(failureMessage(saved))
-          return
+          return false
         }
         nextState = saved.worldState
         setActiveJsonPath(null)
@@ -112,13 +112,14 @@ export function useWorldShell(options: {
       }
 
       const galaxy = getGalaxyById(nextState.world, galaxyId)
-      if (!galaxy) return
+      if (!galaxy) return false
       applyCanvas(snapshotFromGalaxyGraph(galaxy.graph))
       resetSessionUi()
       setWorldState({ ...nextState, activeGalaxyId: galaxyId })
       setNav({ mode: 'galaxy', galaxyId })
       setSelectedUniverseGalaxyId(galaxyId)
       setHighlightGalaxyId(null)
+      return true
     },
     [
       worldState,

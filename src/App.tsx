@@ -129,7 +129,10 @@ import { ReferenceLibrary } from './components/ReferenceLibrary'
 import { useWorldShell } from './useWorldShell'
 import {
   type SheetTransition,
+  runEnterGalaxyTransition,
   sheetTransitionDurationMs,
+  shouldShowGalaxyLayer,
+  shouldShowUniverseLayer,
   waitMs,
 } from './sheetTransition'
 import { universeGatewayOriginPct } from './galaxyRootCenter'
@@ -492,14 +495,16 @@ export default function App() {
   const requestEnterGalaxy = useCallback(
     async (galaxyId: string, originPct: { x: number; y: number }) => {
       if (sheetTransition.phase !== 'idle') return
-      setUniverseEditing(false)
-      setSheetTransition({ phase: 'entering-galaxy', galaxyId, originPct })
-      const ms = sheetTransitionDurationMs()
-      await waitMs(ms)
-      await worldShell.enterGalaxy(galaxyId)
-      setCenterOnRootToken((n) => n + 1)
-      await waitMs(ms)
-      setSheetTransition({ phase: 'idle' })
+      await runEnterGalaxyTransition({
+        galaxyId,
+        originPct,
+        setUniverseEditing,
+        setEntering: (id, origin) =>
+          setSheetTransition({ phase: 'entering-galaxy', galaxyId: id, originPct: origin }),
+        enterGalaxy: worldShell.enterGalaxy,
+        bumpCenterOnRootToken: () => setCenterOnRootToken((n) => n + 1),
+        setIdle: () => setSheetTransition({ phase: 'idle' }),
+      })
     },
     [sheetTransition.phase, worldShell],
   )
@@ -2456,9 +2461,8 @@ export default function App() {
 
             {(() => {
               const showUniverse =
-                (nav.mode === 'universe' || sheetTransition.phase === 'leaving-galaxy') && !!worldState
-              const showGalaxy =
-                nav.mode === 'galaxy' || sheetTransition.phase === 'entering-galaxy'
+                !!worldState && shouldShowUniverseLayer(nav.mode, sheetTransition.phase)
+              const showGalaxy = shouldShowGalaxyLayer(nav.mode, sheetTransition.phase)
               const originPct =
                 sheetTransition.phase === 'idle'
                   ? { x: 50, y: 50 }
