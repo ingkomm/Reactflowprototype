@@ -21,6 +21,7 @@ import {
   type StorageSaveResult,
 } from './persistence/autosave'
 import { WorkspaceStoreInitError } from './persistence/workspaceStore'
+import { WorldStoreInitError } from './persistence/worldStore'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import type { CustomSymbol, GraphDocumentSettings } from './types'
 import { MAX_PORTABLE_JSON_BYTES, utf8ByteLength } from './limits'
@@ -113,7 +114,7 @@ export async function resolveInitialGraphState(): Promise<{
 
     return { snapshot: null, needsBootstrap: true, storageCorrupt: false }
   } catch (err) {
-    if (err instanceof WorkspaceStoreInitError) {
+    if (err instanceof WorldStoreInitError || err instanceof WorkspaceStoreInitError) {
       return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
     }
     throw err

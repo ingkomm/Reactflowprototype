@@ -13,13 +13,17 @@ import {
   BACKUP_KEY,
   BOOTSTRAP_KEY,
   STORAGE_KEY,
+  WORLD_BACKUP_STORAGE_KEY,
+  WORLD_CURRENT_KEY,
   hasBackupDocument,
   loadDocumentFromStorage,
+  saveDocumentToStorage,
   writeBootstrapChoice,
 } from './persistence/autosave'
 import { serializeGraphDocument } from './graphDocument'
 import { MAX_PORTABLE_JSON_BYTES } from './limits'
 import { resetWorkspaceStoreSingleton } from './persistence/workspaceStore'
+import { resetWorldStoreSingleton } from './persistence/worldStore'
 
 function memoryStorage(opts?: { failKeys?: Set<string> }) {
   const map = new Map<string, string>()
@@ -36,6 +40,10 @@ function memoryStorage(opts?: { failKeys?: Set<string> }) {
       map.delete(key)
     },
     clear: () => map.clear(),
+    key: (index: number) => [...map.keys()][index] ?? null,
+    get length() {
+      return map.size
+    },
     _map: map,
   }
 }
@@ -43,6 +51,7 @@ function memoryStorage(opts?: { failKeys?: Set<string> }) {
 describe('createNewSheet persistence hardening', () => {
   beforeEach(() => {
     resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
@@ -65,7 +74,7 @@ describe('createNewSheet persistence hardening', () => {
     expect(result.snapshot.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
     expect(result.snapshot.edges).toHaveLength(EMPTY_GRAPH_EDGES.length)
     expect(await hasBackupDocument()).toBe(true)
-    expect(localStorage.getItem(BACKUP_KEY)).toContain('"schemaVersion"')
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toContain('"schemaVersion"')
 
     const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(true)
@@ -74,7 +83,7 @@ describe('createNewSheet persistence hardening', () => {
   })
 
   it('aborts new sheet when backup fails and keeps current primary document', async () => {
-    const store = memoryStorage({ failKeys: new Set([BACKUP_KEY]) })
+    const store = memoryStorage({ failKeys: new Set([WORLD_BACKUP_STORAGE_KEY]) })
     Object.defineProperty(globalThis, 'localStorage', {
       value: store,
       configurable: true,
@@ -93,13 +102,14 @@ describe('createNewSheet persistence hardening', () => {
     if (result.ok) return
     expect(result.message).toMatch(/백업 실패/)
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before)
-    expect(localStorage.getItem(BACKUP_KEY)).toBeNull()
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toBeNull()
   })
 })
 
 describe('importGraphJsonFile persistence hardening', () => {
   beforeEach(() => {
     resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
@@ -150,13 +160,13 @@ describe('importGraphJsonFile persistence hardening', () => {
     expect(loaded.document.settings?.gridSnapEnabled).toBe(true)
 
     expect(await hasBackupDocument()).toBe(true)
-    expect(localStorage.getItem(BACKUP_KEY)).toContain('"schemaVersion"')
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toContain('"schemaVersion"')
     // BACKUP holds pre-import current (seed graph), not empty imported sheet.
-    expect(localStorage.getItem(BACKUP_KEY)).toContain(SEED_NODES[0]!.id)
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toContain(SEED_NODES[0]!.id)
   })
 
   it('cancels import when current backup fails after valid parse', async () => {
-    const store = memoryStorage({ failKeys: new Set([BACKUP_KEY]) })
+    const store = memoryStorage({ failKeys: new Set([WORLD_BACKUP_STORAGE_KEY]) })
     Object.defineProperty(globalThis, 'localStorage', {
       value: store,
       configurable: true,
@@ -177,19 +187,30 @@ describe('importGraphJsonFile persistence hardening', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.message).toMatch(/백업 실패/)
-    expect(localStorage.getItem(BACKUP_KEY)).toBeNull()
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toBeNull()
     expect(localStorage.getItem(STORAGE_KEY)).toBe(primary)
   })
 
   it('cancels import when PRIMARY save fails after backup; keeps existing PRIMARY', async () => {
-    const store = memoryStorage({ failKeys: new Set([STORAGE_KEY]) })
+    // Establish v0.3 current first, then block further current writes.
+    const primaryDoc = snapshotToDocument(current)
+    const initialStore = memoryStorage()
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: initialStore,
+      configurable: true,
+    })
+    expect((await saveDocumentToStorage(primaryDoc)).ok).toBe(true)
+    const worldPrimaryBefore = localStorage.getItem(WORLD_CURRENT_KEY)
+    expect(worldPrimaryBefore).toBeTruthy()
+
+    const store = memoryStorage({ failKeys: new Set([WORLD_CURRENT_KEY]) })
+    for (const [k, v] of initialStore._map) store._map.set(k, v)
     Object.defineProperty(globalThis, 'localStorage', {
       value: store,
       configurable: true,
     })
-    // Pre-seed PRIMARY before enabling fail-on-set for STORAGE_KEY by writing via map.
-    const primary = serializeGraphDocument(snapshotToDocument(current))
-    store._map.set(STORAGE_KEY, primary)
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
 
     const importedDoc = snapshotToDocument({
       nodes: EMPTY_GRAPH_NODES,
@@ -204,16 +225,15 @@ describe('importGraphJsonFile persistence hardening', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.message).toMatch(/가져온 문서 저장 실패/)
-    // Existing PRIMARY untouched (setItem failed without clearing).
-    expect(localStorage.getItem(STORAGE_KEY)).toBe(primary)
-    // BACKUP still has current document from successful backup step.
-    expect(localStorage.getItem(BACKUP_KEY)).toContain(SEED_NODES[0]!.id)
+    expect(localStorage.getItem(WORLD_CURRENT_KEY)).toBe(worldPrimaryBefore)
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toContain(SEED_NODES[0]!.id)
   })
 })
 
 describe('writeBootstrapChoice / startup recovery', () => {
   beforeEach(() => {
     resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
@@ -231,7 +251,7 @@ describe('writeBootstrapChoice / startup recovery', () => {
     expect(committed.ok).toBe(false)
   })
 
-  it('auto-recovers corrupt PRIMARY from valid BACKUP on startup', async () => {
+  it('corrupt v0.2 PRIMARY fails closed (no empty/demo bootstrap)', async () => {
     const backupDoc = snapshotToDocument({
       nodes: EMPTY_GRAPH_NODES,
       edges: EMPTY_GRAPH_EDGES,
@@ -242,14 +262,12 @@ describe('writeBootstrapChoice / startup recovery', () => {
     localStorage.setItem(BACKUP_KEY, serializeGraphDocument(backupDoc))
 
     const initial = await resolveInitialGraphState()
-    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.storageCorrupt).toBe(true)
     expect(initial.needsBootstrap).toBe(false)
-    expect(initial.snapshot?.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
-
-    const loaded = await loadDocumentFromStorage()
-    expect(loaded.ok).toBe(true)
-    if (!loaded.ok) return
-    expect(loaded.document.settings?.gridSnapEnabled).toBe(true)
+    expect(initial.snapshot).toBeNull()
+    // v0.2 source preserved
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('{corrupt')
+    expect(localStorage.getItem(BACKUP_KEY)).toBe(serializeGraphDocument(backupDoc))
   })
 
   it('does not export restorePreviousBackup manual swap API', async () => {
@@ -262,6 +280,7 @@ describe('writeBootstrapChoice / startup recovery', () => {
 describe('importGraphJsonText shared core', () => {
   beforeEach(() => {
     resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
@@ -305,7 +324,7 @@ describe('importGraphJsonText shared core', () => {
   })
 
   it('aborts when current backup fails', async () => {
-    const store = memoryStorage({ failKeys: new Set([BACKUP_KEY]) })
+    const store = memoryStorage({ failKeys: new Set([WORLD_BACKUP_STORAGE_KEY]) })
     Object.defineProperty(globalThis, 'localStorage', {
       value: store,
       configurable: true,

@@ -2,16 +2,19 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { buildGraphDocument } from '../graphDocument'
 import { EMPTY_GRAPH_EDGES, EMPTY_GRAPH_NODES } from '../emptyGraph'
 import {
+  backupDocumentToStorage,
   hasBackupDocument,
   loadDocumentFromStorage,
   restoreBackupFromStorage,
   saveDocumentToStorage,
   writeBootstrapChoice,
-  STORAGE_KEY,
-  BACKUP_KEY,
+  WORLD_CURRENT_KEY,
+  WORLD_BACKUP_STORAGE_KEY,
   BOOTSTRAP_KEY,
+  STORAGE_KEY,
 } from '../persistence/autosave'
 import { resetWorkspaceStoreSingleton } from '../persistence/workspaceStore'
+import { resetWorldStoreSingleton, WorldStoreInitError } from '../persistence/worldStore'
 
 describe('autosave persistence', () => {
   const store = new Map<string, string>()
@@ -19,6 +22,7 @@ describe('autosave persistence', () => {
   beforeEach(() => {
     store.clear()
     resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => {
@@ -35,7 +39,7 @@ describe('autosave persistence', () => {
     })
   })
 
-  it('round-trips document through workspace store', async () => {
+  it('round-trips document through world store', async () => {
     const doc = buildGraphDocument({
       nodes: EMPTY_GRAPH_NODES,
       edges: EMPTY_GRAPH_EDGES,
@@ -44,7 +48,7 @@ describe('autosave persistence', () => {
     })
     const result = await saveDocumentToStorage(doc)
     expect(result.ok).toBe(true)
-    expect(localStorage.getItem(STORAGE_KEY)).toBeTruthy()
+    expect(localStorage.getItem(WORLD_CURRENT_KEY)).toBeTruthy()
     const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
@@ -52,8 +56,15 @@ describe('autosave persistence', () => {
     expect(loaded.document.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
   })
 
-  it('reports corrupt stored data without throwing', async () => {
-    localStorage.setItem(STORAGE_KEY, '{not json')
+  it('reports corrupt world payload without throwing', async () => {
+    const doc = buildGraphDocument({
+      nodes: EMPTY_GRAPH_NODES,
+      edges: EMPTY_GRAPH_EDGES,
+      customSymbols: [],
+      settings: {},
+    })
+    expect((await saveDocumentToStorage(doc)).ok).toBe(true)
+    localStorage.setItem(WORLD_CURRENT_KEY, '{not json')
     const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(false)
     if (loaded.ok) return
@@ -67,8 +78,9 @@ describe('autosave persistence', () => {
       customSymbols: [],
       settings: {},
     })
-    localStorage.setItem(BACKUP_KEY, JSON.stringify(doc))
+    expect((await backupDocumentToStorage(doc)).ok).toBe(true)
     expect(await hasBackupDocument()).toBe(true)
+    expect(localStorage.getItem(WORLD_BACKUP_STORAGE_KEY)).toBeTruthy()
     const restored = await restoreBackupFromStorage()
     expect(restored.ok).toBe(true)
     if (!restored.ok) return
@@ -90,5 +102,10 @@ describe('autosave persistence', () => {
       length: 0,
     })
     expect(writeBootstrapChoice('empty')).toEqual({ ok: false, reason: 'quota' })
+  })
+
+  it('corrupt v0.2 source fails closed (no empty bootstrap)', async () => {
+    localStorage.setItem(STORAGE_KEY, '{not json')
+    await expect(loadDocumentFromStorage()).rejects.toBeInstanceOf(WorldStoreInitError)
   })
 })

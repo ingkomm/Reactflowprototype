@@ -16,6 +16,9 @@ export const MAX_EDGE_COUNT = 2000
 export const MAX_LOG_COUNT = 5000
 export const MAX_CUSTOM_SYMBOLS = 100
 
+/** Safety cap for Galaxy count inside a WorldDocument (0.3). Not a product UI limit. */
+export const MAX_GALAXIES = 64
+
 export const MIN_ORBIT_TIER_CAPACITY = 1
 export const MAX_ORBIT_TIER_CAPACITY = 24
 
