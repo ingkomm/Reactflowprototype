@@ -22,6 +22,7 @@ import {
 } from './persistence/autosave'
 import { WorkspaceStoreInitError } from './persistence/workspaceStore'
 import { WorldStoreInitError } from './persistence/worldStore'
+import type { GraphAppWorldState } from './persistence/worldTypes'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import type { CustomSymbol, GraphDocumentSettings } from './types'
 import { MAX_PORTABLE_JSON_BYTES, utf8ByteLength } from './limits'
@@ -75,6 +76,7 @@ function snapshotFromDocument(document: GraphDocumentV01): GraphAppSnapshot {
 
 export async function resolveInitialGraphState(): Promise<{
   snapshot: GraphAppSnapshot | null
+  worldState: GraphAppWorldState | null
   needsBootstrap: boolean
   storageCorrupt: boolean
 }> {
@@ -82,9 +84,10 @@ export async function resolveInitialGraphState(): Promise<{
     const stored = await loadDocumentFromStorage()
     if (stored.ok) {
       // Rewrite migrated legacy docs so the next load stays clean.
-      await saveDocumentToStorage(stored.document)
+      const rewritten = await saveDocumentToStorage(stored.document, stored.worldState)
       return {
         snapshot: snapshotFromDocument(stored.document),
+        worldState: rewritten.ok ? rewritten.worldState : stored.worldState,
         needsBootstrap: false,
         storageCorrupt: false,
       }
@@ -93,29 +96,31 @@ export async function resolveInitialGraphState(): Promise<{
     if (await hasStoredDocument()) {
       const backup = await restoreBackupFromStorage()
       if (backup.ok) {
-        await saveDocumentToStorage(backup.document)
+        const rewritten = await saveDocumentToStorage(backup.document, backup.worldState)
         return {
           snapshot: snapshotFromDocument(backup.document),
+          worldState: rewritten.ok ? rewritten.worldState : backup.worldState,
           needsBootstrap: false,
           storageCorrupt: false,
         }
       }
-      return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
+      return { snapshot: null, worldState: null, needsBootstrap: false, storageCorrupt: true }
     }
 
     const choice = readBootstrapChoice()
     if (choice) {
       return {
         snapshot: flowFromBootstrap(choice),
+        worldState: null,
         needsBootstrap: false,
         storageCorrupt: false,
       }
     }
 
-    return { snapshot: null, needsBootstrap: true, storageCorrupt: false }
+    return { snapshot: null, worldState: null, needsBootstrap: true, storageCorrupt: false }
   } catch (err) {
     if (err instanceof WorldStoreInitError || err instanceof WorkspaceStoreInitError) {
-      return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
+      return { snapshot: null, worldState: null, needsBootstrap: false, storageCorrupt: true }
     }
     throw err
   }
@@ -139,30 +144,40 @@ export function snapshotToDocument(input: GraphPersistInput): GraphDocumentV01 {
 
 export async function persistSnapshot(
   snapshot: GraphPersistInput,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<StorageSaveResult> {
-  return saveDocumentToStorage(snapshotToDocument(snapshot))
+  return saveDocumentToStorage(snapshotToDocument(snapshot), worldState)
 }
 
 export function useGraphAutosave(
   snapshot: GraphPersistInput,
+  worldState: GraphAppWorldState | null,
+  onWorldStateChange: (worldState: GraphAppWorldState) => void,
   enabled: boolean,
   onStatus?: (status: SaveStatus, reason?: SaveFailureReason) => void,
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snapshotRef = useRef(snapshot)
+  const worldStateRef = useRef(worldState)
   const generationRef = useRef(0)
   snapshotRef.current = snapshot
+  worldStateRef.current = worldState
 
   const flush = useCallback(() => {
     if (!enabled) return
     const generation = ++generationRef.current
     const pending = snapshotRef.current
-    void persistSnapshot(pending).then((result) => {
+    const pendingWorld = worldStateRef.current
+    void persistSnapshot(pending, pendingWorld).then((result) => {
       if (generation !== generationRef.current) return
-      if (result.ok) onStatus?.('saved')
-      else onStatus?.('failed', result.reason)
+      if (result.ok) {
+        onWorldStateChange(result.worldState)
+        onStatus?.('saved')
+      } else {
+        onStatus?.('failed', result.reason)
+      }
     })
-  }, [enabled, onStatus])
+  }, [enabled, onStatus, onWorldStateChange])
 
   useEffect(() => {
     if (!enabled) return
@@ -182,19 +197,20 @@ export function useGraphAutosave(
 }
 
 export type NewSheetResult =
-  | { ok: true; snapshot: GraphAppSnapshot }
+  | { ok: true; snapshot: GraphAppSnapshot; worldState: GraphAppWorldState }
   | { ok: false; message: string }
 
 export type BootstrapCommitResult =
-  | { ok: true; snapshot: GraphAppSnapshot }
+  | { ok: true; snapshot: GraphAppSnapshot; worldState: GraphAppWorldState }
   | { ok: false; message: string }
 
 /** Start a blank sheet only after the current document is backed up successfully. */
 export async function createNewSheet(
   current: GraphPersistInput,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<NewSheetResult> {
   const currentDoc = snapshotToDocument(current)
-  const backedUp = await backupDocumentToStorage(currentDoc)
+  const backedUp = await backupDocumentToStorage(currentDoc, worldState)
   if (!backedUp.ok) {
     return {
       ok: false,
@@ -211,18 +227,19 @@ export async function createNewSheet(
   }
 
   const snapshot = flowFromBootstrap('empty')
-  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot))
+  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot), worldState)
   if (!saved.ok) {
     return {
       ok: false,
       message: `새 시트를 저장할 수 없습니다 — ${storageFailureMessage(saved.reason)}`,
     }
   }
-  return { ok: true, snapshot }
+  return { ok: true, snapshot, worldState: saved.worldState }
 }
 
 export async function commitBootstrapChoice(
   choice: BootstrapChoice,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<BootstrapCommitResult> {
   const written = writeBootstrapChoice(choice)
   if (!written.ok) {
@@ -232,24 +249,25 @@ export async function commitBootstrapChoice(
     }
   }
   const snapshot = flowFromBootstrap(choice)
-  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot))
+  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot), worldState)
   if (!saved.ok) {
     return {
       ok: false,
       message: `문서를 저장할 수 없습니다 — ${storageFailureMessage(saved.reason)}`,
     }
   }
-  return { ok: true, snapshot }
+  return { ok: true, snapshot, worldState: saved.worldState }
 }
 
 export type ImportJsonResult =
-  | { ok: true; snapshot: GraphAppSnapshot }
+  | { ok: true; snapshot: GraphAppSnapshot; worldState: GraphAppWorldState }
   | { ok: false; message: string }
 
 /** Shared import core for browser File input and Desktop native open. */
 export async function importGraphJsonText(
   text: string,
   current: GraphPersistInput,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<ImportJsonResult> {
   if (utf8ByteLength(text) > MAX_PORTABLE_JSON_BYTES) {
     return {
@@ -276,7 +294,7 @@ export async function importGraphJsonText(
     return { ok: false, message: 'JSON은 파싱됐지만 그래프로 변환할 수 없습니다.' }
   }
 
-  const backedUp = await backupDocumentToStorage(snapshotToDocument(current))
+  const backedUp = await backupDocumentToStorage(snapshotToDocument(current), worldState)
   if (!backedUp.ok) {
     return {
       ok: false,
@@ -285,7 +303,7 @@ export async function importGraphJsonText(
   }
 
   // Persist imported document immediately — do not rely on debounced autosave.
-  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot))
+  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot), worldState)
   if (!saved.ok) {
     return {
       ok: false,
@@ -293,12 +311,13 @@ export async function importGraphJsonText(
     }
   }
 
-  return { ok: true, snapshot }
+  return { ok: true, snapshot, worldState: saved.worldState }
 }
 
 export async function importGraphJsonFile(
   file: File,
   current: GraphPersistInput,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<ImportJsonResult> {
   if (file.size > MAX_PORTABLE_JSON_BYTES) {
     return {
@@ -314,5 +333,5 @@ export async function importGraphJsonFile(
     return { ok: false, message: '파일을 읽을 수 없습니다.' }
   }
 
-  return importGraphJsonText(text, current)
+  return importGraphJsonText(text, current, worldState)
 }

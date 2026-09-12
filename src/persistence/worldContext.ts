@@ -1,37 +1,40 @@
 /**
- * Explicit runtime World context for A1 (no Redux/Zustand).
- * Holds the hydrated WorldDocument and active Galaxy id so autosave can
- * replaceGalaxyGraph without discarding World metadata / inactive Galaxies.
+ * Pure World runtime helpers for A1 (no module-global mutable context).
+ * React (App / useGraphApp) owns GraphAppWorldState explicitly.
  */
-import type { WorldDocumentV03 } from './worldTypes'
-import { DEFAULT_GALAXY_ID } from './worldTypes'
+import type { GraphDocumentV01 } from '../graphDocument'
+import { replaceGalaxyGraph, wrapGraphAsDefaultWorld } from './worldDocument'
+import {
+  DEFAULT_GALAXY_ID,
+  type GraphAppWorldState,
+  type WorldDocumentV03,
+} from './worldTypes'
 
-export type ActiveWorldContext = {
-  world: WorldDocumentV03
-  activeGalaxyId: string
-}
+export type { GraphAppWorldState }
 
-let activeContext: ActiveWorldContext | null = null
+/** @deprecated Alias — prefer GraphAppWorldState. */
+export type ActiveWorldContext = GraphAppWorldState
 
-export function getActiveWorldContext(): ActiveWorldContext | null {
-  return activeContext
-}
-
-export function setActiveWorldContext(context: ActiveWorldContext): void {
-  activeContext = {
-    world: context.world,
-    activeGalaxyId: context.activeGalaxyId || DEFAULT_GALAXY_ID,
+/** Pure: apply a GraphDocument into the active Galaxy of an existing World, or wrap anew. */
+export function worldStateWithReplacedActiveGraph(
+  graph: GraphDocumentV01,
+  worldState: GraphAppWorldState | null,
+): GraphAppWorldState {
+  if (worldState) {
+    return {
+      world: replaceGalaxyGraph(worldState.world, worldState.activeGalaxyId, graph),
+      activeGalaxyId: worldState.activeGalaxyId,
+    }
+  }
+  return {
+    world: wrapGraphAsDefaultWorld(graph),
+    activeGalaxyId: DEFAULT_GALAXY_ID,
   }
 }
 
-export function clearActiveWorldContext(): void {
-  activeContext = null
-}
-
-export function updateActiveWorldDocument(world: WorldDocumentV03): void {
-  if (!activeContext) {
-    activeContext = { world, activeGalaxyId: DEFAULT_GALAXY_ID }
-    return
-  }
-  activeContext = { ...activeContext, world }
+export function worldStateFromLoadedWorld(
+  world: WorldDocumentV03,
+  activeGalaxyId: string = DEFAULT_GALAXY_ID,
+): GraphAppWorldState {
+  return { world, activeGalaxyId: activeGalaxyId || DEFAULT_GALAXY_ID }
 }

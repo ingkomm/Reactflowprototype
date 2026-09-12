@@ -9,15 +9,14 @@ import {
   LEGACY_STORAGE_KEY,
 } from './workspaceStore'
 import {
-  buildWorldForGraphSave,
   getWorldStore,
-  rememberLoadedWorld,
-  rememberSavedWorld,
+  nextWorldStateForGraphSave,
+  worldStateFromLoadedWorld,
   WORLD_BACKUP_KEY,
   WORLD_STORAGE_KEY,
   type WorldStore,
 } from './worldStore'
-import { DEFAULT_GALAXY_ID } from './worldTypes'
+import { DEFAULT_GALAXY_ID, type GraphAppWorldState } from './worldTypes'
 import { getActiveGalaxyGraph } from './worldDocument'
 
 export const STORAGE_KEY = LEGACY_STORAGE_KEY
@@ -30,10 +29,14 @@ export const BOOTSTRAP_KEY = 'pob-bootstrap-choice'
 export type BootstrapChoice = 'empty' | 'demo'
 
 export type StorageLoadResult =
-  | { ok: true; document: GraphDocumentV01 }
+  | { ok: true; document: GraphDocumentV01; worldState: GraphAppWorldState }
   | { ok: false; reason: 'missing' | 'corrupt' | 'quota' | 'io' | 'missing_asset' }
 
 export type StorageSaveResult =
+  | { ok: true; worldState: GraphAppWorldState }
+  | { ok: false; reason: 'quota' | 'too_large' | 'io'; message?: string }
+
+export type BootstrapPreferenceResult =
   | { ok: true }
   | { ok: false; reason: 'quota' | 'too_large' | 'io'; message?: string }
 
@@ -47,7 +50,7 @@ export function readBootstrapChoice(): BootstrapChoice | null {
   return null
 }
 
-export function writeBootstrapChoice(choice: BootstrapChoice): StorageSaveResult {
+export function writeBootstrapChoice(choice: BootstrapChoice): BootstrapPreferenceResult {
   try {
     localStorage.setItem(BOOTSTRAP_KEY, choice)
     return { ok: true }
@@ -62,10 +65,16 @@ function mapLoadReason(
   return reason
 }
 
-function mapSaveResult(
-  result: Awaited<ReturnType<WorldStore['saveCurrent']>>,
-): StorageSaveResult {
-  if (result.ok) return { ok: true }
+function mapSaveFailure(
+  result: Extract<Awaited<ReturnType<WorldStore['saveCurrent']>>, { ok: false }>,
+): Extract<StorageSaveResult, { ok: false }> {
+  if (result.reason === 'invalid') {
+    return {
+      ok: false,
+      reason: 'io',
+      message: result.message ?? 'world validation failed',
+    }
+  }
   return { ok: false, reason: result.reason, message: result.message }
 }
 
@@ -79,8 +88,11 @@ function graphFromWorldLoad(
   if (!graph) {
     return { ok: false, reason: 'corrupt' }
   }
-  rememberLoadedWorld(loaded.world, DEFAULT_GALAXY_ID)
-  return { ok: true, document: graph }
+  return {
+    ok: true,
+    document: graph,
+    worldState: worldStateFromLoadedWorld(loaded.world, DEFAULT_GALAXY_ID),
+  }
 }
 
 export async function hasStoredDocument(): Promise<boolean> {
@@ -95,12 +107,13 @@ export async function hasBackupDocument(): Promise<boolean> {
 
 export async function saveDocumentToStorage(
   document: GraphDocumentV01,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<StorageSaveResult> {
   const store = await getWorldStore()
-  const world = buildWorldForGraphSave(document)
-  const saved = await store.saveCurrent(world)
-  if (saved.ok) rememberSavedWorld(world)
-  return mapSaveResult(saved)
+  const next = nextWorldStateForGraphSave(document, worldState)
+  const saved = await store.saveCurrent(next.world)
+  if (saved.ok) return { ok: true, worldState: next }
+  return mapSaveFailure(saved)
 }
 
 export async function loadDocumentFromStorage(): Promise<StorageLoadResult> {
@@ -111,10 +124,13 @@ export async function loadDocumentFromStorage(): Promise<StorageLoadResult> {
 
 export async function backupDocumentToStorage(
   document: GraphDocumentV01,
+  worldState: GraphAppWorldState | null = null,
 ): Promise<StorageSaveResult> {
   const store = await getWorldStore()
-  const world = buildWorldForGraphSave(document)
-  return mapSaveResult(await store.saveBackup(world))
+  const next = nextWorldStateForGraphSave(document, worldState)
+  const saved = await store.saveBackup(next.world)
+  if (saved.ok) return { ok: true, worldState: next }
+  return mapSaveFailure(saved)
 }
 
 export async function restoreBackupFromStorage(): Promise<StorageLoadResult> {

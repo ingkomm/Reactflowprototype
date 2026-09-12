@@ -123,6 +123,7 @@ import {
   type SaveFailureReason,
   type SaveStatus,
 } from './useGraphApp'
+import type { GraphAppWorldState } from './persistence/worldTypes'
 import { clampOrbitTierCapacity } from './limits'
 import { extractDailyLogsFromNodeData, absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
 import './App.css'
@@ -259,6 +260,7 @@ export default function App() {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [bootstrapPending, setBootstrapPending] = useState(true)
   const [storageCorrupt, setStorageCorrupt] = useState(false)
+  const [worldState, setWorldState] = useState<GraphAppWorldState | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveFailureReason, setSaveFailureReason] = useState<SaveFailureReason | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<PassiveFlowNode>([])
@@ -317,6 +319,8 @@ export default function App() {
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     },
+    worldState,
+    setWorldState,
     workspaceReady && !bootstrapPending && !storageCorrupt,
     (status, reason) => {
       setSaveStatus(status)
@@ -362,6 +366,7 @@ export default function App() {
       if (cancelled) return
       setBootstrapPending(initial.needsBootstrap)
       setStorageCorrupt(initial.storageCorrupt)
+      setWorldState(initial.worldState)
       if (initial.snapshot) {
         setNodes(stack(initial.snapshot.nodes))
         setEdges(sanitizeFlowEdges(initial.snapshot.nodes, initial.snapshot.edges))
@@ -393,12 +398,13 @@ export default function App() {
 
   const handleBootstrap = useCallback(
     (choice: 'empty' | 'demo') => {
-      void commitBootstrapChoice(choice).then((result) => {
+      void commitBootstrapChoice(choice, worldState).then((result) => {
         if (!result.ok) {
           setImportError(result.message)
           return
         }
         const snapshot = result.snapshot
+        setWorldState(result.worldState)
         resetHistory()
         setCustomSymbols(snapshot.customSymbols)
         setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
@@ -412,7 +418,7 @@ export default function App() {
         setImportError(null)
       })
     },
-    [resetHistory, setEdges, setNodes, stack],
+    [resetHistory, setEdges, setNodes, stack, worldState],
   )
 
   const copySelectedNode = useCallback(() => {
@@ -816,8 +822,7 @@ export default function App() {
             })
             return sanitizeEdges(nodes, [
               ...without,
-              rootSocketLinkEdge(rootId!, connectId!, rootConnectSlot!),
-            ])
+              rootSocketLinkEdge(rootId!, connectId!, rootConnectSlot!)])
           })
           return
         }
@@ -1407,8 +1412,7 @@ export default function App() {
     defaultSymbolColors,
     gridSnapEnabled,
     gridSnapScale,
-    voidHighlightEnabled,
-  ])
+    voidHighlightEnabled])
 
   const applyImportedSnapshot = useCallback(
     (imported: {
@@ -1478,8 +1482,7 @@ export default function App() {
     gridSnapEnabled,
     gridSnapScale,
     serializeCurrentGraph,
-    voidHighlightEnabled,
-  ])
+    voidHighlightEnabled])
 
   const handleSaveJsonAs = useCallback(async () => {
     if (isDesktopGraphExportSupported()) {
@@ -1509,8 +1512,7 @@ export default function App() {
     gridSnapEnabled,
     gridSnapScale,
     serializeCurrentGraph,
-    voidHighlightEnabled,
-  ])
+    voidHighlightEnabled])
 
   const handleImportJson = useCallback(
     async (file: File) => {
@@ -1519,11 +1521,12 @@ export default function App() {
         edges: stateRef.current.edges,
         customSymbols,
         settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
-      })
+      }, worldState)
       if (!result.ok) {
         setImportError(result.message)
         return
       }
+      setWorldState(result.worldState)
       applyImportedSnapshot(result.snapshot)
     },
     [
@@ -1533,6 +1536,7 @@ export default function App() {
       gridSnapEnabled,
       gridSnapScale,
       voidHighlightEnabled,
+      worldState,
     ],
   )
 
@@ -1552,11 +1556,12 @@ export default function App() {
       edges: stateRef.current.edges,
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
-    })
+    }, worldState)
     if (!result.ok) {
       setImportError(result.message)
       return
     }
+    setWorldState(result.worldState)
     applyImportedSnapshot(result.snapshot)
     setActiveJsonPath(opened.path)
     writeActiveJsonPath(opened.path)
@@ -1567,6 +1572,7 @@ export default function App() {
     gridSnapEnabled,
     gridSnapScale,
     voidHighlightEnabled,
+    worldState,
   ])
 
   useEffect(() => {
@@ -1610,12 +1616,13 @@ export default function App() {
       edges: stateRef.current.edges,
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
-    }).then((result) => {
+    }, worldState).then((result) => {
       if (!result.ok) {
         setImportError(result.message)
         return
       }
       const snapshot = result.snapshot
+      setWorldState(result.worldState)
       resetHistory()
       setCustomSymbols(snapshot.customSymbols)
       setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
@@ -1646,6 +1653,7 @@ export default function App() {
     setNodes,
     stack,
     voidHighlightEnabled,
+    worldState,
   ])
 
 

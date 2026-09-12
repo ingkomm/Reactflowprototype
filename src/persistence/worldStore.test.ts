@@ -31,6 +31,7 @@ import {
   validateWorldDocument,
   wrapGraphAsDefaultWorld,
 } from './worldDocument'
+import { worldStateWithReplacedActiveGraph } from './worldContext'
 import {
   DEFAULT_GALAXY_ID,
   DEFAULT_GALAXY_NAME,
@@ -39,6 +40,7 @@ import {
 } from './worldTypes'
 import {
   WORLD_BACKUP_MANIFEST_PATH,
+  WORLD_CURRENT_MANIFEST_PATH,
   getWorldStore,
   installMemoryPersistencePair,
   migrateWorkspaceToWorldIfNeeded,
@@ -417,5 +419,180 @@ describe('0.3-A1 World init fail-closed', () => {
     expect(initial.storageCorrupt).toBe(true)
     expect(initial.needsBootstrap).toBe(false)
     expect(initial.snapshot).toBeNull()
+  })
+})
+
+describe('0.3-A1 hardening regressions', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
+  })
+
+  it('exact partial migration: current ok + backup save fail, then retry only migrates backup', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const current = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    const backup = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: false })
+    expect((await workspace.saveCurrent(current)).ok).toBe(true)
+    expect((await workspace.saveBackup(backup)).ok).toBe(true)
+
+    const originalWrite = fs.writeTextFile.bind(fs)
+    fs.writeTextFile = async (path, contents) => {
+      if (String(path).includes('backup.json') && String(path).endsWith('.tmp')) {
+        throw new Error('forced backup save failure on first migration')
+      }
+      return originalWrite(path, contents)
+    }
+
+    const failed = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(failed.status).toBe('failed')
+
+    const currentAfterFail = await world.loadCurrent()
+    expect(currentAfterFail.ok).toBe(true)
+    if (!currentAfterFail.ok) return
+    expect(graphDocumentsEqual(current, getActiveGalaxyGraph(currentAfterFail.world)!)).toBe(true)
+    const currentJson = JSON.stringify(currentAfterFail.world)
+
+    expect(await world.hasBackup()).toBe(false)
+    expect(await fs.exists(WORLD_BACKUP_MANIFEST_PATH)).toBe(false)
+
+    // v0.2 sources preserved
+    const v02Current = await workspace.loadCurrent()
+    const v02Backup = await workspace.loadBackup()
+    expect(v02Current.ok).toBe(true)
+    expect(v02Backup.ok).toBe(true)
+
+    fs.writeTextFile = originalWrite
+    const retried = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(retried.status).toBe('migrated')
+
+    const currentAfterRetry = await world.loadCurrent()
+    expect(currentAfterRetry.ok).toBe(true)
+    if (!currentAfterRetry.ok) return
+    expect(JSON.stringify(currentAfterRetry.world)).toBe(currentJson)
+
+    const bak = await world.loadBackup()
+    expect(bak.ok).toBe(true)
+    if (!bak.ok) return
+    expect(graphDocumentsEqual(backup, getActiveGalaxyGraph(bak.world)!)).toBe(true)
+  })
+
+  it('source probe I/O failure is not treated as no_source / missing', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const source = docWithSymbols([MARKUP])
+    expect((await workspace.saveCurrent(source)).ok).toBe(true)
+
+    const originalRead = fs.readTextFile.bind(fs)
+    fs.readTextFile = async (path) => {
+      if (String(path).includes('storage-v02') && String(path).includes('current.json')) {
+        throw new Error('forced v0.2 current read I/O failure')
+      }
+      return originalRead(path)
+    }
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('failed')
+    if (result.status === 'failed') {
+      expect(result.message.toLowerCase()).not.toMatch(/no_source/)
+    }
+
+    expect(await world.hasCurrent()).toBe(false)
+    expect(await fs.exists(WORLD_CURRENT_MANIFEST_PATH)).toBe(false)
+
+    fs.readTextFile = originalRead
+    const stillThere = await workspace.loadCurrent()
+    expect(stillThere.ok).toBe(true)
+    if (!stillThere.ok) return
+    expect(graphDocumentsEqual(source, stillThere.document)).toBe(true)
+  })
+
+  it('destination corrupt current is not treated as missing and is not overwritten', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const source = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    expect((await workspace.saveCurrent(source)).ok).toBe(true)
+
+    await fs.mkdir('storage-v03', { recursive: true })
+    const corrupt = '{not-a-valid-world-manifest'
+    await fs.writeTextFile(WORLD_CURRENT_MANIFEST_PATH, corrupt)
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('failed')
+
+    expect(await fs.readTextFile(WORLD_CURRENT_MANIFEST_PATH)).toBe(corrupt)
+    const loaded = await world.loadCurrent()
+    expect(loaded.ok).toBe(false)
+    if (!loaded.ok) expect(loaded.reason).toBe('corrupt')
+
+    const v02 = await workspace.loadCurrent()
+    expect(v02.ok).toBe(true)
+  })
+
+  it('saveCurrent rejects invalid World before commit (prior current + assets intact)', async () => {
+    const { world } = installMemoryPersistencePair(createMemoryFsBackend())
+    const good = wrapGraphAsDefaultWorld(docWithSymbols([MARKUP]))
+    expect((await world.saveCurrent(good)).ok).toBe(true)
+    const assetsBefore = await world.assets.list()
+    expect(assetsBefore.length).toBeGreaterThan(0)
+    const assetIdsBefore = new Set(assetsBefore.map((a) => a.assetId))
+
+    const invalid = structuredClone(good)
+    invalid.galaxies.push({ ...invalid.galaxies[0]!, id: DEFAULT_GALAXY_ID })
+    const failed = await world.saveCurrent(invalid)
+    expect(failed.ok).toBe(false)
+    if (!failed.ok) expect(failed.reason).toBe('invalid')
+
+    const loaded = await world.loadCurrent()
+    expect(loaded.ok).toBe(true)
+    if (!loaded.ok) return
+    expect(graphDocumentsEqual(getActiveGalaxyGraph(good)!, getActiveGalaxyGraph(loaded.world)!)).toBe(
+      true,
+    )
+
+    const assetsAfter = await world.assets.list()
+    expect(new Set(assetsAfter.map((a) => a.assetId))).toEqual(assetIdsBefore)
+
+    const nanWorld = structuredClone(good)
+    nanWorld.galaxies[0]!.universePosition = { x: Number.NaN, y: 10 }
+    const failedNan = await world.saveCurrent(nanWorld)
+    expect(failedNan.ok).toBe(false)
+    if (!failedNan.ok) expect(failedNan.reason).toBe('invalid')
+
+    const loaded2 = await world.loadCurrent()
+    expect(loaded2.ok).toBe(true)
+  })
+
+  it('runtime helper replaces only active Galaxy graph (preserves inactive + universe)', () => {
+    const graphA = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    const graphB = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: false })
+    let world = wrapGraphAsDefaultWorld(graphA)
+    world = {
+      ...world,
+      galaxies: [
+        world.galaxies[0]!,
+        {
+          id: 'galaxy-b',
+          name: 'Galaxy B',
+          universePosition: { x: 200, y: 200 },
+          graph: graphB,
+        },
+      ],
+    }
+
+    const nextGraphA = docWithSymbols([MARKUP, RASTER_MARKUP], { gridSnapEnabled: false })
+    const state = worldStateWithReplacedActiveGraph(nextGraphA, {
+      world,
+      activeGalaxyId: DEFAULT_GALAXY_ID,
+    })
+
+    expect(state.activeGalaxyId).toBe(DEFAULT_GALAXY_ID)
+    expect(state.world.universe).toEqual(world.universe)
+    expect(graphDocumentsEqual(getActiveGalaxyGraph(state.world, DEFAULT_GALAXY_ID)!, nextGraphA)).toBe(
+      true,
+    )
+    expect(graphDocumentsEqual(getActiveGalaxyGraph(state.world, 'galaxy-b')!, graphB)).toBe(true)
+    expect(state.world.galaxies[1]!.name).toBe('Galaxy B')
+    expect(state.world.galaxies[1]!.universePosition).toEqual({ x: 200, y: 200 })
   })
 })

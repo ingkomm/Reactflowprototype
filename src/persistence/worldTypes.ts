@@ -87,4 +87,10 @@ export type WorldLoadResult = WorldLoadOk | WorldLoadErr
 
 export type WorldSaveResult =
   | { ok: true }
-  | { ok: false; reason: 'quota' | 'too_large' | 'io'; message?: string }
+  | { ok: false; reason: 'quota' | 'too_large' | 'io' | 'invalid'; message?: string }
+
+/** Explicit World runtime held by the app (not a module singleton). */
+export type GraphAppWorldState = {
+  world: WorldDocumentV03
+  activeGalaxyId: string
+}

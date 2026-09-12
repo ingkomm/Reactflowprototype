@@ -26,20 +26,18 @@ import {
   parseWorldManifestJson,
 } from './worldAssets'
 import {
-  clearActiveWorldContext,
-  getActiveWorldContext,
-  setActiveWorldContext,
-  updateActiveWorldDocument,
+  worldStateFromLoadedWorld,
+  worldStateWithReplacedActiveGraph,
 } from './worldContext'
 import {
   getActiveGalaxyGraph,
-  replaceGalaxyGraph,
   validateWorldDocument,
   wrapGraphAsDefaultWorld,
 } from './worldDocument'
 import {
   DEFAULT_GALAXY_ID,
   WORLD_STORAGE_VERSION,
+  type GraphAppWorldState,
   type WorldDocumentV03,
   type WorldLoadResult,
   type WorldManifestV03,
@@ -225,13 +223,18 @@ function createFsWorldStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorldSto
     const latest = slot === 'current' ? currentGeneration : backupGeneration
     if (generation !== latest) return { ok: true }
 
+    const validated = validateWorldDocument(world)
+    if (!validated.ok) {
+      return { ok: false, reason: 'invalid', message: validated.message }
+    }
+
     try {
       await ensureRoot()
       const path =
         slot === 'current' ? WORLD_CURRENT_MANIFEST_PATH : WORLD_BACKUP_MANIFEST_PATH
       const reuse = await readPreviousGalaxyAssetMap(fs, path)
       const committed = await referencedWorldAssetIds(fs)
-      const manifest = await buildWorldManifestFromDocument(world, assets, {
+      const manifest = await buildWorldManifestFromDocument(validated.world, assets, {
         previousAssetIdsByGalaxySymbol: reuse,
         committedAssetIds: committed,
       })
@@ -370,10 +373,16 @@ function createBrowserWorldStore(): WorldStore {
   ): Promise<WorldSaveResult> => {
     const latest = slot === 'current' ? currentGeneration : backupGeneration
     if (generation !== latest) return { ok: true }
+
+    const validated = validateWorldDocument(world)
+    if (!validated.ok) {
+      return { ok: false, reason: 'invalid', message: validated.message }
+    }
+
     try {
       const reuse = await previousMap(key)
       const committed = await browserRefs()
-      const manifest = await buildWorldManifestFromDocument(world, assets, {
+      const manifest = await buildWorldManifestFromDocument(validated.world, assets, {
         previousAssetIdsByGalaxySymbol: reuse,
         committedAssetIds: committed,
       })
@@ -489,38 +498,117 @@ async function migrateOneWorkspaceSlot(
 }
 
 /**
+ * Fail-closed slot probe: never treat I/O / corrupt as missing.
+ * Uses load* results — not boolean has*() exists checks.
+ */
+export type SlotProbe<T> =
+  | { state: 'missing' }
+  | { state: 'valid'; value: T }
+  | { state: 'failed'; reason: string }
+
+type SlotAction = 'nothing' | 'migrate' | 'already' | 'preserve' | 'fail'
+
+function probeFromLoadResult<T>(
+  loaded: { ok: true; value: T } | { ok: false; reason: string; message: string },
+): SlotProbe<T> {
+  if (loaded.ok) return { state: 'valid', value: loaded.value }
+  if (loaded.reason === 'missing') return { state: 'missing' }
+  return { state: 'failed', reason: `${loaded.reason}: ${loaded.message}` }
+}
+
+export async function probeWorkspaceSlot(
+  workspace: WorkspaceStore,
+  slot: 'current' | 'backup',
+): Promise<SlotProbe<GraphDocumentV01>> {
+  const loaded =
+    slot === 'current' ? await workspace.loadCurrent() : await workspace.loadBackup()
+  if (loaded.ok) return { state: 'valid', value: loaded.document }
+  return probeFromLoadResult({
+    ok: false,
+    reason: loaded.reason,
+    message: loaded.message,
+  })
+}
+
+export async function probeWorldSlot(
+  worldStore: WorldStore,
+  slot: 'current' | 'backup',
+): Promise<SlotProbe<WorldDocumentV03>> {
+  const loaded =
+    slot === 'current' ? await worldStore.loadCurrent() : await worldStore.loadBackup()
+  if (loaded.ok) return { state: 'valid', value: loaded.world }
+  return probeFromLoadResult({
+    ok: false,
+    reason: loaded.reason,
+    message: loaded.message,
+  })
+}
+
+function decideSlotAction(
+  source: SlotProbe<unknown>,
+  dest: SlotProbe<unknown>,
+): SlotAction {
+  if (source.state === 'failed' || dest.state === 'failed') return 'fail'
+  if (source.state === 'missing' && dest.state === 'missing') return 'nothing'
+  if (source.state === 'valid' && dest.state === 'missing') return 'migrate'
+  if (source.state === 'valid' && dest.state === 'valid') return 'already'
+  // source missing + dest valid
+  return 'preserve'
+}
+
+/**
  * Migrate v0.2 Workspace current/backup slots into v0.3 World slots independently.
- * Never deletes or overwrites v0.2 source. Never overwrites an existing v0.3 slot.
+ * Never deletes or overwrites v0.2 source. Never overwrites an existing v0.3 slot
+ * (including corrupt destination — fail closed, do not treat as missing).
  */
 export async function migrateWorkspaceToWorldIfNeeded(
   workspace: WorkspaceStore,
   worldStore: WorldStore,
 ): Promise<WorldMigrationResult> {
-  const v02Current = await workspace.hasCurrent()
-  const v02Backup = await workspace.hasBackup()
-  if (!v02Current && !v02Backup) {
-    return { status: 'no_source' }
+  const sourceCurrent = await probeWorkspaceSlot(workspace, 'current')
+  const sourceBackup = await probeWorkspaceSlot(workspace, 'backup')
+  const destCurrent = await probeWorldSlot(worldStore, 'current')
+  const destBackup = await probeWorldSlot(worldStore, 'backup')
+
+  const currentAction = decideSlotAction(sourceCurrent, destCurrent)
+  const backupAction = decideSlotAction(sourceBackup, destBackup)
+
+  if (currentAction === 'fail') {
+    const reason =
+      sourceCurrent.state === 'failed'
+        ? `v0.2 current probe failed (${sourceCurrent.reason})`
+        : destCurrent.state === 'failed'
+          ? `v0.3 current probe failed (${destCurrent.reason})`
+          : 'current slot migration failed'
+    return { status: 'failed', message: reason }
+  }
+  if (backupAction === 'fail') {
+    const reason =
+      sourceBackup.state === 'failed'
+        ? `v0.2 backup probe failed (${sourceBackup.reason})`
+        : destBackup.state === 'failed'
+          ? `v0.3 backup probe failed (${destBackup.reason})`
+          : 'backup slot migration failed'
+    return { status: 'failed', message: reason }
   }
 
-  const v03Current = await worldStore.hasCurrent()
-  const v03Backup = await worldStore.hasBackup()
-
-  const currentNeeded = v02Current && !v03Current
-  const backupNeeded = v02Backup && !v03Backup
-
-  if (!currentNeeded && !backupNeeded) {
-    return { status: 'already_migrated' }
+  const bothSourcesMissing =
+    sourceCurrent.state === 'missing' && sourceBackup.state === 'missing'
+  const bothDestsMissing =
+    destCurrent.state === 'missing' && destBackup.state === 'missing'
+  if (bothSourcesMissing && bothDestsMissing) {
+    return { status: 'no_source' }
   }
 
   let didMigrate = false
 
-  if (currentNeeded) {
+  if (currentAction === 'migrate') {
     const result = await migrateOneWorkspaceSlot(workspace, worldStore, 'current')
     if (!result.ok) return { status: 'failed', message: result.message }
     didMigrate = true
   }
 
-  if (backupNeeded) {
+  if (backupAction === 'migrate') {
     const result = await migrateOneWorkspaceSlot(workspace, worldStore, 'backup')
     if (!result.ok) return { status: 'failed', message: result.message }
     didMigrate = true
@@ -587,7 +675,6 @@ export function resetWorldStoreSingleton(): void {
   singletonPromise = null
   initFailure = null
   testHooks = {}
-  clearActiveWorldContext()
 }
 
 export async function getWorldStore(): Promise<WorldStore> {
@@ -674,23 +761,20 @@ export function worldStorageVersion(): typeof WORLD_STORAGE_VERSION {
 
 /**
  * Build the WorldDocument to persist for a Graph autosave / New Sheet / import.
- * Replaces the active Galaxy graph inside the existing World when context exists.
+ * Replaces the active Galaxy graph inside the caller-held World when provided.
  */
-export function buildWorldForGraphSave(graph: GraphDocumentV01): WorldDocumentV03 {
-  const active = getActiveWorldContext()
-  if (active) {
-    return replaceGalaxyGraph(active.world, active.activeGalaxyId, graph)
-  }
-  return wrapGraphAsDefaultWorld(graph)
+export function buildWorldForGraphSave(
+  graph: GraphDocumentV01,
+  worldState: GraphAppWorldState | null = null,
+): WorldDocumentV03 {
+  return worldStateWithReplacedActiveGraph(graph, worldState).world
 }
 
-export function rememberLoadedWorld(
-  world: WorldDocumentV03,
-  activeGalaxyId: string = DEFAULT_GALAXY_ID,
-): void {
-  setActiveWorldContext({ world, activeGalaxyId })
+export function nextWorldStateForGraphSave(
+  graph: GraphDocumentV01,
+  worldState: GraphAppWorldState | null = null,
+): GraphAppWorldState {
+  return worldStateWithReplacedActiveGraph(graph, worldState)
 }
 
-export function rememberSavedWorld(world: WorldDocumentV03): void {
-  updateActiveWorldDocument(world)
-}
+export { worldStateFromLoadedWorld, worldStateWithReplacedActiveGraph }
