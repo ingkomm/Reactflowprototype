@@ -1,20 +1,28 @@
+/**
+ * Autosave facade over WorkspaceStore (v0.2).
+ * Bootstrap preference stays in localStorage; graph payloads go through WorkspaceStore.
+ */
 import type { GraphDocumentV01 } from '../graphDocument'
-import { serializeGraphDocument, parseGraphDocumentJson } from '../graphDocument'
-import { MAX_JSON_BYTES } from '../limits'
+import {
+  getWorkspaceStore,
+  LEGACY_BACKUP_KEY,
+  LEGACY_STORAGE_KEY,
+  type WorkspaceStore,
+} from './workspaceStore'
 
-export const STORAGE_KEY = 'pob-graph-document-v01'
-export const BACKUP_KEY = 'pob-graph-document-backup'
+export const STORAGE_KEY = LEGACY_STORAGE_KEY
+export const BACKUP_KEY = LEGACY_BACKUP_KEY
 export const BOOTSTRAP_KEY = 'pob-bootstrap-choice'
 
 export type BootstrapChoice = 'empty' | 'demo'
 
 export type StorageLoadResult =
   | { ok: true; document: GraphDocumentV01 }
-  | { ok: false; reason: 'missing' | 'corrupt' | 'quota' }
+  | { ok: false; reason: 'missing' | 'corrupt' | 'quota' | 'io' | 'missing_asset' }
 
 export type StorageSaveResult =
   | { ok: true }
-  | { ok: false; reason: 'quota' | 'too_large' }
+  | { ok: false; reason: 'quota' | 'too_large' | 'io'; message?: string }
 
 export function readBootstrapChoice(): BootstrapChoice | null {
   try {
@@ -35,73 +43,61 @@ export function writeBootstrapChoice(choice: BootstrapChoice): StorageSaveResult
   }
 }
 
-export function hasStoredDocument(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) != null
-  } catch {
-    return false
-  }
+function mapLoadReason(
+  reason: 'missing' | 'corrupt' | 'io' | 'missing_asset',
+): Extract<StorageLoadResult, { ok: false }>['reason'] {
+  return reason
 }
 
-export function hasBackupDocument(): boolean {
-  try {
-    return localStorage.getItem(BACKUP_KEY) != null
-  } catch {
-    return false
-  }
+function mapSaveResult(
+  result: Awaited<ReturnType<WorkspaceStore['saveCurrent']>>,
+): StorageSaveResult {
+  if (result.ok) return { ok: true }
+  return { ok: false, reason: result.reason, message: result.message }
 }
 
-export function saveDocumentToStorage(document: GraphDocumentV01): StorageSaveResult {
-  const serialized = serializeGraphDocument(document)
-  if (serialized.length > MAX_JSON_BYTES) {
-    return { ok: false, reason: 'too_large' }
-  }
-  try {
-    localStorage.setItem(STORAGE_KEY, serialized)
-    return { ok: true }
-  } catch {
-    return { ok: false, reason: 'quota' }
-  }
+export async function hasStoredDocument(): Promise<boolean> {
+  const store = await getWorkspaceStore()
+  return store.hasCurrent()
 }
 
-export function loadDocumentFromStorage(): StorageLoadResult {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ok: false, reason: 'missing' }
-    const parsed = parseGraphDocumentJson(raw)
-    if (!parsed.ok) return { ok: false, reason: 'corrupt' }
-    return { ok: true, document: parsed.document }
-  } catch {
-    return { ok: false, reason: 'corrupt' }
-  }
+export async function hasBackupDocument(): Promise<boolean> {
+  const store = await getWorkspaceStore()
+  return store.hasBackup()
 }
 
-export function backupDocumentToStorage(document: GraphDocumentV01): StorageSaveResult {
-  const serialized = serializeGraphDocument(document)
-  if (serialized.length > MAX_JSON_BYTES) {
-    return { ok: false, reason: 'too_large' }
-  }
-  try {
-    localStorage.setItem(BACKUP_KEY, serialized)
-    return { ok: true }
-  } catch {
-    return { ok: false, reason: 'quota' }
-  }
+export async function saveDocumentToStorage(
+  document: GraphDocumentV01,
+): Promise<StorageSaveResult> {
+  const store = await getWorkspaceStore()
+  return mapSaveResult(await store.saveCurrent(document))
 }
 
-export function restoreBackupFromStorage(): StorageLoadResult {
-  try {
-    const raw = localStorage.getItem(BACKUP_KEY)
-    if (!raw) return { ok: false, reason: 'missing' }
-    const parsed = parseGraphDocumentJson(raw)
-    if (!parsed.ok) return { ok: false, reason: 'corrupt' }
-    return { ok: true, document: parsed.document }
-  } catch {
-    return { ok: false, reason: 'corrupt' }
-  }
+export async function loadDocumentFromStorage(): Promise<StorageLoadResult> {
+  const store = await getWorkspaceStore()
+  const loaded = await store.loadCurrent()
+  if (loaded.ok) return { ok: true, document: loaded.document }
+  return { ok: false, reason: mapLoadReason(loaded.reason) }
 }
 
-export function storageFailureMessage(reason: 'quota' | 'too_large' | undefined): string {
+export async function backupDocumentToStorage(
+  document: GraphDocumentV01,
+): Promise<StorageSaveResult> {
+  const store = await getWorkspaceStore()
+  return mapSaveResult(await store.saveBackup(document))
+}
+
+export async function restoreBackupFromStorage(): Promise<StorageLoadResult> {
+  const store = await getWorkspaceStore()
+  const loaded = await store.loadBackup()
+  if (loaded.ok) return { ok: true, document: loaded.document }
+  return { ok: false, reason: mapLoadReason(loaded.reason) }
+}
+
+export function storageFailureMessage(
+  reason: 'quota' | 'too_large' | 'io' | undefined,
+): string {
   if (reason === 'too_large') return '문서가 너무 커서 저장할 수 없습니다.'
+  if (reason === 'io') return '저장소 I/O에 실패했습니다. 기존 문서는 유지됩니다.'
   return '로컬 저장에 실패했습니다 (용량 부족 등).'
 }

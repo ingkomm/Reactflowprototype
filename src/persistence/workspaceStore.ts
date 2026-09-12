@@ -1,0 +1,506 @@
+/**
+ * Internal workspace persistence (v0.2).
+ *
+ * Desktop: AppData/storage-v02/{current,backup}.json + assets/
+ * Browser: localStorage fallback (size-capped)
+ *
+ * Structured workspace data ≠ asset bytes.
+ * Portable GraphDocument remains self-contained (markup inline).
+ */
+import type { GraphDocumentV01 } from '../graphDocument'
+import { parseGraphDocumentJson, serializeGraphDocument } from '../graphDocument'
+import { MAX_BROWSER_AUTOSAVE_BYTES, utf8ByteLength } from '../limits'
+import { isDesktopGraphExportSupported } from '../platform/graphExport'
+import type { AssetStore } from './assetStore'
+import { createFileAssetStore, createLocalStorageAssetStore } from './fileAssetStore'
+import {
+  createMemoryFsBackend,
+  createTauriAppDataFsBackend,
+  type FsBackend,
+} from './fsBackend'
+import {
+  buildManifestFromDocument,
+  collectAssetIdsFromManifest,
+  hydrateManifest,
+  parseWorkspaceManifestJson,
+  symbolIdToAssetIdMap,
+} from './symbolAssets'
+import type {
+  WorkspaceLoadResult,
+  WorkspaceManifestV02,
+  WorkspaceSaveResult,
+} from './workspaceTypes'
+import { WORKSPACE_STORAGE_VERSION } from './workspaceTypes'
+
+export const STORAGE_ROOT = 'storage-v02'
+export const CURRENT_MANIFEST_PATH = `${STORAGE_ROOT}/current.json`
+export const BACKUP_MANIFEST_PATH = `${STORAGE_ROOT}/backup.json`
+export const ASSETS_DIR = `${STORAGE_ROOT}/assets`
+
+/** Legacy localStorage keys (v0.1). Kept for migration / browser. */
+export const LEGACY_STORAGE_KEY = 'pob-graph-document-v01'
+export const LEGACY_BACKUP_KEY = 'pob-graph-document-backup'
+export const MIGRATION_MARKER_KEY = 'pob-workspace-migrated-v02'
+
+export type WorkspaceStore = {
+  readonly kind: 'desktop' | 'browser' | 'memory'
+  assets: AssetStore
+  hasCurrent(): Promise<boolean>
+  hasBackup(): Promise<boolean>
+  loadCurrent(): Promise<WorkspaceLoadResult>
+  loadBackup(): Promise<WorkspaceLoadResult>
+  saveCurrent(document: GraphDocumentV01): Promise<WorkspaceSaveResult>
+  saveBackup(document: GraphDocumentV01): Promise<WorkspaceSaveResult>
+  clearCurrent(): Promise<WorkspaceSaveResult>
+}
+
+function serializeManifest(manifest: WorkspaceManifestV02): string {
+  return `${JSON.stringify(manifest)}\n`
+}
+
+function createWriteQueue() {
+  let chain: Promise<unknown> = Promise.resolve()
+  let generation = 0
+
+  return {
+    enqueue<T>(task: (generation: number) => Promise<T>): Promise<T> {
+      const myGen = ++generation
+      const run = chain.then(() => task(myGen))
+      chain = run.then(
+        () => undefined,
+        () => undefined,
+      )
+      return run
+    },
+    get generation() {
+      return generation
+    },
+  }
+}
+
+async function garbageCollectAssets(assets: AssetStore, keep: Set<string>): Promise<void> {
+  const listed = await assets.list()
+  for (const entry of listed) {
+    if (!keep.has(entry.assetId)) {
+      await assets.delete(entry.assetId)
+    }
+  }
+}
+
+async function readManifestRaw(
+  fs: FsBackend,
+  path: string,
+): Promise<{ ok: true; text: string } | { ok: false; reason: 'missing' | 'io'; message: string }> {
+  try {
+    if (!(await fs.exists(path))) return { ok: false, reason: 'missing', message: 'missing' }
+    const text = await fs.readTextFile(path)
+    return { ok: true, text }
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'io',
+      message: err instanceof Error ? err.message : 'read failed',
+    }
+  }
+}
+
+async function atomicWriteText(fs: FsBackend, path: string, contents: string): Promise<void> {
+  const tmp = `${path}.tmp`
+  await fs.writeTextFile(tmp, contents)
+  if (!(await fs.exists(tmp))) {
+    throw new Error('temp write missing after write')
+  }
+  await fs.rename(tmp, path)
+}
+
+async function loadSlotFromFs(
+  fs: FsBackend,
+  assets: AssetStore,
+  path: string,
+): Promise<WorkspaceLoadResult> {
+  const raw = await readManifestRaw(fs, path)
+  if (!raw.ok) {
+    return {
+      ok: false,
+      reason: raw.reason === 'missing' ? 'missing' : 'io',
+      message: raw.message,
+    }
+  }
+
+  const manifest = parseWorkspaceManifestJson(raw.text)
+  if (!manifest) {
+    const legacy = parseGraphDocumentJson(raw.text)
+    if (legacy.ok) {
+      return { ok: true, document: legacy.document, issues: [] }
+    }
+    return {
+      ok: false,
+      reason: 'corrupt',
+      message: 'workspace manifest corrupt',
+      issues: [{ code: 'corrupt_manifest', message: 'invalid storageVersion or shape' }],
+    }
+  }
+
+  const hydrated = await hydrateManifest(manifest, assets)
+  const blocking = hydrated.issues.filter(
+    (i) => i.code === 'missing_asset' || i.code === 'corrupt_asset',
+  )
+  if (blocking.length > 0) {
+    return {
+      ok: false,
+      reason: 'missing_asset',
+      message: `missing or corrupt asset (${blocking[0]!.assetId})`,
+      issues: hydrated.issues,
+    }
+  }
+  return { ok: true, document: hydrated.document, issues: hydrated.issues }
+}
+
+async function readPreviousAssetMap(
+  fs: FsBackend,
+  path: string,
+): Promise<Map<string, string> | undefined> {
+  const raw = await readManifestRaw(fs, path)
+  if (!raw.ok) return undefined
+  const manifest = parseWorkspaceManifestJson(raw.text)
+  if (!manifest) return undefined
+  return symbolIdToAssetIdMap(manifest)
+}
+
+async function referencedAssetIds(fs: FsBackend): Promise<Set<string>> {
+  const keep = new Set<string>()
+  for (const path of [CURRENT_MANIFEST_PATH, BACKUP_MANIFEST_PATH]) {
+    const raw = await readManifestRaw(fs, path)
+    if (!raw.ok) continue
+    const manifest = parseWorkspaceManifestJson(raw.text)
+    if (!manifest) continue
+    for (const id of collectAssetIdsFromManifest(manifest)) keep.add(id)
+  }
+  return keep
+}
+
+function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorkspaceStore {
+  const assets = createFileAssetStore(fs, ASSETS_DIR)
+  const currentQueue = createWriteQueue()
+  const backupQueue = createWriteQueue()
+
+  const ensureRoot = async () => {
+    await fs.mkdir(STORAGE_ROOT, { recursive: true })
+    await fs.mkdir(ASSETS_DIR, { recursive: true })
+  }
+
+  const saveSlot = async (
+    slot: 'current' | 'backup',
+    document: GraphDocumentV01,
+    generation: number,
+    queue: ReturnType<typeof createWriteQueue>,
+  ): Promise<WorkspaceSaveResult> => {
+    if (generation !== queue.generation) return { ok: true }
+
+    try {
+      await ensureRoot()
+      const path = slot === 'current' ? CURRENT_MANIFEST_PATH : BACKUP_MANIFEST_PATH
+      const reuse = await readPreviousAssetMap(fs, path)
+      const manifest = await buildManifestFromDocument(document, assets, reuse)
+
+      if (generation !== queue.generation) return { ok: true }
+
+      const text = serializeManifest(manifest)
+      await atomicWriteText(fs, path, text)
+
+      const keep = await referencedAssetIds(fs)
+      await garbageCollectAssets(assets, keep)
+      return { ok: true }
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'io',
+        message: err instanceof Error ? err.message : 'workspace save failed',
+      }
+    }
+  }
+
+  return {
+    kind,
+    assets,
+    async hasCurrent() {
+      try {
+        return await fs.exists(CURRENT_MANIFEST_PATH)
+      } catch {
+        return false
+      }
+    },
+    async hasBackup() {
+      try {
+        return await fs.exists(BACKUP_MANIFEST_PATH)
+      } catch {
+        return false
+      }
+    },
+    loadCurrent: () => loadSlotFromFs(fs, assets, CURRENT_MANIFEST_PATH),
+    loadBackup: () => loadSlotFromFs(fs, assets, BACKUP_MANIFEST_PATH),
+    saveCurrent: (document) =>
+      currentQueue.enqueue((gen) => saveSlot('current', document, gen, currentQueue)),
+    saveBackup: (document) =>
+      backupQueue.enqueue((gen) => saveSlot('backup', document, gen, backupQueue)),
+    async clearCurrent() {
+      try {
+        await ensureRoot()
+        if (await fs.exists(CURRENT_MANIFEST_PATH)) {
+          await fs.remove(CURRENT_MANIFEST_PATH)
+        }
+        const keep = await referencedAssetIds(fs)
+        await garbageCollectAssets(assets, keep)
+        return { ok: true }
+      } catch (err) {
+        return {
+          ok: false,
+          reason: 'io',
+          message: err instanceof Error ? err.message : 'clear failed',
+        }
+      }
+    },
+  }
+}
+
+function createBrowserWorkspaceStore(): WorkspaceStore {
+  const assets = createLocalStorageAssetStore()
+  const currentQueue = createWriteQueue()
+  const backupQueue = createWriteQueue()
+  const CURRENT_KEY = LEGACY_STORAGE_KEY
+  const BACKUP_KEY = LEGACY_BACKUP_KEY
+
+  const readKey = (key: string): string | null => {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  }
+
+  const writeKey = (key: string, value: string): WorkspaceSaveResult => {
+    if (utf8ByteLength(value) > MAX_BROWSER_AUTOSAVE_BYTES) {
+      return { ok: false, reason: 'too_large', message: 'browser autosave limit exceeded' }
+    }
+    try {
+      localStorage.setItem(key, value)
+      return { ok: true }
+    } catch {
+      return { ok: false, reason: 'quota' }
+    }
+  }
+
+  const loadKey = async (key: string): Promise<WorkspaceLoadResult> => {
+    const raw = readKey(key)
+    if (raw == null) return { ok: false, reason: 'missing', message: 'missing' }
+
+    const manifest = parseWorkspaceManifestJson(raw)
+    if (manifest) {
+      const hydrated = await hydrateManifest(manifest, assets)
+      const blocking = hydrated.issues.filter(
+        (i) => i.code === 'missing_asset' || i.code === 'corrupt_asset',
+      )
+      if (blocking.length > 0) {
+        return {
+          ok: false,
+          reason: 'missing_asset',
+          message: `missing or corrupt asset (${blocking[0]!.assetId})`,
+          issues: hydrated.issues,
+        }
+      }
+      return { ok: true, document: hydrated.document, issues: hydrated.issues }
+    }
+
+    const legacy = parseGraphDocumentJson(raw)
+    if (legacy.ok) return { ok: true, document: legacy.document, issues: [] }
+    return { ok: false, reason: 'corrupt', message: 'corrupt localStorage payload' }
+  }
+
+  const previousMap = async (key: string): Promise<Map<string, string> | undefined> => {
+    const raw = readKey(key)
+    if (!raw) return undefined
+    const manifest = parseWorkspaceManifestJson(raw)
+    if (!manifest) return undefined
+    return symbolIdToAssetIdMap(manifest)
+  }
+
+  const browserRefs = async (): Promise<Set<string>> => {
+    const keep = new Set<string>()
+    for (const key of [CURRENT_KEY, BACKUP_KEY]) {
+      const raw = readKey(key)
+      if (!raw) continue
+      const manifest = parseWorkspaceManifestJson(raw)
+      if (!manifest) continue
+      for (const id of collectAssetIdsFromManifest(manifest)) keep.add(id)
+    }
+    return keep
+  }
+
+  const saveKey = async (
+    key: string,
+    document: GraphDocumentV01,
+    generation: number,
+    queue: ReturnType<typeof createWriteQueue>,
+  ): Promise<WorkspaceSaveResult> => {
+    if (generation !== queue.generation) return { ok: true }
+    try {
+      const reuse = await previousMap(key)
+      const manifest = await buildManifestFromDocument(document, assets, reuse)
+      if (generation !== queue.generation) return { ok: true }
+      const text = serializeManifest(manifest)
+      const written = writeKey(key, text)
+      if (!written.ok) return written
+      const keep = await browserRefs()
+      await garbageCollectAssets(assets, keep)
+      return { ok: true }
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'io',
+        message: err instanceof Error ? err.message : 'browser save failed',
+      }
+    }
+  }
+
+  return {
+    kind: 'browser',
+    assets,
+    async hasCurrent() {
+      return readKey(CURRENT_KEY) != null
+    },
+    async hasBackup() {
+      return readKey(BACKUP_KEY) != null
+    },
+    loadCurrent: () => loadKey(CURRENT_KEY),
+    loadBackup: () => loadKey(BACKUP_KEY),
+    saveCurrent: (document) =>
+      currentQueue.enqueue((gen) => saveKey(CURRENT_KEY, document, gen, currentQueue)),
+    saveBackup: (document) =>
+      backupQueue.enqueue((gen) => saveKey(BACKUP_KEY, document, gen, backupQueue)),
+    async clearCurrent() {
+      try {
+        localStorage.removeItem(CURRENT_KEY)
+        const keep = await browserRefs()
+        await garbageCollectAssets(assets, keep)
+        return { ok: true }
+      } catch {
+        return { ok: false, reason: 'quota' }
+      }
+    },
+  }
+}
+
+/** Migrate legacy localStorage GraphDocument → workspace store (once). Never deletes legacy keys. */
+export async function migrateLegacyLocalStorageIfNeeded(
+  store: WorkspaceStore,
+): Promise<{ migrated: boolean; message?: string }> {
+  if (await store.hasCurrent()) {
+    return { migrated: false }
+  }
+
+  let primaryRaw: string | null = null
+  let backupRaw: string | null = null
+  try {
+    primaryRaw = localStorage.getItem(LEGACY_STORAGE_KEY)
+    backupRaw = localStorage.getItem(LEGACY_BACKUP_KEY)
+  } catch {
+    return { migrated: false, message: 'localStorage unavailable' }
+  }
+
+  if (!primaryRaw && !backupRaw) return { migrated: false }
+
+  if (primaryRaw && parseWorkspaceManifestJson(primaryRaw)) {
+    return { migrated: false }
+  }
+
+  let migratedPrimary = false
+  if (primaryRaw) {
+    const parsed = parseGraphDocumentJson(primaryRaw)
+    if (parsed.ok) {
+      const saved = await store.saveCurrent(parsed.document)
+      if (!saved.ok) {
+        return {
+          migrated: false,
+          message: saved.message ?? `primary migration failed (${saved.reason})`,
+        }
+      }
+      const verify = await store.loadCurrent()
+      if (!verify.ok) {
+        return {
+          migrated: false,
+          message: `primary migration verify failed (${verify.reason})`,
+        }
+      }
+      migratedPrimary = true
+      try {
+        localStorage.setItem(MIGRATION_MARKER_KEY, 'ok')
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (backupRaw) {
+    const parsed = parseGraphDocumentJson(backupRaw)
+    if (parsed.ok) {
+      const saved = await store.saveBackup(parsed.document)
+      if (!saved.ok) {
+        return {
+          migrated: migratedPrimary,
+          message: saved.message ?? `backup migration failed (${saved.reason})`,
+        }
+      }
+    }
+  }
+
+  return { migrated: migratedPrimary }
+}
+
+let singleton: WorkspaceStore | null = null
+let singletonPromise: Promise<WorkspaceStore> | null = null
+
+/** Test helper: inject a memory-backed store (resets singleton). */
+export function installMemoryWorkspaceStore(fs?: FsBackend): WorkspaceStore {
+  const store = createFsWorkspaceStore(fs ?? createMemoryFsBackend(), 'memory')
+  singleton = store
+  singletonPromise = Promise.resolve(store)
+  return store
+}
+
+export function resetWorkspaceStoreSingleton(): void {
+  singleton = null
+  singletonPromise = null
+}
+
+export async function getWorkspaceStore(): Promise<WorkspaceStore> {
+  if (singleton) return singleton
+  if (singletonPromise) return singletonPromise
+
+  singletonPromise = (async () => {
+    if (isDesktopGraphExportSupported()) {
+      try {
+        const fs = await createTauriAppDataFsBackend()
+        const store = createFsWorkspaceStore(fs, 'desktop')
+        await migrateLegacyLocalStorageIfNeeded(store)
+        singleton = store
+        return store
+      } catch {
+        // Fall through to browser store if Tauri FS init fails.
+      }
+    }
+    const store = createBrowserWorkspaceStore()
+    singleton = store
+    return store
+  })()
+
+  return singletonPromise
+}
+
+export function workspaceStorageVersion(): typeof WORKSPACE_STORAGE_VERSION {
+  return WORKSPACE_STORAGE_VERSION
+}
+
+/** Serialize portable GraphDocument (self-contained) — used by Save / Save As. */
+export function serializePortableDocument(document: GraphDocumentV01): string {
+  return serializeGraphDocument(document)
+}

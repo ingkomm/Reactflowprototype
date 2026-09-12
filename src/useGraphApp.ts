@@ -22,7 +22,7 @@ import {
 } from './persistence/autosave'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import type { CustomSymbol, GraphDocumentSettings } from './types'
-import { MAX_JSON_BYTES } from './limits'
+import { MAX_PORTABLE_JSON_BYTES, utf8ByteLength } from './limits'
 import { syncEdgesReachableFromInitial } from './power'
 import { pruneInvalidEdges } from './graphEdges'
 import { stripInvalidRootPowerEdges } from './rootOrbit'
@@ -40,7 +40,7 @@ export type GraphPersistInput = GraphAppSnapshot & {
 
 export type SaveStatus = 'idle' | 'saved' | 'failed'
 
-export type SaveFailureReason = 'quota' | 'too_large'
+export type SaveFailureReason = 'quota' | 'too_large' | 'io'
 
 const AUTOSAVE_DEBOUNCE_MS = 400
 
@@ -71,29 +71,43 @@ function snapshotFromDocument(document: GraphDocumentV01): GraphAppSnapshot {
   }
 }
 
-export function resolveInitialGraphState(): {
+export async function resolveInitialGraphState(): Promise<{
   snapshot: GraphAppSnapshot | null
   needsBootstrap: boolean
   storageCorrupt: boolean
-} {
-  const stored = loadDocumentFromStorage()
+}> {
+  const stored = await loadDocumentFromStorage()
   if (stored.ok) {
-    // Rewrite migrated legacy docs (e.g. kind: small → shard) so the next load stays clean.
-    saveDocumentToStorage(stored.document)
-    return { snapshot: snapshotFromDocument(stored.document), needsBootstrap: false, storageCorrupt: false }
+    // Rewrite migrated legacy docs so the next load stays clean.
+    await saveDocumentToStorage(stored.document)
+    return {
+      snapshot: snapshotFromDocument(stored.document),
+      needsBootstrap: false,
+      storageCorrupt: false,
+    }
   }
 
-  if (hasStoredDocument()) {
-    const backup = restoreBackupFromStorage()
+  if (await hasStoredDocument()) {
+    const backup = await restoreBackupFromStorage()
     if (backup.ok) {
-      saveDocumentToStorage(backup.document)
-      return { snapshot: snapshotFromDocument(backup.document), needsBootstrap: false, storageCorrupt: false }
+      await saveDocumentToStorage(backup.document)
+      return {
+        snapshot: snapshotFromDocument(backup.document),
+        needsBootstrap: false,
+        storageCorrupt: false,
+      }
     }
     return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
   }
 
   const choice = readBootstrapChoice()
-  if (choice) return { snapshot: flowFromBootstrap(choice), needsBootstrap: false, storageCorrupt: false }
+  if (choice) {
+    return {
+      snapshot: flowFromBootstrap(choice),
+      needsBootstrap: false,
+      storageCorrupt: false,
+    }
+  }
 
   return { snapshot: null, needsBootstrap: true, storageCorrupt: false }
 }
@@ -114,7 +128,9 @@ export function snapshotToDocument(input: GraphPersistInput): GraphDocumentV01 {
   })
 }
 
-export function persistSnapshot(snapshot: GraphPersistInput): StorageSaveResult {
+export async function persistSnapshot(
+  snapshot: GraphPersistInput,
+): Promise<StorageSaveResult> {
   return saveDocumentToStorage(snapshotToDocument(snapshot))
 }
 
@@ -124,16 +140,20 @@ export function useGraphAutosave(
   onStatus?: (status: SaveStatus, reason?: SaveFailureReason) => void,
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const snapshotRef = useRef(snapshot)
+  const generationRef = useRef(0)
+  snapshotRef.current = snapshot
 
   const flush = useCallback(() => {
     if (!enabled) return
-    const result = persistSnapshot(snapshot)
-    if (result.ok) {
-      onStatus?.('saved')
-    } else {
-      onStatus?.('failed', result.reason)
-    }
-  }, [enabled, onStatus, snapshot])
+    const generation = ++generationRef.current
+    const pending = snapshotRef.current
+    void persistSnapshot(pending).then((result) => {
+      if (generation !== generationRef.current) return
+      if (result.ok) onStatus?.('saved')
+      else onStatus?.('failed', result.reason)
+    })
+  }, [enabled, onStatus])
 
   useEffect(() => {
     if (!enabled) return
@@ -161,9 +181,11 @@ export type BootstrapCommitResult =
   | { ok: false; message: string }
 
 /** Start a blank sheet only after the current document is backed up successfully. */
-export function createNewSheet(current: GraphPersistInput): NewSheetResult {
+export async function createNewSheet(
+  current: GraphPersistInput,
+): Promise<NewSheetResult> {
   const currentDoc = snapshotToDocument(current)
-  const backedUp = backupDocumentToStorage(currentDoc)
+  const backedUp = await backupDocumentToStorage(currentDoc)
   if (!backedUp.ok) {
     return {
       ok: false,
@@ -180,7 +202,7 @@ export function createNewSheet(current: GraphPersistInput): NewSheetResult {
   }
 
   const snapshot = flowFromBootstrap('empty')
-  const saved = saveDocumentToStorage(snapshotToDocument(snapshot))
+  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot))
   if (!saved.ok) {
     return {
       ok: false,
@@ -190,7 +212,9 @@ export function createNewSheet(current: GraphPersistInput): NewSheetResult {
   return { ok: true, snapshot }
 }
 
-export function commitBootstrapChoice(choice: BootstrapChoice): BootstrapCommitResult {
+export async function commitBootstrapChoice(
+  choice: BootstrapChoice,
+): Promise<BootstrapCommitResult> {
   const written = writeBootstrapChoice(choice)
   if (!written.ok) {
     return {
@@ -199,7 +223,7 @@ export function commitBootstrapChoice(choice: BootstrapChoice): BootstrapCommitR
     }
   }
   const snapshot = flowFromBootstrap(choice)
-  const saved = saveDocumentToStorage(snapshotToDocument(snapshot))
+  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot))
   if (!saved.ok) {
     return {
       ok: false,
@@ -214,12 +238,15 @@ export type ImportJsonResult =
   | { ok: false; message: string }
 
 /** Shared import core for browser File input and Desktop native open. */
-export function importGraphJsonText(
+export async function importGraphJsonText(
   text: string,
   current: GraphPersistInput,
-): ImportJsonResult {
-  if (text.length > MAX_JSON_BYTES) {
-    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
+): Promise<ImportJsonResult> {
+  if (utf8ByteLength(text) > MAX_PORTABLE_JSON_BYTES) {
+    return {
+      ok: false,
+      message: `JSON 파일이 너무 큽니다 (최대 ${MAX_PORTABLE_JSON_BYTES} bytes).`,
+    }
   }
 
   const parsed = parseGraphDocumentJson(text)
@@ -240,7 +267,7 @@ export function importGraphJsonText(
     return { ok: false, message: 'JSON은 파싱됐지만 그래프로 변환할 수 없습니다.' }
   }
 
-  const backedUp = backupDocumentToStorage(snapshotToDocument(current))
+  const backedUp = await backupDocumentToStorage(snapshotToDocument(current))
   if (!backedUp.ok) {
     return {
       ok: false,
@@ -249,7 +276,7 @@ export function importGraphJsonText(
   }
 
   // Persist imported document immediately — do not rely on debounced autosave.
-  const saved = saveDocumentToStorage(snapshotToDocument(snapshot))
+  const saved = await saveDocumentToStorage(snapshotToDocument(snapshot))
   if (!saved.ok) {
     return {
       ok: false,
@@ -264,8 +291,11 @@ export async function importGraphJsonFile(
   file: File,
   current: GraphPersistInput,
 ): Promise<ImportJsonResult> {
-  if (file.size > MAX_JSON_BYTES) {
-    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
+  if (file.size > MAX_PORTABLE_JSON_BYTES) {
+    return {
+      ok: false,
+      message: `JSON 파일이 너무 큽니다 (최대 ${MAX_PORTABLE_JSON_BYTES} bytes).`,
+    }
   }
 
   let text: string

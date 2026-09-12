@@ -11,12 +11,14 @@ import {
   BACKUP_KEY,
   BOOTSTRAP_KEY,
 } from '../persistence/autosave'
+import { resetWorkspaceStoreSingleton } from '../persistence/workspaceStore'
 
 describe('autosave persistence', () => {
   const store = new Map<string, string>()
 
   beforeEach(() => {
     store.clear()
+    resetWorkspaceStoreSingleton()
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => {
@@ -26,35 +28,39 @@ describe('autosave persistence', () => {
         store.delete(key)
       },
       clear: () => store.clear(),
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() {
+        return store.size
+      },
     })
   })
 
-  it('round-trips document through localStorage', () => {
+  it('round-trips document through workspace store', async () => {
     const doc = buildGraphDocument({
       nodes: EMPTY_GRAPH_NODES,
       edges: EMPTY_GRAPH_EDGES,
       customSymbols: [],
       settings: { gridSnapEnabled: true },
     })
-    const result = saveDocumentToStorage(doc)
+    const result = await saveDocumentToStorage(doc)
     expect(result.ok).toBe(true)
     expect(localStorage.getItem(STORAGE_KEY)).toBeTruthy()
-    const loaded = loadDocumentFromStorage()
+    const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
     expect(loaded.document.settings?.gridSnapEnabled).toBe(true)
     expect(loaded.document.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
   })
 
-  it('reports corrupt stored data without throwing', () => {
+  it('reports corrupt stored data without throwing', async () => {
     localStorage.setItem(STORAGE_KEY, '{not json')
-    const loaded = loadDocumentFromStorage()
+    const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(false)
     if (loaded.ok) return
     expect(loaded.reason).toBe('corrupt')
   })
 
-  it('restores backup document', () => {
+  it('restores backup document', async () => {
     const doc = buildGraphDocument({
       nodes: EMPTY_GRAPH_NODES,
       edges: EMPTY_GRAPH_EDGES,
@@ -62,8 +68,8 @@ describe('autosave persistence', () => {
       settings: {},
     })
     localStorage.setItem(BACKUP_KEY, JSON.stringify(doc))
-    expect(hasBackupDocument()).toBe(true)
-    const restored = restoreBackupFromStorage()
+    expect(await hasBackupDocument()).toBe(true)
+    const restored = await restoreBackupFromStorage()
     expect(restored.ok).toBe(true)
     if (!restored.ok) return
     expect(restored.document.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
@@ -80,6 +86,8 @@ describe('autosave persistence', () => {
       },
       removeItem: () => undefined,
       clear: () => undefined,
+      key: () => null,
+      length: 0,
     })
     expect(writeBootstrapChoice('empty')).toEqual({ ok: false, reason: 'quota' })
   })

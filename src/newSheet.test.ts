@@ -18,7 +18,8 @@ import {
   writeBootstrapChoice,
 } from './persistence/autosave'
 import { serializeGraphDocument } from './graphDocument'
-import { MAX_JSON_BYTES } from './limits'
+import { MAX_PORTABLE_JSON_BYTES } from './limits'
+import { resetWorkspaceStoreSingleton } from './persistence/workspaceStore'
 
 function memoryStorage(opts?: { failKeys?: Set<string> }) {
   const map = new Map<string, string>()
@@ -41,13 +42,14 @@ function memoryStorage(opts?: { failKeys?: Set<string> }) {
 
 describe('createNewSheet persistence hardening', () => {
   beforeEach(() => {
+    resetWorkspaceStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
     })
   })
 
-  it('backs up current document then replaces storage with empty sheet', () => {
+  it('backs up current document then replaces storage with empty sheet', async () => {
     const current = {
       nodes: SEED_NODES,
       edges: SEED_EDGES,
@@ -57,21 +59,21 @@ describe('createNewSheet persistence hardening', () => {
     const before = snapshotToDocument(current)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(before))
 
-    const result = createNewSheet(current)
+    const result = await createNewSheet(current)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.snapshot.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
     expect(result.snapshot.edges).toHaveLength(EMPTY_GRAPH_EDGES.length)
-    expect(hasBackupDocument()).toBe(true)
+    expect(await hasBackupDocument()).toBe(true)
     expect(localStorage.getItem(BACKUP_KEY)).toContain('"schemaVersion"')
 
-    const loaded = loadDocumentFromStorage()
+    const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
     expect(loaded.document.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
   })
 
-  it('aborts new sheet when backup fails and keeps current primary document', () => {
+  it('aborts new sheet when backup fails and keeps current primary document', async () => {
     const store = memoryStorage({ failKeys: new Set([BACKUP_KEY]) })
     Object.defineProperty(globalThis, 'localStorage', {
       value: store,
@@ -86,7 +88,7 @@ describe('createNewSheet persistence hardening', () => {
     const before = serializeGraphDocument(snapshotToDocument(current))
     localStorage.setItem(STORAGE_KEY, before)
 
-    const result = createNewSheet(current)
+    const result = await createNewSheet(current)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.message).toMatch(/백업 실패/)
@@ -97,6 +99,7 @@ describe('createNewSheet persistence hardening', () => {
 
 describe('importGraphJsonFile persistence hardening', () => {
   beforeEach(() => {
+    resetWorkspaceStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
@@ -140,13 +143,13 @@ describe('importGraphJsonFile persistence hardening', () => {
     expect(result.snapshot.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
 
     // Success does not wait for autosave — PRIMARY is already imported.
-    const loaded = loadDocumentFromStorage()
+    const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
     expect(loaded.document.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
     expect(loaded.document.settings?.gridSnapEnabled).toBe(true)
 
-    expect(hasBackupDocument()).toBe(true)
+    expect(await hasBackupDocument()).toBe(true)
     expect(localStorage.getItem(BACKUP_KEY)).toContain('"schemaVersion"')
     // BACKUP holds pre-import current (seed graph), not empty imported sheet.
     expect(localStorage.getItem(BACKUP_KEY)).toContain(SEED_NODES[0]!.id)
@@ -210,24 +213,25 @@ describe('importGraphJsonFile persistence hardening', () => {
 
 describe('writeBootstrapChoice / startup recovery', () => {
   beforeEach(() => {
+    resetWorkspaceStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
     })
   })
 
-  it('returns failure instead of throwing when bootstrap write fails', () => {
+  it('returns failure instead of throwing when bootstrap write fails', async () => {
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage({ failKeys: new Set([BOOTSTRAP_KEY]) }),
       configurable: true,
     })
     const written = writeBootstrapChoice('empty')
     expect(written.ok).toBe(false)
-    const committed = commitBootstrapChoice('empty')
+    const committed = await commitBootstrapChoice('empty')
     expect(committed.ok).toBe(false)
   })
 
-  it('auto-recovers corrupt PRIMARY from valid BACKUP on startup', () => {
+  it('auto-recovers corrupt PRIMARY from valid BACKUP on startup', async () => {
     const backupDoc = snapshotToDocument({
       nodes: EMPTY_GRAPH_NODES,
       edges: EMPTY_GRAPH_EDGES,
@@ -237,12 +241,12 @@ describe('writeBootstrapChoice / startup recovery', () => {
     localStorage.setItem(STORAGE_KEY, '{corrupt')
     localStorage.setItem(BACKUP_KEY, serializeGraphDocument(backupDoc))
 
-    const initial = resolveInitialGraphState()
+    const initial = await resolveInitialGraphState()
     expect(initial.storageCorrupt).toBe(false)
     expect(initial.needsBootstrap).toBe(false)
     expect(initial.snapshot?.nodes).toHaveLength(EMPTY_GRAPH_NODES.length)
 
-    const loaded = loadDocumentFromStorage()
+    const loaded = await loadDocumentFromStorage()
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
     expect(loaded.document.settings?.gridSnapEnabled).toBe(true)
@@ -257,6 +261,7 @@ describe('writeBootstrapChoice / startup recovery', () => {
 
 describe('importGraphJsonText shared core', () => {
   beforeEach(() => {
+    resetWorkspaceStoreSingleton()
     Object.defineProperty(globalThis, 'localStorage', {
       value: memoryStorage(),
       configurable: true,
@@ -270,7 +275,7 @@ describe('importGraphJsonText shared core', () => {
     settings: {},
   }
 
-  it('accepts valid JSON text', () => {
+  it('accepts valid JSON text', async () => {
     const importedDoc = snapshotToDocument({
       nodes: EMPTY_GRAPH_NODES,
       edges: EMPTY_GRAPH_EDGES,
@@ -278,28 +283,28 @@ describe('importGraphJsonText shared core', () => {
       settings: {},
     })
     localStorage.setItem(STORAGE_KEY, serializeGraphDocument(snapshotToDocument(current)))
-    const result = importGraphJsonText(serializeGraphDocument(importedDoc), current)
+    const result = await importGraphJsonText(serializeGraphDocument(importedDoc), current)
     expect(result.ok).toBe(true)
   })
 
-  it('rejects invalid JSON text without mutating storage', () => {
+  it('rejects invalid JSON text without mutating storage', async () => {
     const primary = serializeGraphDocument(snapshotToDocument(current))
     localStorage.setItem(STORAGE_KEY, primary)
     localStorage.setItem(BACKUP_KEY, '{"keep":"me"}')
-    const result = importGraphJsonText('{not-json', current)
+    const result = await importGraphJsonText('{not-json', current)
     expect(result.ok).toBe(false)
     expect(localStorage.getItem(BACKUP_KEY)).toBe('{"keep":"me"}')
     expect(localStorage.getItem(STORAGE_KEY)).toBe(primary)
   })
 
-  it('rejects oversized text', () => {
-    const huge = 'x'.repeat(MAX_JSON_BYTES + 1)
-    const result = importGraphJsonText(huge, current)
+  it('rejects oversized text', async () => {
+    const huge = 'x'.repeat(MAX_PORTABLE_JSON_BYTES + 1)
+    const result = await importGraphJsonText(huge, current)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.message).toMatch(/너무 큽니다/)
   })
 
-  it('aborts when current backup fails', () => {
+  it('aborts when current backup fails', async () => {
     const store = memoryStorage({ failKeys: new Set([BACKUP_KEY]) })
     Object.defineProperty(globalThis, 'localStorage', {
       value: store,
@@ -313,7 +318,7 @@ describe('importGraphJsonText shared core', () => {
       customSymbols: [],
       settings: {},
     })
-    const result = importGraphJsonText(serializeGraphDocument(importedDoc), current)
+    const result = await importGraphJsonText(serializeGraphDocument(importedDoc), current)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.message).toMatch(/백업/)
     expect(localStorage.getItem(STORAGE_KEY)).toBe(primary)

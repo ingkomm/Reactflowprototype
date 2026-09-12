@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { validateGraphIntegrity } from './graphIntegrity'
 import { buildGraphDocument, parseGraphDocumentJson } from './graphDocument'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
+import { MAX_PORTABLE_JSON_BYTES } from './limits'
 
 describe('graph integrity & import limits', () => {
   it('accepts valid seed graph', () => {
@@ -100,7 +101,7 @@ describe('graph integrity & import limits', () => {
   })
 
   it('rejects oversized JSON', () => {
-    const huge = 'x'.repeat(3 * 1024 * 1024)
+    const huge = 'x'.repeat(MAX_PORTABLE_JSON_BYTES + 1)
     const result = parseGraphDocumentJson(huge)
     expect(result.ok).toBe(false)
     if (result.ok) return

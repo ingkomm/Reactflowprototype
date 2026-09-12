@@ -255,34 +255,23 @@ function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
   return sanitizeFlowEdges(nodes, edges)
 }
 
-const initialGraph = resolveInitialGraphState()
-
 export default function App() {
-  const [bootstrapPending, setBootstrapPending] = useState(initialGraph.needsBootstrap)
-  const [storageCorrupt, setStorageCorrupt] = useState(initialGraph.storageCorrupt)
+  const [workspaceReady, setWorkspaceReady] = useState(false)
+  const [bootstrapPending, setBootstrapPending] = useState(true)
+  const [storageCorrupt, setStorageCorrupt] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveFailureReason, setSaveFailureReason] = useState<SaveFailureReason | null>(null)
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.snapshot?.nodes ?? [])
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.snapshot?.edges ?? [])
-  const [gridSnapEnabled, setGridSnapEnabled] = useState(
-    initialGraph.snapshot?.settings.gridSnapEnabled ?? false,
-  )
-  const [gridSnapScale, setGridSnapScale] = useState(
-    normalizeGridSnapScale(initialGraph.snapshot?.settings.gridSnapScale ?? DEFAULT_GRID_SNAP_SCALE),
-  )
-  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(
-    initialGraph.snapshot?.settings.voidHighlightEnabled ?? false,
-  )
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialGraph.snapshot?.nodes[0]?.id ?? DEFAULT_SELECTED_NODE_ID,
-  )
+  const [nodes, setNodes, onNodesChange] = useNodesState<PassiveFlowNode>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
+  const [gridSnapScale, setGridSnapScale] = useState(DEFAULT_GRID_SNAP_SCALE)
+  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
   const [inspectorWidth, setInspectorWidth] = useState(360)
-  const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>(
-    initialGraph.snapshot?.customSymbols ?? [],
-  )
+  const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
   const [defaultSymbolColors, setDefaultSymbolColors] = useState<
     Partial<Record<SymbolEditorKind, string>>
-  >(initialGraph.snapshot?.settings.defaultSymbolColors ?? {})
+  >({})
   const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
   const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
@@ -328,7 +317,7 @@ export default function App() {
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     },
-    !bootstrapPending && !storageCorrupt,
+    workspaceReady && !bootstrapPending && !storageCorrupt,
     (status, reason) => {
       setSaveStatus(status)
       setSaveFailureReason(reason ?? null)
@@ -367,6 +356,33 @@ export default function App() {
     [],
   )
 
+  useEffect(() => {
+    let cancelled = false
+    void resolveInitialGraphState().then((initial) => {
+      if (cancelled) return
+      setBootstrapPending(initial.needsBootstrap)
+      setStorageCorrupt(initial.storageCorrupt)
+      if (initial.snapshot) {
+        setNodes(stack(initial.snapshot.nodes))
+        setEdges(sanitizeFlowEdges(initial.snapshot.nodes, initial.snapshot.edges))
+        setCustomSymbols(initial.snapshot.customSymbols)
+        setDefaultSymbolColors(initial.snapshot.settings.defaultSymbolColors ?? {})
+        setGridSnapEnabled(initial.snapshot.settings.gridSnapEnabled ?? false)
+        setGridSnapScale(
+          normalizeGridSnapScale(
+            initial.snapshot.settings.gridSnapScale ?? DEFAULT_GRID_SNAP_SCALE,
+          ),
+        )
+        setVoidHighlightEnabled(initial.snapshot.settings.voidHighlightEnabled ?? false)
+        setSelectedId(initial.snapshot.nodes[0]?.id ?? DEFAULT_SELECTED_NODE_ID)
+      }
+      setWorkspaceReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setEdges, setNodes, stack])
+
   const { commit, reset: resetHistory } = useGraphHistory({
     getState: () => stateRef.current,
     setState: (snap) => {
@@ -377,23 +393,24 @@ export default function App() {
 
   const handleBootstrap = useCallback(
     (choice: 'empty' | 'demo') => {
-      const result = commitBootstrapChoice(choice)
-      if (!result.ok) {
-        setImportError(result.message)
-        return
-      }
-      const snapshot = result.snapshot
-      resetHistory()
-      setCustomSymbols(snapshot.customSymbols)
-      setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
-      setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
-      setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
-      setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
-      setNodes(stack(snapshot.nodes))
-      setEdges(sanitizeFlowEdges(snapshot.nodes, snapshot.edges))
-      setSelectedId(snapshot.nodes[0]?.id ?? null)
-      setBootstrapPending(false)
-      setImportError(null)
+      void commitBootstrapChoice(choice).then((result) => {
+        if (!result.ok) {
+          setImportError(result.message)
+          return
+        }
+        const snapshot = result.snapshot
+        resetHistory()
+        setCustomSymbols(snapshot.customSymbols)
+        setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+        setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+        setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
+        setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+        setNodes(stack(snapshot.nodes))
+        setEdges(sanitizeFlowEdges(snapshot.nodes, snapshot.edges))
+        setSelectedId(snapshot.nodes[0]?.id ?? null)
+        setBootstrapPending(false)
+        setImportError(null)
+      })
     },
     [resetHistory, setEdges, setNodes, stack],
   )
@@ -1530,7 +1547,7 @@ export default function App() {
       setImportError(opened.message)
       return
     }
-    const result = importGraphJsonText(opened.text, {
+    const result = await importGraphJsonText(opened.text, {
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
@@ -1588,36 +1605,37 @@ export default function App() {
       '새 시트를 만들까요?\n현재 작업 내용은 지워지고 빈 시트로 바뀝니다.\n이전 문서는 백업으로 보관됩니다.',
     )
     if (!confirmed) return
-    const result = createNewSheet({
+    void createNewSheet({
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    }).then((result) => {
+      if (!result.ok) {
+        setImportError(result.message)
+        return
+      }
+      const snapshot = result.snapshot
+      resetHistory()
+      setCustomSymbols(snapshot.customSymbols)
+      setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+      setNodes(stack(snapshot.nodes))
+      setEdges(snapshot.edges)
+      setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+      setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
+      setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+      setSelectedId(snapshot.nodes[0]?.id ?? null)
+      setStorageCorrupt(false)
+      setImportError(null)
+      setSaveStatus('saved')
+      setSaveFailureReason(null)
+      setContextMenu(null)
+      setPinnedViewers([])
+      setPinnedViewerBounds({})
+      setFloatingVideoNodeIds([])
+      setActiveJsonPath(null)
+      clearActiveJsonPath()
     })
-    if (!result.ok) {
-      setImportError(result.message)
-      return
-    }
-    const snapshot = result.snapshot
-    resetHistory()
-    setCustomSymbols(snapshot.customSymbols)
-    setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
-    setNodes(stack(snapshot.nodes))
-    setEdges(snapshot.edges)
-    setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
-    setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
-    setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
-    setSelectedId(snapshot.nodes[0]?.id ?? null)
-    setStorageCorrupt(false)
-    setImportError(null)
-    setSaveStatus('saved')
-    setSaveFailureReason(null)
-    setContextMenu(null)
-    setPinnedViewers([])
-    setPinnedViewerBounds({})
-    setFloatingVideoNodeIds([])
-    setActiveJsonPath(null)
-    clearActiveJsonPath()
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -2197,7 +2215,9 @@ export default function App() {
                   >
                     {saveFailureReason === 'too_large'
                       ? '저장 실패 (용량 초과)'
-                      : '저장 실패'}
+                      : saveFailureReason === 'io'
+                        ? '저장 실패 (디스크 I/O)'
+                        : '저장 실패'}
                   </span>
                 )}
                 <input

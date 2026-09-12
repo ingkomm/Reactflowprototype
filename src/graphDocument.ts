@@ -24,7 +24,8 @@ import { validateVideoMedia } from './videoMedia'
 import {
   MAX_CUSTOM_SYMBOLS,
   MAX_EDGE_COUNT,
-  MAX_JSON_BYTES,
+  MAX_PORTABLE_JSON_BYTES,
+  utf8ByteLength,
   MAX_LOG_COUNT,
   MAX_NODE_COUNT,
   MAX_STRING_LENGTH,
@@ -385,8 +386,11 @@ function normalizeSettings(value: unknown): GraphDocumentSettings {
 }
 
 export function parseGraphDocumentJson(text: string): GraphParseResult {
-  if (text.length > MAX_JSON_BYTES) {
-    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
+  if (utf8ByteLength(text) > MAX_PORTABLE_JSON_BYTES) {
+    return {
+      ok: false,
+      message: `JSON 파일이 너무 큽니다 (최대 ${MAX_PORTABLE_JSON_BYTES} bytes).`,
+    }
   }
   let parsed: unknown
   try {
