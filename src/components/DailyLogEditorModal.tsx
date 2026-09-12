@@ -253,12 +253,12 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
         </div>
 
         <footer className="daily-log-editor-modal__footer">
-          <button type="button" className="btn btn--ghost" onClick={requestClose}>
+          <button type="button" className="btn" onClick={requestClose}>
             취소
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn--ghost"
             data-testid="daily-log-editor-save"
             onClick={handleSave}
           >

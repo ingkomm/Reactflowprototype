@@ -219,7 +219,7 @@ describe('DailyLogPanel compact + editor modal', () => {
     expect(isDailyLogDraftDirty({ ...base, localVideoPath: '/videos/a.mp4' }, base)).toBe(true)
   })
 
-  it('edit mode: cancel is ghost, primary is solid btn labeled 수정', () => {
+  it('edit mode: cancel is plain btn (gray), primary is btn--ghost (green) labeled 수정', () => {
     const view = mount(
       <DailyLogEditorModal
         open
@@ -240,14 +240,14 @@ describe('DailyLogPanel compact + editor modal', () => {
     const primary = document.body.querySelector(
       '[data-testid="daily-log-editor-save"]',
     ) as HTMLButtonElement
-    expect(cancel.className.split(/\s+/)).toEqual(expect.arrayContaining(['btn', 'btn--ghost']))
-    expect(primary.className.split(/\s+/)).toContain('btn')
-    expect(primary.className.split(/\s+/)).not.toContain('btn--ghost')
+    expect(cancel.className.split(/\s+/)).toContain('btn')
+    expect(cancel.className.split(/\s+/)).not.toContain('btn--ghost')
+    expect(primary.className.split(/\s+/)).toEqual(expect.arrayContaining(['btn', 'btn--ghost']))
     expect(primary.textContent).toBe('수정')
     view.unmount()
   })
 
-  it('add mode: primary is solid btn labeled 저장', () => {
+  it('add mode: primary is btn--ghost labeled 저장', () => {
     const view = mount(
       <DailyLogEditorModal
         open
@@ -265,8 +265,7 @@ describe('DailyLogPanel compact + editor modal', () => {
     const primary = document.body.querySelector(
       '[data-testid="daily-log-editor-save"]',
     ) as HTMLButtonElement
-    expect(primary.className.split(/\s+/)).toContain('btn')
-    expect(primary.className.split(/\s+/)).not.toContain('btn--ghost')
+    expect(primary.className.split(/\s+/)).toEqual(expect.arrayContaining(['btn', 'btn--ghost']))
     expect(primary.textContent).toBe('저장')
     view.unmount()
   })
