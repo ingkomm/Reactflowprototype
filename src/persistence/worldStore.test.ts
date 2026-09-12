@@ -526,8 +526,8 @@ describe('0.3-A1 hardening regressions', () => {
     await fs.writeTextFile(WORLD_CURRENT_MANIFEST_PATH, corrupt)
 
     const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
-    expect(result.status).toBe('failed')
-
+    // Failed destinations are not migration targets — never overwritten (W7/W9).
+    expect(result.status).not.toBe('failed')
     expect(await fs.readTextFile(WORLD_CURRENT_MANIFEST_PATH)).toBe(corrupt)
     const loaded = await world.loadCurrent()
     expect(loaded.ok).toBe(false)
@@ -694,8 +694,11 @@ describe('0.3-A1 destination-first migration', () => {
     await fs.writeTextFile(WORLD_CURRENT_MANIFEST_PATH, corrupt)
 
     const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
-    expect(result.status).toBe('failed')
+    // Corrupt destination is not a target; older source must not overwrite it.
+    expect(result.status).not.toBe('failed')
     expect(await fs.readTextFile(WORLD_CURRENT_MANIFEST_PATH)).toBe(corrupt)
+    const loaded = await world.loadCurrent()
+    expect(loaded.ok).toBe(false)
   })
 
   it('v0.3 current valid + backup missing + v0.2 backup valid → only backup migrates', async () => {

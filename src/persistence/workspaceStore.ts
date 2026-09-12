@@ -174,27 +174,49 @@ async function loadSlotFromFs(
   return finalizeHydratedLoad(hydrated)
 }
 
+type PreviousAssetMapResult =
+  | { ok: true; map: Map<string, string> | undefined }
+  | { ok: false; reason: 'io'; message: string }
+
+type AssetRefScan =
+  | { ok: true; ids: Set<string> }
+  | { ok: false; reason: 'uncertain'; message: string }
+
 async function readPreviousAssetMap(
   fs: FsBackend,
   path: string,
-): Promise<Map<string, string> | undefined> {
+): Promise<PreviousAssetMapResult> {
   const raw = await readManifestRaw(fs, path)
-  if (!raw.ok) return undefined
+  if (!raw.ok) {
+    if (raw.reason === 'missing') return { ok: true, map: undefined }
+    return { ok: false, reason: 'io', message: raw.message }
+  }
   const manifest = parseWorkspaceManifestJson(raw.text)
-  if (!manifest) return undefined
-  return symbolIdToAssetIdMap(manifest)
+  // Corrupt slot being overwritten: no reuse map.
+  if (!manifest) return { ok: true, map: undefined }
+  return { ok: true, map: symbolIdToAssetIdMap(manifest) }
 }
 
-async function referencedAssetIds(fs: FsBackend): Promise<Set<string>> {
+/** Missing slots contribute nothing; I/O or corrupt → uncertain (never pretend empty). */
+async function referencedAssetIds(fs: FsBackend): Promise<AssetRefScan> {
   const keep = new Set<string>()
   for (const path of [CURRENT_MANIFEST_PATH, BACKUP_MANIFEST_PATH]) {
     const raw = await readManifestRaw(fs, path)
-    if (!raw.ok) continue
+    if (!raw.ok) {
+      if (raw.reason === 'missing') continue
+      return { ok: false, reason: 'uncertain', message: raw.message }
+    }
     const manifest = parseWorkspaceManifestJson(raw.text)
-    if (!manifest) continue
+    if (!manifest) {
+      return {
+        ok: false,
+        reason: 'uncertain',
+        message: `unreadable workspace manifest at ${path}`,
+      }
+    }
     for (const id of collectAssetIdsFromManifest(manifest)) keep.add(id)
   }
-  return keep
+  return { ok: true, ids: keep }
 }
 
 function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorkspaceStore {
@@ -219,10 +241,16 @@ function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): Work
     try {
       await ensureRoot()
       const path = slot === 'current' ? CURRENT_MANIFEST_PATH : BACKUP_MANIFEST_PATH
-      const reuse = await readPreviousAssetMap(fs, path)
-      const committed = await referencedAssetIds(fs)
+      const previous = await readPreviousAssetMap(fs, path)
+      if (!previous.ok) {
+        return { ok: false, reason: 'io', message: previous.message }
+      }
+      const committedScan = await referencedAssetIds(fs)
+      const committed = committedScan.ok
+        ? committedScan.ids
+        : new Set((await assets.list()).map((a) => a.assetId))
       const manifest = await buildManifestFromDocument(document, assets, {
-        previousAssetIdsBySymbolId: reuse,
+        previousAssetIdsBySymbolId: previous.map,
         committedAssetIds: committed,
       })
 
@@ -232,8 +260,10 @@ function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): Work
       const text = serializeManifest(manifest)
       await atomicWriteText(fs, path, text)
 
-      const keep = await referencedAssetIds(fs)
-      await garbageCollectAssets(assets, keep)
+      const keepScan = await referencedAssetIds(fs)
+      if (keepScan.ok) {
+        await garbageCollectAssets(assets, keepScan.ids)
+      }
       return { ok: true }
     } catch (err) {
       return {
@@ -248,18 +278,10 @@ function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): Work
     kind,
     assets,
     async hasCurrent() {
-      try {
-        return await fs.exists(CURRENT_MANIFEST_PATH)
-      } catch {
-        return false
-      }
+      return await fs.exists(CURRENT_MANIFEST_PATH)
     },
     async hasBackup() {
-      try {
-        return await fs.exists(BACKUP_MANIFEST_PATH)
-      } catch {
-        return false
-      }
+      return await fs.exists(BACKUP_MANIFEST_PATH)
     },
     loadCurrent: () => loadSlotFromFs(fs, assets, CURRENT_MANIFEST_PATH),
     loadBackup: () => loadSlotFromFs(fs, assets, BACKUP_MANIFEST_PATH),
@@ -278,8 +300,10 @@ function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): Work
           if (await fs.exists(CURRENT_MANIFEST_PATH)) {
             await fs.remove(CURRENT_MANIFEST_PATH)
           }
-          const keep = await referencedAssetIds(fs)
-          await garbageCollectAssets(assets, keep)
+          const keepScan = await referencedAssetIds(fs)
+          if (keepScan.ok) {
+            await garbageCollectAssets(assets, keepScan.ids)
+          }
           return { ok: true }
         } catch (err) {
           return {
@@ -350,7 +374,9 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
       }
       if (!read.value) continue
       const manifest = parseWorkspaceManifestJson(read.value)
-      if (!manifest) continue
+      if (!manifest) {
+        throw new Error(`unreadable workspace localStorage manifest for ${key}`)
+      }
       for (const id of collectAssetIdsFromManifest(manifest)) keep.add(id)
     }
     return keep
@@ -440,100 +466,135 @@ export type LegacyMigrationResult =
 export async function migrateLegacyLocalStorageIfNeeded(
   store: WorkspaceStore,
 ): Promise<LegacyMigrationResult> {
-  let primaryRaw: string | null = null
-  let backupRaw: string | null = null
-  const primaryRead = readBrowserStorageKey(LEGACY_STORAGE_KEY)
-  if (!primaryRead.ok) {
-    return {
-      status: 'failed',
-      message: `legacy primary localStorage read failed (${primaryRead.message})`,
-    }
-  }
-  const backupRead = readBrowserStorageKey(LEGACY_BACKUP_KEY)
-  if (!backupRead.ok) {
-    return {
-      status: 'failed',
-      message: `legacy backup localStorage read failed (${backupRead.message})`,
-    }
-  }
-  primaryRaw = primaryRead.value
-  backupRaw = backupRead.value
-
-  const legacyPrimaryExists = primaryRaw != null
-  const legacyBackupExists = backupRaw != null
-  if (!legacyPrimaryExists && !legacyBackupExists) {
+  if (typeof globalThis.localStorage === 'undefined') {
     return { status: 'no_legacy' }
   }
-
-  // Read slot presence once; do not treat current alone as full migration complete.
-  const currentExists = await store.hasCurrent()
-  const backupExists = await store.hasBackup()
-
-  const primaryNeeded = legacyPrimaryExists && !currentExists
-  const backupNeeded = legacyBackupExists && !backupExists
-
-  if (!primaryNeeded && !backupNeeded) {
-    return { status: 'already_migrated' }
-  }
-
   let didMigrate = false
+  let anyLegacySeen = false
+  let anyMissingDest = false
+  let anyValidDest = false
 
-  if (primaryNeeded) {
-    const parsed = parseGraphDocumentJson(primaryRaw!)
+  for (const slot of ['current', 'backup'] as const) {
+    const dest = slot === 'current' ? await store.loadCurrent() : await store.loadBackup()
+    if (dest.ok) {
+      anyValidDest = true
+      continue
+    }
+    if (dest.reason !== 'missing') {
+      return {
+        status: 'failed',
+        message: `v0.2 ${slot} is ${dest.reason}; refusing to overwrite with legacy source`,
+      }
+    }
+
+    anyMissingDest = true
+    const key = slot === 'current' ? LEGACY_STORAGE_KEY : LEGACY_BACKUP_KEY
+    const read = readBrowserStorageKey(key)
+    if (!read.ok) {
+      return {
+        status: 'failed',
+        message: `legacy ${slot} localStorage read failed (${read.message})`,
+      }
+    }
+    if (read.value == null) {
+      continue
+    }
+    anyLegacySeen = true
+
+    const parsed = parseGraphDocumentJson(read.value)
     if (!parsed.ok) {
       return {
         status: 'failed',
-        message: `legacy primary is not a valid GraphDocument (${parsed.message})`,
+        message: `legacy ${slot} is not a valid GraphDocument (${parsed.message})`,
       }
     }
-    const saved = await store.saveCurrent(parsed.document)
+    const saved =
+      slot === 'current'
+        ? await store.saveCurrent(parsed.document)
+        : await store.saveBackup(parsed.document)
     if (!saved.ok) {
       return {
         status: 'failed',
-        message: saved.message ?? `primary migration failed (${saved.reason})`,
+        message: saved.message ?? `${slot} migration failed (${saved.reason})`,
       }
     }
-    const verify = await store.loadCurrent()
+    const verify = slot === 'current' ? await store.loadCurrent() : await store.loadBackup()
     if (!verify.ok) {
       return {
         status: 'failed',
-        message: `primary migration verify failed (${verify.reason})`,
+        message: `${slot} migration verify failed (${verify.reason})`,
       }
     }
     didMigrate = true
-    try {
-      localStorage.setItem(MIGRATION_MARKER_KEY, 'ok')
-    } catch {
-      /* ignore */
+    if (slot === 'current') {
+      try {
+        localStorage.setItem(MIGRATION_MARKER_KEY, 'ok')
+      } catch {
+        /* ignore */
+      }
     }
   }
 
-  if (backupNeeded) {
-    const parsed = parseGraphDocumentJson(backupRaw!)
-    if (!parsed.ok) {
-      return {
-        status: 'failed',
-        message: `legacy backup is not a valid GraphDocument (${parsed.message})`,
-      }
-    }
-    const saved = await store.saveBackup(parsed.document)
-    if (!saved.ok) {
-      return {
-        status: 'failed',
-        message: saved.message ?? `backup migration failed (${saved.reason})`,
-      }
-    }
-    const verify = await store.loadBackup()
-    if (!verify.ok) {
-      return {
-        status: 'failed',
-        message: `backup migration verify failed (${verify.reason})`,
-      }
-    }
-    didMigrate = true
+  if (didMigrate) return { status: 'migrated' }
+  if (!anyMissingDest) return { status: 'already_migrated' }
+  if (!anyLegacySeen) {
+    // Missing destination(s) but no legacy for those slots.
+    return anyValidDest ? { status: 'already_migrated' } : { status: 'no_legacy' }
   }
+  return { status: 'already_migrated' }
+}
 
-  return didMigrate ? { status: 'migrated' } : { status: 'already_migrated' }
+/** Destination-first migration of a single legacy slot into v0.2. */
+export async function migrateLegacySlotIfNeeded(
+  store: WorkspaceStore,
+  slot: 'current' | 'backup',
+): Promise<LegacyMigrationResult> {
+  if (typeof globalThis.localStorage === 'undefined') {
+    return { status: 'no_legacy' }
+  }
+  const dest = slot === 'current' ? await store.loadCurrent() : await store.loadBackup()
+  if (dest.ok) return { status: 'already_migrated' }
+  if (dest.reason !== 'missing') {
+    return {
+      status: 'failed',
+      message: `v0.2 ${slot} is ${dest.reason}; refusing to overwrite with legacy source`,
+    }
+  }
+  const key = slot === 'current' ? LEGACY_STORAGE_KEY : LEGACY_BACKUP_KEY
+  const read = readBrowserStorageKey(key)
+  if (!read.ok) {
+    return {
+      status: 'failed',
+      message: `legacy ${slot} localStorage read failed (${read.message})`,
+    }
+  }
+  if (read.value == null) return { status: 'no_legacy' }
+
+  const parsed = parseGraphDocumentJson(read.value)
+  if (!parsed.ok) {
+    return {
+      status: 'failed',
+      message: `legacy ${slot} is not a valid GraphDocument (${parsed.message})`,
+    }
+  }
+  const saved =
+    slot === 'current'
+      ? await store.saveCurrent(parsed.document)
+      : await store.saveBackup(parsed.document)
+  if (!saved.ok) {
+    return {
+      status: 'failed',
+      message: saved.message ?? `${slot} migration failed (${saved.reason})`,
+    }
+  }
+  const verify = slot === 'current' ? await store.loadCurrent() : await store.loadBackup()
+  if (!verify.ok) {
+    return {
+      status: 'failed',
+      message: `${slot} migration verify failed (${verify.reason})`,
+    }
+  }
+  return { status: 'migrated' }
 }
 
 export class WorkspaceStoreInitError extends Error {
@@ -585,7 +646,11 @@ export function resetWorkspaceStoreSingleton(): void {
   testHooks = {}
 }
 
-export async function getWorkspaceStore(): Promise<WorkspaceStore> {
+/**
+ * Open v0.2 Workspace backend without running all-slot legacy migration.
+ * Used as a migration source by WorldStore; legacy is resolved per missing slot.
+ */
+export async function openWorkspaceStoreBackend(): Promise<WorkspaceStore> {
   if (initFailure) throw initFailure
   if (singleton) return singleton
   if (singletonPromise) return singletonPromise
@@ -602,23 +667,9 @@ export async function getWorkspaceStore(): Promise<WorkspaceStore> {
           ? await testHooks.createDesktopFs()
           : await createTauriAppDataFsBackend()
         const store = createFsWorkspaceStore(fs, 'desktop')
-        const migration = await migrateLegacyLocalStorageIfNeeded(store)
-        if (migration.status === 'failed') {
-          initFailure = new WorkspaceStoreInitError(
-            `Legacy workspace migration failed: ${migration.message}`,
-            { reason: 'legacy_migration' },
-          )
-          singleton = null
-          throw initFailure
-        }
         singleton = store
         return store
       } catch (err) {
-        if (err instanceof WorkspaceStoreInitError) {
-          initFailure = err
-          singleton = null
-          throw err
-        }
         initFailure = new WorkspaceStoreInitError(
           err instanceof Error
             ? err.message
@@ -640,6 +691,30 @@ export async function getWorkspaceStore(): Promise<WorkspaceStore> {
     singletonPromise = null
     throw err
   }
+}
+
+export async function getWorkspaceStore(): Promise<WorkspaceStore> {
+  if (initFailure) throw initFailure
+
+  const isDesktop =
+    testHooks.isDesktop != null ? testHooks.isDesktop : isDesktopGraphExportSupported()
+
+  const store = await openWorkspaceStoreBackend()
+
+  if (isDesktop) {
+    const migration = await migrateLegacyLocalStorageIfNeeded(store)
+    if (migration.status === 'failed') {
+      initFailure = new WorkspaceStoreInitError(
+        `Legacy workspace migration failed: ${migration.message}`,
+        { reason: 'legacy_migration' },
+      )
+      singleton = null
+      singletonPromise = null
+      throw initFailure
+    }
+  }
+
+  return store
 }
 
 export function workspaceStorageVersion(): typeof WORKSPACE_STORAGE_VERSION {

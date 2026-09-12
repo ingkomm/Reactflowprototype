@@ -45,8 +45,9 @@ import {
 } from './worldTypes'
 import { readBrowserStorageKey } from './browserStorage'
 import {
-  getWorkspaceStore,
   installMemoryWorkspaceStore,
+  migrateLegacySlotIfNeeded,
+  openWorkspaceStoreBackend,
   WorkspaceStoreInitError,
   type WorkspaceStore,
 } from './workspaceStore'
@@ -182,27 +183,48 @@ async function loadSlotFromFs(
   return finalizeHydratedWorldLoad(hydrated)
 }
 
+type PreviousGalaxyAssetMapResult =
+  | { ok: true; map: Map<string, string> | undefined }
+  | { ok: false; reason: 'io'; message: string }
+
+type WorldAssetRefScan =
+  | { ok: true; ids: Set<string> }
+  | { ok: false; reason: 'uncertain'; message: string }
+
 async function readPreviousGalaxyAssetMap(
   fs: FsBackend,
   path: string,
-): Promise<Map<string, string> | undefined> {
+): Promise<PreviousGalaxyAssetMapResult> {
   const raw = await readManifestRaw(fs, path)
-  if (!raw.ok) return undefined
+  if (!raw.ok) {
+    if (raw.reason === 'missing') return { ok: true, map: undefined }
+    return { ok: false, reason: 'io', message: raw.message }
+  }
   const manifest = parseWorldManifestJson(raw.text)
-  if (!manifest) return undefined
-  return galaxySymbolAssetIdMap(manifest)
+  if (!manifest) return { ok: true, map: undefined }
+  return { ok: true, map: galaxySymbolAssetIdMap(manifest) }
 }
 
-async function referencedWorldAssetIds(fs: FsBackend): Promise<Set<string>> {
+/** Missing slots contribute nothing; I/O or corrupt → uncertain (never pretend empty). */
+async function referencedWorldAssetIds(fs: FsBackend): Promise<WorldAssetRefScan> {
   const keep = new Set<string>()
   for (const path of [WORLD_CURRENT_MANIFEST_PATH, WORLD_BACKUP_MANIFEST_PATH]) {
     const raw = await readManifestRaw(fs, path)
-    if (!raw.ok) continue
+    if (!raw.ok) {
+      if (raw.reason === 'missing') continue
+      return { ok: false, reason: 'uncertain', message: raw.message }
+    }
     const manifest = parseWorldManifestJson(raw.text)
-    if (!manifest) continue
+    if (!manifest) {
+      return {
+        ok: false,
+        reason: 'uncertain',
+        message: `unreadable world manifest at ${path}`,
+      }
+    }
     for (const id of collectAssetIdsFromWorldManifest(manifest)) keep.add(id)
   }
-  return keep
+  return { ok: true, ids: keep }
 }
 
 function createFsWorldStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorldStore {
@@ -233,10 +255,16 @@ function createFsWorldStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorldSto
       await ensureRoot()
       const path =
         slot === 'current' ? WORLD_CURRENT_MANIFEST_PATH : WORLD_BACKUP_MANIFEST_PATH
-      const reuse = await readPreviousGalaxyAssetMap(fs, path)
-      const committed = await referencedWorldAssetIds(fs)
+      const previous = await readPreviousGalaxyAssetMap(fs, path)
+      if (!previous.ok) {
+        return { ok: false, reason: 'io', message: previous.message }
+      }
+      const committedScan = await referencedWorldAssetIds(fs)
+      const committed = committedScan.ok
+        ? committedScan.ids
+        : new Set((await assets.list()).map((a) => a.assetId))
       const manifest = await buildWorldManifestFromDocument(validated.world, assets, {
-        previousAssetIdsByGalaxySymbol: reuse,
+        previousAssetIdsByGalaxySymbol: previous.map,
         committedAssetIds: committed,
       })
 
@@ -246,8 +274,10 @@ function createFsWorldStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorldSto
       const text = serializeWorldManifest(manifest)
       await atomicWriteText(fs, path, text)
 
-      const keep = await referencedWorldAssetIds(fs)
-      await garbageCollectAssets(assets, keep)
+      const keepScan = await referencedWorldAssetIds(fs)
+      if (keepScan.ok) {
+        await garbageCollectAssets(assets, keepScan.ids)
+      }
       return { ok: true }
     } catch (err) {
       return {
@@ -262,18 +292,10 @@ function createFsWorldStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorldSto
     kind,
     assets,
     async hasCurrent() {
-      try {
-        return await fs.exists(WORLD_CURRENT_MANIFEST_PATH)
-      } catch {
-        return false
-      }
+      return await fs.exists(WORLD_CURRENT_MANIFEST_PATH)
     },
     async hasBackup() {
-      try {
-        return await fs.exists(WORLD_BACKUP_MANIFEST_PATH)
-      } catch {
-        return false
-      }
+      return await fs.exists(WORLD_BACKUP_MANIFEST_PATH)
     },
     loadCurrent: () => loadSlotFromFs(fs, assets, WORLD_CURRENT_MANIFEST_PATH),
     loadBackup: () => loadSlotFromFs(fs, assets, WORLD_BACKUP_MANIFEST_PATH),
@@ -292,8 +314,10 @@ function createFsWorldStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorldSto
           if (await fs.exists(WORLD_CURRENT_MANIFEST_PATH)) {
             await fs.remove(WORLD_CURRENT_MANIFEST_PATH)
           }
-          const keep = await referencedWorldAssetIds(fs)
-          await garbageCollectAssets(assets, keep)
+          const keepScan = await referencedWorldAssetIds(fs)
+          if (keepScan.ok) {
+            await garbageCollectAssets(assets, keepScan.ids)
+          }
           return { ok: true }
         } catch (err) {
           return {
@@ -361,7 +385,9 @@ function createBrowserWorldStore(): WorldStore {
       }
       if (!read.value) continue
       const manifest = parseWorldManifestJson(read.value)
-      if (!manifest) continue
+      if (!manifest) {
+        throw new Error(`unreadable world localStorage manifest for ${key}`)
+      }
       for (const id of collectAssetIdsFromWorldManifest(manifest)) keep.add(id)
     }
     return keep
@@ -553,49 +579,83 @@ export async function probeWorldSlot(
   })
 }
 
+export type StorageSlot = 'current' | 'backup'
+
+export type WorldMigrationPlan = {
+  current: SlotProbe<WorldDocumentV03>
+  backup: SlotProbe<WorldDocumentV03>
+  targets: StorageSlot[]
+}
+
+/**
+ * Slot-by-slot destination-first target selection.
+ * Never uses anyValid / bothExist shortcuts.
+ *
+ * W1 valid+valid → []
+ * W2 valid+missing → [backup]
+ * W3 valid+failed → []
+ * W4 missing+valid → [] (backup recovery preferred over older current)
+ * W5 failed+valid → []
+ * W6 missing+missing → [current, backup]
+ * W7 failed+missing → [backup]
+ * W8 missing+failed → [current]
+ * W9 failed+failed → []
+ */
+export function planWorldMigrationTargets(
+  current: SlotProbe<WorldDocumentV03>,
+  backup: SlotProbe<WorldDocumentV03>,
+): StorageSlot[] {
+  const targets: StorageSlot[] = []
+  if (current.state === 'missing' && backup.state !== 'valid') {
+    targets.push('current')
+  }
+  if (backup.state === 'missing') {
+    targets.push('backup')
+  }
+  return targets
+}
+
+export async function planWorldMigration(worldStore: WorldStore): Promise<WorldMigrationPlan> {
+  const current = await probeWorldSlot(worldStore, 'current')
+  const backup = await probeWorldSlot(worldStore, 'backup')
+  return {
+    current,
+    backup,
+    targets: planWorldMigrationTargets(current, backup),
+  }
+}
+
 type SlotPlan =
   | { action: 'already' }
   | { action: 'nothing' }
   | { action: 'migrate' }
-  | { action: 'blocked' } // corrupt/io dest with no migratable source — not init-fatal alone
+  | { action: 'blocked' }
   | { action: 'fail'; message: string }
 
 /**
- * Destination-first plan for one slot.
- * Valid v0.3 destination short-circuits — corresponding v0.2 source is never probed.
- * Corrupt destination is never overwritten; if a valid v0.2 source exists, migration fails.
- * If destination is corrupt and source is missing, slot is blocked (startup may recover via backup).
+ * Destination-first plan for one *missing* migration target slot.
+ * Failed destinations are never targets (overwrite forbidden); callers must not pass them.
  */
 async function planSlotMigration(
   workspace: WorkspaceStore,
   worldStore: WorldStore,
-  slot: 'current' | 'backup',
+  slot: StorageSlot,
 ): Promise<SlotPlan> {
   const dest = await probeWorldSlot(worldStore, slot)
   if (dest.state === 'valid') {
     return { action: 'already' }
   }
-
   if (dest.state === 'failed') {
-    // May probe source only to decide fail vs blocked — never overwrite dest.
-    const source = await probeWorkspaceSlot(workspace, slot)
-    if (source.state === 'valid') {
-      return {
-        action: 'fail',
-        message: `v0.3 ${slot} is ${dest.reason.split(':')[0]}; refusing to overwrite with v0.2 source`,
-      }
-    }
-    if (source.state === 'failed') {
-      return {
-        action: 'fail',
-        message: `v0.3 ${slot} probe failed (${dest.reason}); v0.2 ${slot} also failed (${source.reason})`,
-      }
-    }
-    // source missing — corrupt dest stands, but no migration overwrite was attempted
+    // Fail-closed: never overwrite failed destination with older source.
     return { action: 'blocked' }
   }
 
-  // Destination missing — only then probe the v0.2 source for this slot.
+  // Ensure v0.2 source for this slot only (may pull same-slot legacy if v0.2 missing).
+  const ensured = await ensureWorkspaceSourceSlot(workspace, slot)
+  if (ensured.status === 'failed') {
+    return { action: 'fail', message: ensured.message }
+  }
+
   const source = await probeWorkspaceSlot(workspace, slot)
   if (source.state === 'valid') {
     return { action: 'migrate' }
@@ -610,54 +670,59 @@ async function planSlotMigration(
 }
 
 /**
- * True when getWorldStore must acquire v0.2 Workspace as a migration source.
- * v0.2 is not a permanent runtime dependency: if any v0.3 slot is already valid,
- * missing sibling slots are optional and must not gate startup on legacy/v0.2 init.
+ * Resolve one workspace slot as a World migration source.
+ * v0.2 valid → use it (no legacy). v0.2 failed → fail closed.
+ * v0.2 missing → only then attempt same-slot legacy migration.
  */
-async function worldNeedsMigrationSource(worldStore: WorldStore): Promise<boolean> {
-  const current = await probeWorldSlot(worldStore, 'current')
-  const backup = await probeWorldSlot(worldStore, 'backup')
-  const anyValid = current.state === 'valid' || backup.state === 'valid'
-  if (anyValid) return false
-  return current.state === 'missing' || backup.state === 'missing'
+async function ensureWorkspaceSourceSlot(
+  workspace: WorkspaceStore,
+  slot: StorageSlot,
+): Promise<{ status: 'ok' } | { status: 'failed'; message: string }> {
+  const probe = await probeWorkspaceSlot(workspace, slot)
+  if (probe.state === 'valid') return { status: 'ok' }
+  if (probe.state === 'failed') {
+    return {
+      status: 'failed',
+      message: `v0.2 ${slot} is unreadable (${probe.reason}); refusing legacy overwrite`,
+    }
+  }
+  const legacy = await migrateLegacySlotIfNeeded(workspace, slot)
+  if (legacy.status === 'failed') {
+    return { status: 'failed', message: legacy.message }
+  }
+  return { status: 'ok' }
 }
 
 /**
- * Migrate v0.2 Workspace current/backup slots into v0.3 World slots independently.
- * Destination-first: a valid v0.3 slot never depends on reading its v0.2 source.
- * Never deletes or overwrites v0.2 source. Never overwrites an existing v0.3 slot
- * (including corrupt destination — fail closed, do not treat as missing).
+ * Migrate selected v0.2 → v0.3 slots (default: planWorldMigration targets).
+ * Destination-first / slot-independent; never overwrites failed or valid destinations.
  */
 export async function migrateWorkspaceToWorldIfNeeded(
   workspace: WorkspaceStore,
   worldStore: WorldStore,
+  targets?: StorageSlot[],
 ): Promise<WorldMigrationResult> {
-  const currentPlan = await planSlotMigration(workspace, worldStore, 'current')
-  if (currentPlan.action === 'fail') {
-    return { status: 'failed', message: currentPlan.message }
-  }
+  const plan = await planWorldMigration(worldStore)
+  const selected = targets ?? plan.targets
 
-  const backupPlan = await planSlotMigration(workspace, worldStore, 'backup')
-  if (backupPlan.action === 'fail') {
-    return { status: 'failed', message: backupPlan.message }
-  }
-
-  if (currentPlan.action === 'nothing' && backupPlan.action === 'nothing') {
+  if (selected.length === 0) {
+    if (plan.current.state === 'valid' || plan.backup.state === 'valid') {
+      return { status: 'already_migrated' }
+    }
     return { status: 'no_source' }
   }
 
   let didMigrate = false
-
-  if (currentPlan.action === 'migrate') {
-    const result = await migrateOneWorkspaceSlot(workspace, worldStore, 'current')
-    if (!result.ok) return { status: 'failed', message: result.message }
-    didMigrate = true
-  }
-
-  if (backupPlan.action === 'migrate') {
-    const result = await migrateOneWorkspaceSlot(workspace, worldStore, 'backup')
-    if (!result.ok) return { status: 'failed', message: result.message }
-    didMigrate = true
+  for (const slot of selected) {
+    const slotPlan = await planSlotMigration(workspace, worldStore, slot)
+    if (slotPlan.action === 'fail') {
+      return { status: 'failed', message: slotPlan.message }
+    }
+    if (slotPlan.action === 'migrate') {
+      const result = await migrateOneWorkspaceSlot(workspace, worldStore, slot)
+      if (!result.ok) return { status: 'failed', message: result.message }
+      didMigrate = true
+    }
   }
 
   return didMigrate ? { status: 'migrated' } : { status: 'already_migrated' }
@@ -755,10 +820,12 @@ export async function getWorldStore(): Promise<WorldStore> {
         store = createBrowserWorldStore()
       }
 
-      if (await worldNeedsMigrationSource(store)) {
+      const migrationPlan = await planWorldMigration(store)
+      if (migrationPlan.targets.length > 0) {
         let workspace: WorkspaceStore
         try {
-          workspace = await getWorkspaceStore()
+          // Raw v0.2 backend only — do not run all-slot legacy migration as a side effect.
+          workspace = await openWorkspaceStoreBackend()
         } catch (err) {
           if (err instanceof WorkspaceStoreInitError) {
             initFailure = new WorldStoreInitError(err.message, {
@@ -771,7 +838,11 @@ export async function getWorldStore(): Promise<WorldStore> {
           throw err
         }
 
-        const migration = await migrateWorkspaceToWorldIfNeeded(workspace, store)
+        const migration = await migrateWorkspaceToWorldIfNeeded(
+          workspace,
+          store,
+          migrationPlan.targets,
+        )
         if (migration.status === 'failed') {
           initFailure = new WorldStoreInitError(`World migration failed: ${migration.message}`, {
             reason: 'world_migration',
