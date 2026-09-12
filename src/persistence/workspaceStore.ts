@@ -426,14 +426,10 @@ export type LegacyMigrationResult =
   | { status: 'migrated' }
   | { status: 'failed'; message: string }
 
-/** Migrate legacy localStorage GraphDocument → workspace store (once). Never deletes legacy keys. */
+/** Migrate legacy localStorage GraphDocument → workspace store by slot. Never deletes legacy keys. */
 export async function migrateLegacyLocalStorageIfNeeded(
   store: WorkspaceStore,
 ): Promise<LegacyMigrationResult> {
-  if (await store.hasCurrent()) {
-    return { status: 'already_migrated' }
-  }
-
   let primaryRaw: string | null = null
   let backupRaw: string | null = null
   try {
@@ -444,53 +440,81 @@ export async function migrateLegacyLocalStorageIfNeeded(
     return { status: 'no_legacy' }
   }
 
-  if (!primaryRaw && !backupRaw) return { status: 'no_legacy' }
-
-  if (primaryRaw && parseWorkspaceManifestJson(primaryRaw)) {
+  const legacyPrimaryExists = primaryRaw != null
+  const legacyBackupExists = backupRaw != null
+  if (!legacyPrimaryExists && !legacyBackupExists) {
     return { status: 'no_legacy' }
   }
 
-  let migratedPrimary = false
-  if (primaryRaw) {
-    const parsed = parseGraphDocumentJson(primaryRaw)
-    if (parsed.ok) {
-      const saved = await store.saveCurrent(parsed.document)
-      if (!saved.ok) {
-        return {
-          status: 'failed',
-          message: saved.message ?? `primary migration failed (${saved.reason})`,
-        }
+  // Read slot presence once; do not treat current alone as full migration complete.
+  const currentExists = await store.hasCurrent()
+  const backupExists = await store.hasBackup()
+
+  const primaryNeeded = legacyPrimaryExists && !currentExists
+  const backupNeeded = legacyBackupExists && !backupExists
+
+  if (!primaryNeeded && !backupNeeded) {
+    return { status: 'already_migrated' }
+  }
+
+  let didMigrate = false
+
+  if (primaryNeeded) {
+    const parsed = parseGraphDocumentJson(primaryRaw!)
+    if (!parsed.ok) {
+      return {
+        status: 'failed',
+        message: `legacy primary is not a valid GraphDocument (${parsed.message})`,
       }
-      const verify = await store.loadCurrent()
-      if (!verify.ok) {
-        return {
-          status: 'failed',
-          message: `primary migration verify failed (${verify.reason})`,
-        }
+    }
+    const saved = await store.saveCurrent(parsed.document)
+    if (!saved.ok) {
+      return {
+        status: 'failed',
+        message: saved.message ?? `primary migration failed (${saved.reason})`,
       }
-      migratedPrimary = true
-      try {
-        localStorage.setItem(MIGRATION_MARKER_KEY, 'ok')
-      } catch {
-        /* ignore */
+    }
+    const verify = await store.loadCurrent()
+    if (!verify.ok) {
+      return {
+        status: 'failed',
+        message: `primary migration verify failed (${verify.reason})`,
       }
+    }
+    didMigrate = true
+    try {
+      localStorage.setItem(MIGRATION_MARKER_KEY, 'ok')
+    } catch {
+      /* ignore */
     }
   }
 
-  if (backupRaw) {
-    const parsed = parseGraphDocumentJson(backupRaw)
-    if (parsed.ok) {
-      const saved = await store.saveBackup(parsed.document)
-      if (!saved.ok) {
-        return {
-          status: 'failed',
-          message: saved.message ?? `backup migration failed (${saved.reason})`,
-        }
+  if (backupNeeded) {
+    const parsed = parseGraphDocumentJson(backupRaw!)
+    if (!parsed.ok) {
+      return {
+        status: 'failed',
+        message: `legacy backup is not a valid GraphDocument (${parsed.message})`,
       }
     }
+    const saved = await store.saveBackup(parsed.document)
+    if (!saved.ok) {
+      return {
+        status: 'failed',
+        message: saved.message ?? `backup migration failed (${saved.reason})`,
+      }
+    }
+    const verify = await store.loadBackup()
+    if (!verify.ok) {
+      return {
+        status: 'failed',
+        message: `backup migration verify failed (${verify.reason})`,
+      }
+    }
+    didMigrate = true
   }
 
-  return migratedPrimary ? { status: 'migrated' } : { status: 'no_legacy' }
+  return didMigrate ? { status: 'migrated' } : { status: 'already_migrated' }
 }
 
 export class WorkspaceStoreInitError extends Error {

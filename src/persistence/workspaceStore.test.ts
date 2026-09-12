@@ -14,6 +14,7 @@ import {
 import { createMemoryFsBackend } from './fsBackend'
 import { buildManifestFromDocument, hydrateManifest } from './symbolAssets'
 import {
+  BACKUP_MANIFEST_PATH,
   CURRENT_MANIFEST_PATH,
   installMemoryWorkspaceStore,
   LEGACY_BACKUP_KEY,
@@ -638,6 +639,163 @@ describe('legacy migration init failure regressions', () => {
     expect(loaded.document.customSymbols[0]?.markup).toBe(MARKUP)
     // Legacy keys remain (never deleted).
     expect(memory.get(LEGACY_STORAGE_KEY)).toBeTruthy()
+  })
+})
+
+
+describe('legacy migration slot completion regressions', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+  })
+
+  it('A: primary success + backup save failure fails overall init', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(docWithSymbols([MARKUP])))
+    memory.set(LEGACY_BACKUP_KEY, serializeGraphDocument(docWithSymbols([RASTER_MARKUP])))
+
+    const fs = createMemoryFsBackend()
+    const originalWrite = fs.writeTextFile.bind(fs)
+    fs.writeTextFile = async (path, contents) => {
+      if (String(path).includes('backup.json')) {
+        throw new Error('forced backup migration failure')
+      }
+      return originalWrite(path, contents)
+    }
+
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+    await expect(getWorkspaceStore()).rejects.toMatchObject({ reason: 'legacy_migration' })
+
+    // Primary may already be on disk, but init must not succeed.
+    expect(await fs.exists(CURRENT_MANIFEST_PATH)).toBe(true)
+    expect(await fs.exists(BACKUP_MANIFEST_PATH)).toBe(false)
+    fs.writeTextFile = originalWrite
+  })
+
+  it('B: after backup failure is cleared, retry migrates only missing backup and keeps current', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    const primary = docWithSymbols([MARKUP])
+    const backup = docWithSymbols([RASTER_MARKUP])
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(primary))
+    memory.set(LEGACY_BACKUP_KEY, serializeGraphDocument(backup))
+
+    const fs = createMemoryFsBackend()
+    const originalWrite = fs.writeTextFile.bind(fs)
+    let failBackup = true
+    fs.writeTextFile = async (path, contents) => {
+      if (failBackup && String(path).includes('backup.json')) {
+        throw new Error('forced backup migration failure')
+      }
+      return originalWrite(path, contents)
+    }
+
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+
+    failBackup = false
+    resetWorkspaceStoreSingleton()
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    const store = await getWorkspaceStore()
+    const current = await store.loadCurrent()
+    const loadedBackup = await store.loadBackup()
+    expect(current.ok).toBe(true)
+    expect(loadedBackup.ok).toBe(true)
+    if (!current.ok || !loadedBackup.ok) return
+    expect(current.document.customSymbols[0]?.markup).toBe(MARKUP)
+    expect(loadedBackup.document.customSymbols[0]?.markup).toBe(RASTER_MARKUP)
+  })
+
+  it('C: corrupt legacy primary JSON fails migration and blocks bootstrap', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    memory.set(LEGACY_STORAGE_KEY, '{not-valid-graph-document')
+    writeBootstrapChoice('demo')
+
+    const fs = createMemoryFsBackend()
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+
+    resetWorkspaceStoreSingleton()
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(true)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).toBeNull()
+    expect(memory.get(LEGACY_STORAGE_KEY)).toBe('{not-valid-graph-document')
+  })
+
+  it('D: current already migrated but corrupt legacy backup still fails completion', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(docWithSymbols([MARKUP])))
+    memory.set(LEGACY_BACKUP_KEY, '{corrupt-backup')
+
+    const fs = createMemoryFsBackend()
+    // Pre-seed current as if a previous partial primary migration succeeded.
+    const seed = installMemoryWorkspaceStore(fs)
+    expect((await seed.saveCurrent(docWithSymbols([MARKUP]))).ok).toBe(true)
+    resetWorkspaceStoreSingleton()
+
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+    await expect(getWorkspaceStore()).rejects.toMatchObject({ reason: 'legacy_migration' })
+    expect(await fs.exists(CURRENT_MANIFEST_PATH)).toBe(true)
+    expect(memory.get(LEGACY_BACKUP_KEY)).toBe('{corrupt-backup')
+  })
+
+  it('E: legacy primary+backup with both v0.2 slots present is already_migrated without overwrite', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    const currentDoc = docWithSymbols([MARKUP])
+    const backupDoc = docWithSymbols([RASTER_MARKUP])
+    const stalePrimary = buildGraphDocument({
+      nodes: EMPTY_GRAPH_NODES,
+      edges: EMPTY_GRAPH_EDGES,
+      customSymbols: [],
+      settings: {},
+    })
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(stalePrimary))
+    memory.set(LEGACY_BACKUP_KEY, serializeGraphDocument(stalePrimary))
+
+    const fs = createMemoryFsBackend()
+    const seed = installMemoryWorkspaceStore(fs)
+    expect((await seed.saveCurrent(currentDoc)).ok).toBe(true)
+    expect((await seed.saveBackup(backupDoc)).ok).toBe(true)
+
+    const result = await migrateLegacyLocalStorageIfNeeded(seed)
+    expect(result.status).toBe('already_migrated')
+
+    const current = await seed.loadCurrent()
+    const backup = await seed.loadBackup()
+    expect(current.ok).toBe(true)
+    expect(backup.ok).toBe(true)
+    if (!current.ok || !backup.ok) return
+    expect(current.document.customSymbols[0]?.markup).toBe(MARKUP)
+    expect(backup.document.customSymbols[0]?.markup).toBe(RASTER_MARKUP)
   })
 })
 
