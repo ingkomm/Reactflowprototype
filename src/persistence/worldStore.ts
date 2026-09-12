@@ -365,6 +365,10 @@ function createBrowserWorldStore(): WorldStore {
     return finalizeHydratedWorldLoad(hydrated)
   }
 
+  /**
+   * Target previous map: missing/corrupt → no reuse (overwrite allowed).
+   * localStorage I/O failure → throw (fail-closed; distinct from corrupt).
+   */
   const previousMap = async (key: string): Promise<Map<string, string> | undefined> => {
     const read = readBrowserStorageKey(key)
     if (!read.ok) {
@@ -376,21 +380,36 @@ function createBrowserWorldStore(): WorldStore {
     return galaxySymbolAssetIdMap(manifest)
   }
 
-  const browserRefs = async (): Promise<Set<string>> => {
+  type BrowserAssetRefScan =
+    | { ok: true; ids: Set<string> }
+    | { ok: false; reason: 'uncertain'; message: string }
+    | { ok: false; reason: 'io'; message: string }
+
+  /**
+   * Missing → empty refs for that slot.
+   * Valid → collect refs.
+   * Corrupt/unparseable → uncertain (never empty; never throw).
+   * getItem throw / I/O → io (fail-closed for pre-save).
+   */
+  const browserRefs = async (): Promise<BrowserAssetRefScan> => {
     const keep = new Set<string>()
     for (const key of [CURRENT_KEY, BACKUP_KEY]) {
       const read = readBrowserStorageKey(key)
       if (!read.ok) {
-        throw new Error(read.message)
+        return { ok: false, reason: 'io', message: read.message }
       }
       if (!read.value) continue
       const manifest = parseWorldManifestJson(read.value)
       if (!manifest) {
-        throw new Error(`unreadable world localStorage manifest for ${key}`)
+        return {
+          ok: false,
+          reason: 'uncertain',
+          message: `unreadable world localStorage manifest for ${key}`,
+        }
       }
       for (const id of collectAssetIdsFromWorldManifest(manifest)) keep.add(id)
     }
-    return keep
+    return { ok: true, ids: keep }
   }
 
   const saveKey = async (
@@ -409,7 +428,13 @@ function createBrowserWorldStore(): WorldStore {
 
     try {
       const reuse = await previousMap(key)
-      const committed = await browserRefs()
+      const scan = await browserRefs()
+      if (!scan.ok && scan.reason === 'io') {
+        return { ok: false, reason: 'io', message: scan.message }
+      }
+      const committed = scan.ok
+        ? scan.ids
+        : new Set((await assets.list()).map((a) => a.assetId))
       const manifest = await buildWorldManifestFromDocument(validated.world, assets, {
         previousAssetIdsByGalaxySymbol: reuse,
         committedAssetIds: committed,
@@ -419,8 +444,11 @@ function createBrowserWorldStore(): WorldStore {
       const text = serializeWorldManifest(manifest)
       const written = writeKey(key, text)
       if (!written.ok) return written
-      const keep = await browserRefs()
-      await garbageCollectAssets(assets, keep)
+      const keepScan = await browserRefs()
+      // Valid → GC. Uncertain or I/O → skip GC (never delete from unreadable sibling).
+      if (keepScan.ok) {
+        await garbageCollectAssets(assets, keepScan.ids)
+      }
       return { ok: true }
     } catch (err) {
       return {
@@ -462,8 +490,10 @@ function createBrowserWorldStore(): WorldStore {
       mutationQueue.enqueue(async () => {
         try {
           localStorage.removeItem(CURRENT_KEY)
-          const keep = await browserRefs()
-          await garbageCollectAssets(assets, keep)
+          const keepScan = await browserRefs()
+          if (keepScan.ok) {
+            await garbageCollectAssets(assets, keepScan.ids)
+          }
           return { ok: true }
         } catch {
           return { ok: false, reason: 'quota' }

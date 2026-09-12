@@ -1021,3 +1021,131 @@ describe('0.3-A1 final hardening: WorldStore init skips v0.2 when not needed', (
     expect(loaded.ok).toBe(true)
   })
 })
+
+describe('0.3-A1 browser corrupt recovery persistence (R1–R4)', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
+  })
+
+  it('R1: corrupt current + valid backup → recovery rewrites current in storage', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const backupDoc = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: true })
+    expect((await saveDocumentToStorage(backupDoc)).ok).toBe(true)
+    expect((await backupDocumentToStorage(backupDoc)).ok).toBe(true)
+    memory.set(WORLD_STORAGE_KEY, '{corrupt-v03-current')
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).not.toBeNull()
+
+    const store = await getWorldStore()
+    const current = await store.loadCurrent()
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    expect(graphDocumentsEqual(backupDoc, getActiveGalaxyGraph(current.world)!)).toBe(true)
+  })
+
+  it('R2: after recovery, restart succeeds from recovered current alone', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const backupDoc = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: false })
+    expect((await saveDocumentToStorage(backupDoc)).ok).toBe(true)
+    expect((await backupDocumentToStorage(backupDoc)).ok).toBe(true)
+    memory.set(WORLD_STORAGE_KEY, '{corrupt-v03-current')
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const first = await resolveInitialGraphState()
+    expect(first.storageCorrupt).toBe(false)
+    expect(first.snapshot).not.toBeNull()
+
+    // Prove restart uses recovered current: drop backup and reset singletons.
+    memory.delete(WORLD_BACKUP_KEY)
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const second = await resolveInitialGraphState()
+    expect(second.storageCorrupt).toBe(false)
+    expect(second.needsBootstrap).toBe(false)
+    expect(second.snapshot).not.toBeNull()
+    if (!second.snapshot) return
+    expect(second.snapshot.settings.gridSnapEnabled).toBe(false)
+
+    const store = await getWorldStore()
+    const current = await store.loadCurrent()
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    expect(graphDocumentsEqual(backupDoc, getActiveGalaxyGraph(current.world)!)).toBe(true)
+  })
+
+  it('R3: valid current + corrupt backup must not block current save', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const original = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    expect((await saveDocumentToStorage(original)).ok).toBe(true)
+    expect((await backupDocumentToStorage(original)).ok).toBe(true)
+    memory.set(WORLD_BACKUP_KEY, '{corrupt-v03-backup')
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const updated = docWithSymbols([MARKUP], { gridSnapEnabled: false })
+    expect((await saveDocumentToStorage(updated)).ok).toBe(true)
+
+    const store = await getWorldStore()
+    const current = await store.loadCurrent()
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    expect(graphDocumentsEqual(updated, getActiveGalaxyGraph(current.world)!)).toBe(true)
+    expect(memory.get(WORLD_BACKUP_KEY)).toBe('{corrupt-v03-backup')
+  })
+
+  it('R4: browser corrupt sibling must not GC custom-symbol assets', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const currentDoc = docWithSymbols([MARKUP])
+    const backupDoc = docWithSymbols([RASTER_MARKUP])
+    expect((await saveDocumentToStorage(currentDoc)).ok).toBe(true)
+    expect((await backupDocumentToStorage(backupDoc)).ok).toBe(true)
+
+    const storeBefore = await getWorldStore()
+    const assetsBefore = await storeBefore.assets.list()
+    expect(assetsBefore.length).toBeGreaterThan(1)
+    const assetIdsBefore = new Set(assetsBefore.map((a) => a.assetId))
+
+    memory.set(WORLD_BACKUP_KEY, '{corrupt-v03-backup')
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    expect((await saveDocumentToStorage(currentDoc)).ok).toBe(true)
+
+    const store = await getWorldStore()
+    const assetsAfter = await store.assets.list()
+    expect(new Set(assetsAfter.map((a) => a.assetId))).toEqual(assetIdsBefore)
+
+    const current = await store.loadCurrent()
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    expect(getActiveGalaxyGraph(current.world)!.customSymbols[0]?.markup).toBe(MARKUP)
+  })
+})
