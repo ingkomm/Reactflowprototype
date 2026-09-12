@@ -88,13 +88,44 @@
   accent-color: #9fe8dd;
 }
 
+.topbar__file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar__file-btn {
+  border: 1px solid color-mix(in srgb, #8fa0b0 40%, transparent);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topbar__file-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, #9fe8dd 45%, transparent);
+  background: color-mix(in srgb, #9fe8dd 8%, transparent);
+}
+
+.topbar__file-btn:focus-visible {
+  outline: 1px solid color-mix(in srgb, #9fe8dd 55%, transparent);
+  outline-offset: 1px;
+}
+
 .topbar__active-json {
   color: var(--muted);
-  font-size: 12px;
-  max-width: 160px;
+  font-size: 0.7rem;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-left: 2px;
 }
 
 .topbar__scale {

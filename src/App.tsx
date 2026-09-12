@@ -33,6 +33,11 @@ import {
   saveGraphJsonAsDesktop,
   saveGraphJsonToPathDesktop,
 } from './platform/graphExport'
+import {
+  clearActiveJsonPath,
+  readActiveJsonPath,
+  writeActiveJsonPath,
+} from './persistence/activeJsonPath'
 import { stagesForKind } from './stage'
 import { createLogId, createNodeId, createStageId } from './ids'
 import {
@@ -288,7 +293,7 @@ export default function App() {
   const pinnedZCounterRef = useRef(50)
   const [focusLogId, setFocusLogId] = useState<string | null>(null)
   /** Session-only external JSON path (Desktop). Not part of GraphDocument / autosave. */
-  const [activeJsonPath, setActiveJsonPath] = useState<string | null>(null)
+  const [activeJsonPath, setActiveJsonPath] = useState<string | null>(() => readActiveJsonPath())
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
   const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
@@ -1437,6 +1442,7 @@ export default function App() {
         return
       }
       setActiveJsonPath(result.path)
+      writeActiveJsonPath(result.path)
       setImportError(null)
       return
     }
@@ -1468,6 +1474,7 @@ export default function App() {
         return
       }
       setActiveJsonPath(result.path)
+      writeActiveJsonPath(result.path)
       setImportError(null)
       return
     }
@@ -1535,6 +1542,7 @@ export default function App() {
     }
     applyImportedSnapshot(result.snapshot)
     setActiveJsonPath(opened.path)
+    writeActiveJsonPath(opened.path)
   }, [
     applyImportedSnapshot,
     customSymbols,
@@ -1609,6 +1617,7 @@ export default function App() {
     setPinnedViewerBounds({})
     setFloatingVideoNodeIds([])
     setActiveJsonPath(null)
+    clearActiveJsonPath()
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -2146,38 +2155,40 @@ export default function App() {
                 <button type="button" className="btn" onClick={handleNewSheet}>
                   새 시트
                 </button>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="topbar-save-json"
-                  onClick={() => void handleSaveJson()}
-                >
-                  저장
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="topbar-save-json-as"
-                  onClick={() => void handleSaveJsonAs()}
-                >
-                  다른 이름으로 저장
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  data-testid="topbar-open-json"
-                  onClick={() => void handleOpenJson()}
-                >
-                  불러오기
-                </button>
-                {isDesktopGraphExportSupported() ? (
-                  <span className="topbar__active-json" title={activeJsonPath ?? undefined}>
-                    Active:{' '}
-                    {activeJsonPath
-                      ? activeJsonPath.replace(/^.*[/\\]/, '') || activeJsonPath
-                      : '없음'}
-                  </span>
-                ) : null}
+                <div className="topbar__file-actions">
+                  <button
+                    type="button"
+                    className="topbar__file-btn"
+                    data-testid="topbar-save-json"
+                    onClick={() => void handleSaveJson()}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="topbar__file-btn"
+                    data-testid="topbar-save-json-as"
+                    onClick={() => void handleSaveJsonAs()}
+                  >
+                    Save As
+                  </button>
+                  <button
+                    type="button"
+                    className="topbar__file-btn"
+                    data-testid="topbar-open-json"
+                    onClick={() => void handleOpenJson()}
+                  >
+                    Load
+                  </button>
+                  {isDesktopGraphExportSupported() ? (
+                    <span className="topbar__active-json" title={activeJsonPath ?? undefined}>
+                      Active:{' '}
+                      {activeJsonPath
+                        ? activeJsonPath.replace(/^.*[/\\]/, '') || activeJsonPath
+                        : 'none'}
+                    </span>
+                  ) : null}
+                </div>
                 {saveStatus === 'failed' && (
                   <span
                     className="topbar__save-status topbar__save-status--failed"
