@@ -14,12 +14,17 @@ import {
 import { createMemoryFsBackend } from './fsBackend'
 import { buildManifestFromDocument, hydrateManifest } from './symbolAssets'
 import {
+  CURRENT_MANIFEST_PATH,
   installMemoryWorkspaceStore,
   LEGACY_BACKUP_KEY,
   LEGACY_STORAGE_KEY,
   migrateLegacyLocalStorageIfNeeded,
   resetWorkspaceStoreSingleton,
+  setWorkspaceStoreTestHooks,
+  WorkspaceStoreInitError,
+  getWorkspaceStore,
 } from './workspaceStore'
+import { WORKSPACE_STORAGE_VERSION } from './workspaceTypes'
 
 const DEMO_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -346,5 +351,151 @@ describe('asset store + custom symbol externalize', () => {
     if (!reparsed.ok) return
     expect(reparsed.document.customSymbols[0]?.markup).toBe(MARKUP)
     expect(reparsed.document.customSymbols[1]?.markup).toBe(RASTER_MARKUP)
+  })
+})
+
+
+describe('workspace store integrity regressions', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+  })
+
+  it('A: markup change does not overwrite committed asset when manifest commit fails', async () => {
+    const fs = createMemoryFsBackend()
+    const store = installMemoryWorkspaceStore(fs)
+    const original = docWithSymbols([MARKUP])
+    expect((await store.saveCurrent(original)).ok).toBe(true)
+
+    const before = await store.loadCurrent()
+    expect(before.ok).toBe(true)
+    if (!before.ok) return
+    const oldMarkup = before.document.customSymbols[0]!.markup
+    const assetsBefore = await store.assets.list()
+    expect(assetsBefore.length).toBe(1)
+    const oldAssetId = assetsBefore[0]!.assetId
+    const oldPayload = await store.assets.get(oldAssetId)
+    expect(oldPayload?.text).toBe(oldMarkup)
+
+    const originalWrite = fs.writeTextFile.bind(fs)
+    fs.writeTextFile = async (path, contents) => {
+      if (String(path).endsWith('current.json.tmp')) {
+        throw new Error('forced manifest temp write failure')
+      }
+      return originalWrite(path, contents)
+    }
+
+    const changed = docWithSymbols([RASTER_MARKUP])
+    // Keep the same symbol id so this is an in-place symbol update.
+    changed.customSymbols[0] = {
+      ...changed.customSymbols[0]!,
+      id: original.customSymbols[0]!.id,
+      name: original.customSymbols[0]!.name,
+    }
+    const failed = await store.saveCurrent(changed)
+    expect(failed.ok).toBe(false)
+
+    const after = await store.loadCurrent()
+    expect(after.ok).toBe(true)
+    if (!after.ok) return
+    expect(after.document.customSymbols[0]?.markup).toBe(oldMarkup)
+
+    const stillOld = await store.assets.get(oldAssetId)
+    expect(stillOld?.text).toBe(oldMarkup)
+
+    fs.writeTextFile = originalWrite
+  })
+
+  it('B: overlapping saveCurrent/saveBackup keep both assets; GC does not drop the other slot', async () => {
+    const store = installMemoryWorkspaceStore(createMemoryFsBackend())
+    const currentDoc = docWithSymbols([MARKUP])
+    const backupDoc = docWithSymbols([RASTER_MARKUP])
+    // Distinct symbol ids so each slot owns a distinct asset.
+    backupDoc.customSymbols[0] = {
+      ...backupDoc.customSymbols[0]!,
+      id: 'sym-backup',
+      name: 'Backup Symbol',
+    }
+
+    const [currentResult, backupResult] = await Promise.all([
+      store.saveCurrent(currentDoc),
+      store.saveBackup(backupDoc),
+    ])
+    expect(currentResult.ok).toBe(true)
+    expect(backupResult.ok).toBe(true)
+
+    const currentLoaded = await store.loadCurrent()
+    const backupLoaded = await store.loadBackup()
+    expect(currentLoaded.ok).toBe(true)
+    expect(backupLoaded.ok).toBe(true)
+    if (!currentLoaded.ok || !backupLoaded.ok) return
+    expect(currentLoaded.document.customSymbols[0]?.markup).toBe(MARKUP)
+    expect(backupLoaded.document.customSymbols[0]?.markup).toBe(RASTER_MARKUP)
+
+    const listed = await store.assets.list()
+    expect(listed.length).toBeGreaterThanOrEqual(2)
+    for (const entry of listed) {
+      const got = await store.assets.get(entry.assetId)
+      expect(got?.text).toBeTruthy()
+    }
+  })
+
+  it('C: desktop AppData init failure does not fall back to browser localStorage store', async () => {
+    resetWorkspaceStoreSingleton()
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => {
+        throw new Error('simulated AppData init failure')
+      },
+    })
+
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+
+    // Second call stays failed — still no silent browser fallback.
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+  })
+
+  it('D: hydrated manifest that fails GraphDocument validation is corrupt, not ok', async () => {
+    const fs = createMemoryFsBackend()
+    const store = installMemoryWorkspaceStore(fs)
+    // First create a valid store so directories exist, then overwrite manifest with broken shape.
+    expect((await store.saveCurrent(docWithSymbols([MARKUP]))).ok).toBe(true)
+
+    const brokenManifest = {
+      storageVersion: WORKSPACE_STORAGE_VERSION,
+      document: {
+        schemaVersion: '999.0',
+        nodes: [],
+        edges: 'not-an-array',
+        customSymbols: [],
+      },
+      assets: [],
+    }
+    await fs.writeTextFile(CURRENT_MANIFEST_PATH, `${JSON.stringify(brokenManifest)}\n`)
+
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(false)
+    if (loaded.ok) return
+    expect(loaded.reason).toBe('corrupt')
+  })
+
+  it('asset metadata byteLength mismatch is treated as corrupt_asset', async () => {
+    const fs = createMemoryFsBackend()
+    const store = installMemoryWorkspaceStore(fs)
+    expect((await store.saveCurrent(docWithSymbols([MARKUP]))).ok).toBe(true)
+
+    const listed = await store.assets.list()
+    expect(listed.length).toBe(1)
+    const assetId = listed[0]!.assetId
+    const metaPath = `storage-v02/assets/${assetId}.meta.json`
+    const raw = await fs.readTextFile(metaPath)
+    const meta = JSON.parse(raw) as Record<string, unknown>
+    meta.byteLength = 1
+    await fs.writeTextFile(metaPath, JSON.stringify(meta))
+
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(false)
+    if (loaded.ok) return
+    expect(loaded.reason).toBe('missing_asset')
+    expect(loaded.issues?.some((i) => i.code === 'corrupt_asset')).toBe(true)
   })
 })

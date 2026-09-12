@@ -8,7 +8,11 @@
  * Portable GraphDocument remains self-contained (markup inline).
  */
 import type { GraphDocumentV01 } from '../graphDocument'
-import { parseGraphDocumentJson, serializeGraphDocument } from '../graphDocument'
+import {
+  parseGraphDocumentJson,
+  serializeGraphDocument,
+  validateGraphDocument,
+} from '../graphDocument'
 import { MAX_BROWSER_AUTOSAVE_BYTES, utf8ByteLength } from '../limits'
 import { isDesktopGraphExportSupported } from '../platform/graphExport'
 import type { AssetStore } from './assetStore'
@@ -58,22 +62,17 @@ function serializeManifest(manifest: WorkspaceManifestV02): string {
   return `${JSON.stringify(manifest)}\n`
 }
 
-function createWriteQueue() {
+/** Serializes all storage mutations (saveCurrent / saveBackup / clearCurrent / GC). */
+function createSerialQueue() {
   let chain: Promise<unknown> = Promise.resolve()
-  let generation = 0
-
   return {
-    enqueue<T>(task: (generation: number) => Promise<T>): Promise<T> {
-      const myGen = ++generation
-      const run = chain.then(() => task(myGen))
+    enqueue<T>(task: () => Promise<T>): Promise<T> {
+      const run = chain.then(() => task())
       chain = run.then(
         () => undefined,
         () => undefined,
       )
       return run
-    },
-    get generation() {
-      return generation
     },
   }
 }
@@ -113,6 +112,35 @@ async function atomicWriteText(fs: FsBackend, path: string, contents: string): P
   await fs.rename(tmp, path)
 }
 
+
+async function finalizeHydratedLoad(
+  hydrated: Awaited<ReturnType<typeof hydrateManifest>>,
+): Promise<WorkspaceLoadResult> {
+  const blocking = hydrated.issues.filter(
+    (i) => i.code === 'missing_asset' || i.code === 'corrupt_asset',
+  )
+  if (blocking.length > 0) {
+    return {
+      ok: false,
+      reason: 'missing_asset',
+      message: `missing or corrupt asset (${blocking[0]!.assetId})`,
+      issues: hydrated.issues,
+    }
+  }
+
+  const validated = validateGraphDocument(hydrated.document)
+  if (!validated.ok) {
+    return {
+      ok: false,
+      reason: 'corrupt',
+      message: validated.message,
+      issues: [{ code: 'corrupt_manifest', message: validated.message }],
+    }
+  }
+
+  return { ok: true, document: validated.document, issues: hydrated.issues }
+}
+
 async function loadSlotFromFs(
   fs: FsBackend,
   assets: AssetStore,
@@ -142,18 +170,7 @@ async function loadSlotFromFs(
   }
 
   const hydrated = await hydrateManifest(manifest, assets)
-  const blocking = hydrated.issues.filter(
-    (i) => i.code === 'missing_asset' || i.code === 'corrupt_asset',
-  )
-  if (blocking.length > 0) {
-    return {
-      ok: false,
-      reason: 'missing_asset',
-      message: `missing or corrupt asset (${blocking[0]!.assetId})`,
-      issues: hydrated.issues,
-    }
-  }
-  return { ok: true, document: hydrated.document, issues: hydrated.issues }
+  return finalizeHydratedLoad(hydrated)
 }
 
 async function readPreviousAssetMap(
@@ -181,8 +198,9 @@ async function referencedAssetIds(fs: FsBackend): Promise<Set<string>> {
 
 function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): WorkspaceStore {
   const assets = createFileAssetStore(fs, ASSETS_DIR)
-  const currentQueue = createWriteQueue()
-  const backupQueue = createWriteQueue()
+  const mutationQueue = createSerialQueue()
+  let currentGeneration = 0
+  let backupGeneration = 0
 
   const ensureRoot = async () => {
     await fs.mkdir(STORAGE_ROOT, { recursive: true })
@@ -193,17 +211,22 @@ function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): Work
     slot: 'current' | 'backup',
     document: GraphDocumentV01,
     generation: number,
-    queue: ReturnType<typeof createWriteQueue>,
   ): Promise<WorkspaceSaveResult> => {
-    if (generation !== queue.generation) return { ok: true }
+    const latest = slot === 'current' ? currentGeneration : backupGeneration
+    if (generation !== latest) return { ok: true }
 
     try {
       await ensureRoot()
       const path = slot === 'current' ? CURRENT_MANIFEST_PATH : BACKUP_MANIFEST_PATH
       const reuse = await readPreviousAssetMap(fs, path)
-      const manifest = await buildManifestFromDocument(document, assets, reuse)
+      const committed = await referencedAssetIds(fs)
+      const manifest = await buildManifestFromDocument(document, assets, {
+        previousAssetIdsBySymbolId: reuse,
+        committedAssetIds: committed,
+      })
 
-      if (generation !== queue.generation) return { ok: true }
+      const stillLatest = slot === 'current' ? currentGeneration : backupGeneration
+      if (generation !== stillLatest) return { ok: true }
 
       const text = serializeManifest(manifest)
       await atomicWriteText(fs, path, text)
@@ -239,34 +262,40 @@ function createFsWorkspaceStore(fs: FsBackend, kind: 'desktop' | 'memory'): Work
     },
     loadCurrent: () => loadSlotFromFs(fs, assets, CURRENT_MANIFEST_PATH),
     loadBackup: () => loadSlotFromFs(fs, assets, BACKUP_MANIFEST_PATH),
-    saveCurrent: (document) =>
-      currentQueue.enqueue((gen) => saveSlot('current', document, gen, currentQueue)),
-    saveBackup: (document) =>
-      backupQueue.enqueue((gen) => saveSlot('backup', document, gen, backupQueue)),
-    async clearCurrent() {
-      try {
-        await ensureRoot()
-        if (await fs.exists(CURRENT_MANIFEST_PATH)) {
-          await fs.remove(CURRENT_MANIFEST_PATH)
-        }
-        const keep = await referencedAssetIds(fs)
-        await garbageCollectAssets(assets, keep)
-        return { ok: true }
-      } catch (err) {
-        return {
-          ok: false,
-          reason: 'io',
-          message: err instanceof Error ? err.message : 'clear failed',
-        }
-      }
+    saveCurrent: (document) => {
+      const gen = ++currentGeneration
+      return mutationQueue.enqueue(() => saveSlot('current', document, gen))
     },
+    saveBackup: (document) => {
+      const gen = ++backupGeneration
+      return mutationQueue.enqueue(() => saveSlot('backup', document, gen))
+    },
+    clearCurrent: () =>
+      mutationQueue.enqueue(async () => {
+        try {
+          await ensureRoot()
+          if (await fs.exists(CURRENT_MANIFEST_PATH)) {
+            await fs.remove(CURRENT_MANIFEST_PATH)
+          }
+          const keep = await referencedAssetIds(fs)
+          await garbageCollectAssets(assets, keep)
+          return { ok: true }
+        } catch (err) {
+          return {
+            ok: false,
+            reason: 'io',
+            message: err instanceof Error ? err.message : 'clear failed',
+          }
+        }
+      }),
   }
 }
 
 function createBrowserWorkspaceStore(): WorkspaceStore {
   const assets = createLocalStorageAssetStore()
-  const currentQueue = createWriteQueue()
-  const backupQueue = createWriteQueue()
+  const mutationQueue = createSerialQueue()
+  let currentGeneration = 0
+  let backupGeneration = 0
   const CURRENT_KEY = LEGACY_STORAGE_KEY
   const BACKUP_KEY = LEGACY_BACKUP_KEY
 
@@ -297,18 +326,7 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
     const manifest = parseWorkspaceManifestJson(raw)
     if (manifest) {
       const hydrated = await hydrateManifest(manifest, assets)
-      const blocking = hydrated.issues.filter(
-        (i) => i.code === 'missing_asset' || i.code === 'corrupt_asset',
-      )
-      if (blocking.length > 0) {
-        return {
-          ok: false,
-          reason: 'missing_asset',
-          message: `missing or corrupt asset (${blocking[0]!.assetId})`,
-          issues: hydrated.issues,
-        }
-      }
-      return { ok: true, document: hydrated.document, issues: hydrated.issues }
+      return finalizeHydratedLoad(hydrated)
     }
 
     const legacy = parseGraphDocumentJson(raw)
@@ -340,13 +358,19 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
     key: string,
     document: GraphDocumentV01,
     generation: number,
-    queue: ReturnType<typeof createWriteQueue>,
+    slot: 'current' | 'backup',
   ): Promise<WorkspaceSaveResult> => {
-    if (generation !== queue.generation) return { ok: true }
+    const latest = slot === 'current' ? currentGeneration : backupGeneration
+    if (generation !== latest) return { ok: true }
     try {
       const reuse = await previousMap(key)
-      const manifest = await buildManifestFromDocument(document, assets, reuse)
-      if (generation !== queue.generation) return { ok: true }
+      const committed = await browserRefs()
+      const manifest = await buildManifestFromDocument(document, assets, {
+        previousAssetIdsBySymbolId: reuse,
+        committedAssetIds: committed,
+      })
+      const stillLatest = slot === 'current' ? currentGeneration : backupGeneration
+      if (generation !== stillLatest) return { ok: true }
       const text = serializeManifest(manifest)
       const written = writeKey(key, text)
       if (!written.ok) return written
@@ -373,20 +397,25 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
     },
     loadCurrent: () => loadKey(CURRENT_KEY),
     loadBackup: () => loadKey(BACKUP_KEY),
-    saveCurrent: (document) =>
-      currentQueue.enqueue((gen) => saveKey(CURRENT_KEY, document, gen, currentQueue)),
-    saveBackup: (document) =>
-      backupQueue.enqueue((gen) => saveKey(BACKUP_KEY, document, gen, backupQueue)),
-    async clearCurrent() {
-      try {
-        localStorage.removeItem(CURRENT_KEY)
-        const keep = await browserRefs()
-        await garbageCollectAssets(assets, keep)
-        return { ok: true }
-      } catch {
-        return { ok: false, reason: 'quota' }
-      }
+    saveCurrent: (document) => {
+      const gen = ++currentGeneration
+      return mutationQueue.enqueue(() => saveKey(CURRENT_KEY, document, gen, 'current'))
     },
+    saveBackup: (document) => {
+      const gen = ++backupGeneration
+      return mutationQueue.enqueue(() => saveKey(BACKUP_KEY, document, gen, 'backup'))
+    },
+    clearCurrent: () =>
+      mutationQueue.enqueue(async () => {
+        try {
+          localStorage.removeItem(CURRENT_KEY)
+          const keep = await browserRefs()
+          await garbageCollectAssets(assets, keep)
+          return { ok: true }
+        } catch {
+          return { ok: false, reason: 'quota' }
+        }
+      }),
   }
 }
 
@@ -456,36 +485,76 @@ export async function migrateLegacyLocalStorageIfNeeded(
   return { migrated: migratedPrimary }
 }
 
+
+export class WorkspaceStoreInitError extends Error {
+  readonly code = 'workspace_store_init_failed' as const
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'WorkspaceStoreInitError'
+  }
+}
+
+type WorkspaceStoreTestHooks = {
+  /** When set, overrides Tauri desktop detection for tests. */
+  isDesktop?: boolean | null
+  /** When set, replaces Tauri AppData FS factory for tests. */
+  createDesktopFs?: (() => Promise<FsBackend>) | null
+}
+
+let testHooks: WorkspaceStoreTestHooks = {}
+
+/** Test-only hooks for desktop init / fallback behavior. Cleared by resetWorkspaceStoreSingleton. */
+export function setWorkspaceStoreTestHooks(hooks: WorkspaceStoreTestHooks): void {
+  testHooks = { ...hooks }
+}
+
 let singleton: WorkspaceStore | null = null
 let singletonPromise: Promise<WorkspaceStore> | null = null
+let initFailure: WorkspaceStoreInitError | null = null
 
 /** Test helper: inject a memory-backed store (resets singleton). */
 export function installMemoryWorkspaceStore(fs?: FsBackend): WorkspaceStore {
   const store = createFsWorkspaceStore(fs ?? createMemoryFsBackend(), 'memory')
   singleton = store
   singletonPromise = Promise.resolve(store)
+  initFailure = null
   return store
 }
 
 export function resetWorkspaceStoreSingleton(): void {
   singleton = null
   singletonPromise = null
+  initFailure = null
+  testHooks = {}
 }
 
 export async function getWorkspaceStore(): Promise<WorkspaceStore> {
+  if (initFailure) throw initFailure
   if (singleton) return singleton
   if (singletonPromise) return singletonPromise
 
+  const isDesktop =
+    testHooks.isDesktop != null ? testHooks.isDesktop : isDesktopGraphExportSupported()
+
   singletonPromise = (async () => {
-    if (isDesktopGraphExportSupported()) {
+    if (isDesktop) {
       try {
-        const fs = await createTauriAppDataFsBackend()
+        const fs = testHooks.createDesktopFs
+          ? await testHooks.createDesktopFs()
+          : await createTauriAppDataFsBackend()
         const store = createFsWorkspaceStore(fs, 'desktop')
         await migrateLegacyLocalStorageIfNeeded(store)
         singleton = store
         return store
-      } catch {
-        // Fall through to browser store if Tauri FS init fails.
+      } catch (err) {
+        initFailure = new WorkspaceStoreInitError(
+          err instanceof Error
+            ? err.message
+            : 'Desktop AppData workspace store failed to initialize',
+          { cause: err },
+        )
+        singleton = null
+        throw initFailure
       }
     }
     const store = createBrowserWorkspaceStore()
@@ -493,7 +562,12 @@ export async function getWorkspaceStore(): Promise<WorkspaceStore> {
     return store
   })()
 
-  return singletonPromise
+  try {
+    return await singletonPromise
+  } catch (err) {
+    singletonPromise = null
+    throw err
+  }
 }
 
 export function workspaceStorageVersion(): typeof WORKSPACE_STORAGE_VERSION {

@@ -20,6 +20,7 @@ import {
   type BootstrapChoice,
   type StorageSaveResult,
 } from './persistence/autosave'
+import { WorkspaceStoreInitError } from './persistence/workspaceStore'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import type { CustomSymbol, GraphDocumentSettings } from './types'
 import { MAX_PORTABLE_JSON_BYTES, utf8ByteLength } from './limits'
@@ -76,40 +77,47 @@ export async function resolveInitialGraphState(): Promise<{
   needsBootstrap: boolean
   storageCorrupt: boolean
 }> {
-  const stored = await loadDocumentFromStorage()
-  if (stored.ok) {
-    // Rewrite migrated legacy docs so the next load stays clean.
-    await saveDocumentToStorage(stored.document)
-    return {
-      snapshot: snapshotFromDocument(stored.document),
-      needsBootstrap: false,
-      storageCorrupt: false,
-    }
-  }
-
-  if (await hasStoredDocument()) {
-    const backup = await restoreBackupFromStorage()
-    if (backup.ok) {
-      await saveDocumentToStorage(backup.document)
+  try {
+    const stored = await loadDocumentFromStorage()
+    if (stored.ok) {
+      // Rewrite migrated legacy docs so the next load stays clean.
+      await saveDocumentToStorage(stored.document)
       return {
-        snapshot: snapshotFromDocument(backup.document),
+        snapshot: snapshotFromDocument(stored.document),
         needsBootstrap: false,
         storageCorrupt: false,
       }
     }
-    return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
-  }
 
-  const choice = readBootstrapChoice()
-  if (choice) {
-    return {
-      snapshot: flowFromBootstrap(choice),
-      needsBootstrap: false,
-      storageCorrupt: false,
+    if (await hasStoredDocument()) {
+      const backup = await restoreBackupFromStorage()
+      if (backup.ok) {
+        await saveDocumentToStorage(backup.document)
+        return {
+          snapshot: snapshotFromDocument(backup.document),
+          needsBootstrap: false,
+          storageCorrupt: false,
+        }
+      }
+      return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
     }
-  }
 
-  return { snapshot: null, needsBootstrap: true, storageCorrupt: false }
+    const choice = readBootstrapChoice()
+    if (choice) {
+      return {
+        snapshot: flowFromBootstrap(choice),
+        needsBootstrap: false,
+        storageCorrupt: false,
+      }
+    }
+
+    return { snapshot: null, needsBootstrap: true, storageCorrupt: false }
+  } catch (err) {
+    if (err instanceof WorkspaceStoreInitError) {
+      return { snapshot: null, needsBootstrap: false, storageCorrupt: true }
+    }
+    throw err
+  }
 }
 
 export function sanitizeFlowEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {

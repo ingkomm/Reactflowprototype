@@ -33,16 +33,58 @@ export function isHydratedCustomSymbol(value: unknown): value is CustomSymbol {
   return typeof r.markup === 'string' && typeof r.id === 'string'
 }
 
+export type ExternalizeOptions = {
+  /** Previous symbolId → assetId map for the slot being saved (reuse when markup unchanged). */
+  previousAssetIdsBySymbolId?: Map<string, string>
+  /**
+   * Asset IDs currently referenced by current and/or backup manifests.
+   * These must never be overwritten in-place.
+   */
+  committedAssetIds?: Set<string>
+}
+
 export async function externalizeCustomSymbols(
   symbols: CustomSymbol[],
   assets: AssetStore,
-  reuseAssetIds?: Map<string, string>,
+  options?: ExternalizeOptions | Map<string, string>,
 ): Promise<{ metas: CustomSymbolMetaV02[]; assetMetas: AssetMetaV02[] }> {
+  // Back-compat: older callers passed a reuse map as the third argument.
+  const opts: ExternalizeOptions =
+    options instanceof Map ? { previousAssetIdsBySymbolId: options } : (options ?? {})
+  const previous = opts.previousAssetIdsBySymbolId
+  const committed = opts.committedAssetIds ?? new Set<string>()
+
   const metas: CustomSymbolMetaV02[] = []
   const assetMetas: AssetMetaV02[] = []
 
   for (const symbol of symbols) {
-    const assetId = reuseAssetIds?.get(symbol.id) ?? createAssetId()
+    const prevId = previous?.get(symbol.id)
+    if (prevId) {
+      const existing = await assets.get(prevId)
+      if (existing?.text === symbol.markup) {
+        const actualLen = textToBytes(existing.text).byteLength
+        if (existing.byteLength === actualLen) {
+          const { markup: _markup, ...rest } = symbol
+          metas.push({ ...rest, assetId: prevId })
+          assetMetas.push({
+            assetId: prevId,
+            kind: existing.kind,
+            mimeType: existing.mimeType,
+            byteLength: existing.byteLength,
+            label: existing.label,
+          })
+          continue
+        }
+      }
+    }
+
+    // Markup changed (or previous missing/corrupt): always allocate a new assetId.
+    // Never put() into an id that current/backup already reference.
+    let assetId = createAssetId()
+    while (committed.has(assetId) || (prevId != null && assetId === prevId)) {
+      assetId = createAssetId()
+    }
+
     const record = await assets.put({
       assetId,
       kind: 'custom-symbol-markup',
@@ -67,6 +109,7 @@ export async function externalizeCustomSymbols(
 export async function hydrateCustomSymbols(
   metas: CustomSymbolMetaV02[],
   assets: AssetStore,
+  expectedByteLengthByAssetId?: Map<string, number>,
 ): Promise<{ symbols: CustomSymbol[]; issues: WorkspaceLoadIssue[] }> {
   const symbols: CustomSymbol[] = []
   const issues: WorkspaceLoadIssue[] = []
@@ -81,6 +124,16 @@ export async function hydrateCustomSymbols(
       issues.push({ code: 'corrupt_asset', assetId: meta.assetId, symbolId: meta.id })
       continue
     }
+    const actualLen = textToBytes(record.text).byteLength
+    if (record.byteLength !== actualLen) {
+      issues.push({ code: 'corrupt_asset', assetId: meta.assetId, symbolId: meta.id })
+      continue
+    }
+    const expected = expectedByteLengthByAssetId?.get(meta.assetId)
+    if (expected != null && expected !== actualLen) {
+      issues.push({ code: 'corrupt_asset', assetId: meta.assetId, symbolId: meta.id })
+      continue
+    }
     const { assetId: _assetId, ...rest } = meta
     symbols.push({ ...rest, markup: record.text })
   }
@@ -91,12 +144,12 @@ export async function hydrateCustomSymbols(
 export async function buildManifestFromDocument(
   document: GraphDocumentV01,
   assets: AssetStore,
-  previousAssetIdsBySymbolId?: Map<string, string>,
+  options?: ExternalizeOptions | Map<string, string>,
 ): Promise<WorkspaceManifestV02> {
   const { metas, assetMetas } = await externalizeCustomSymbols(
     document.customSymbols,
     assets,
-    previousAssetIdsBySymbolId,
+    options,
   )
   const { customSymbols: _cs, ...rest } = document
   return {
@@ -110,7 +163,14 @@ export async function hydrateManifest(
   manifest: WorkspaceManifestV02,
   assets: AssetStore,
 ): Promise<{ document: GraphDocumentV01; issues: WorkspaceLoadIssue[] }> {
-  const { symbols, issues } = await hydrateCustomSymbols(manifest.document.customSymbols, assets)
+  const expectedByteLengthByAssetId = new Map(
+    manifest.assets.map((a) => [a.assetId, a.byteLength] as const),
+  )
+  const { symbols, issues } = await hydrateCustomSymbols(
+    manifest.document.customSymbols,
+    assets,
+    expectedByteLengthByAssetId,
+  )
   return {
     document: { ...manifest.document, customSymbols: symbols },
     issues,
