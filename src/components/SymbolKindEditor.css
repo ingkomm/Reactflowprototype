@@ -1,0 +1,135 @@
+.symbol-kind-editor__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(4, 8, 12, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.symbol-kind-editor {
+  width: min(360px, 100%);
+  max-height: min(520px, 92vh);
+  overflow: auto;
+  background: #0d1218;
+  border: 1px solid color-mix(in srgb, #8fa0b0 24%, transparent);
+  border-radius: 14px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+.symbol-kind-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.symbol-kind-editor__head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.symbol-kind-editor__hint {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.symbol-kind-editor__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.symbol-kind-editor__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #121820;
+  border: 1px solid color-mix(in srgb, #8fa0b0 16%, transparent);
+}
+
+.symbol-kind-editor__meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.symbol-kind-editor__preview {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #0a0e14;
+  border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+  overflow: hidden;
+}
+
+.symbol-kind-editor__preview--custom {
+  border-radius: 8px;
+  color: #e8eef3;
+  overflow: visible;
+}
+
+.symbol-kind-editor__preview--custom svg {
+  width: 72%;
+  height: 72%;
+  overflow: visible;
+}
+
+.symbol-kind-editor__name {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.symbol-kind-editor__name-input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #8fa0b0 22%, transparent);
+  background: #0a0e14;
+  color: #e8eef3;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.symbol-kind-editor__name-input:focus {
+  outline: 1px solid color-mix(in srgb, #6cb6ea 55%, transparent);
+  border-color: color-mix(in srgb, #6cb6ea 40%, transparent);
+}
+
+.symbol-kind-editor__badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.symbol-kind-editor__delete {
+  align-self: center;
+}
+
+.symbol-kind-editor__error {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #ff9a9a;
+}
+
+.symbol-kind-editor__foot {
+  display: flex;
+  justify-content: flex-start;
+}

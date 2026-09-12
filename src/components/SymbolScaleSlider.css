@@ -1,0 +1,30 @@
+.symbol-scale-slider {
+  display: grid;
+  gap: 4px;
+}
+
+.symbol-scale-slider__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.symbol-scale-slider__label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.symbol-scale-slider__value {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: #d5dde5;
+}
+
+.symbol-scale-slider__input {
+  width: 100%;
+  accent-color: #6cb6ea;
+  cursor: pointer;
+}

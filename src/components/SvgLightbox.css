@@ -1,0 +1,127 @@
+.svg-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.svg-lightbox__backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: color-mix(in srgb, #05080c 78%, transparent);
+  cursor: pointer;
+}
+
+.svg-lightbox__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: calc(100vw - 32px);
+  height: calc(100vh - 32px);
+  max-width: none;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #9eb0bf 28%, transparent);
+  background: color-mix(in srgb, #121820 94%, #000 6%);
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 45%, transparent);
+  box-sizing: border-box;
+}
+
+.svg-lightbox__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.svg-lightbox__label {
+  margin-right: 0.35rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9eb0bf;
+}
+
+.svg-lightbox__btn {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, #c5d0da 28%, transparent);
+  background: color-mix(in srgb, #1a222c 90%, #fff 10%);
+  color: #eef3f7;
+  border-radius: 6px;
+  min-width: 2rem;
+  height: 1.9rem;
+  padding: 0 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.svg-lightbox__btn:hover {
+  border-color: color-mix(in srgb, #d4a24c 55%, transparent);
+}
+
+.svg-lightbox__btn--close {
+  margin-left: auto;
+}
+
+.svg-lightbox__zoom {
+  min-width: 3.25rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: #b7c4d0;
+}
+
+.svg-lightbox__viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #c5ced6 40%, transparent);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7f7f4 100%),
+    #ffffff;
+  touch-action: none;
+  user-select: none;
+}
+
+.svg-lightbox__viewport--pannable {
+  cursor: grab;
+}
+
+.svg-lightbox__viewport--dragging {
+  cursor: grabbing;
+}
+
+.svg-lightbox__img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  max-width: none;
+  width: auto;
+  height: auto;
+  transform-origin: 0 0;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
