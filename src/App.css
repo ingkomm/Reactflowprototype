@@ -343,3 +343,69 @@ body.is-resizing-inspector .react-flow {
     max-height: none;
   }
 }
+
+
+/* Universe ↔ Galaxy sheet transitions (visual only; coordinates stay separate). */
+.sheet-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template: 1fr / 1fr;
+}
+
+.sheet-stage--locked {
+  pointer-events: none;
+}
+
+.sheet-layer {
+  grid-area: 1 / 1;
+  min-height: 0;
+  height: 100%;
+  will-change: transform, opacity;
+}
+
+.sheet-layer--universe-leaving {
+  animation: sheet-universe-leave 200ms ease-out forwards;
+}
+
+.sheet-layer--universe-entering {
+  animation: sheet-universe-enter 200ms ease-out forwards;
+}
+
+.sheet-layer--galaxy-entering {
+  animation: sheet-galaxy-enter 200ms ease-out forwards;
+}
+
+.sheet-layer--galaxy-leaving {
+  animation: sheet-galaxy-leave 200ms ease-out forwards;
+}
+
+@keyframes sheet-universe-leave {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.14); }
+}
+
+@keyframes sheet-universe-enter {
+  from { opacity: 0; transform: scale(1.14); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sheet-galaxy-enter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sheet-galaxy-leave {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-layer--universe-leaving,
+  .sheet-layer--universe-entering,
+  .sheet-layer--galaxy-entering,
+  .sheet-layer--galaxy-leaving {
+    animation-duration: 1ms;
+  }
+}

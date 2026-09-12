@@ -104,13 +104,17 @@
   height: 72px;
   border: none;
   background: transparent;
-  cursor: grab;
+  cursor: pointer;
   padding: 0;
   color: inherit;
   touch-action: none;
 }
 
-.galaxy-gateway:active {
+.galaxy-gateway--editable {
+  cursor: grab;
+}
+
+.galaxy-gateway--editable:active {
   cursor: grabbing;
 }
 

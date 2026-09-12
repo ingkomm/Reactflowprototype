@@ -8,8 +8,12 @@ type Props = {
   galaxies: GalaxyDocumentV03[]
   selectedGalaxyId: string | null
   highlightGalaxyId?: string | null
+  /** When false, structure tools are hidden and gateway drag is disabled. */
+  editing?: boolean
+  onEditingChange?: (editing: boolean) => void
+  navigationLocked?: boolean
   onSelectGalaxy: (galaxyId: string) => void
-  onEnterGalaxy: (galaxyId: string) => void
+  onEnterGalaxy: (galaxyId: string, originPct: { x: number; y: number }) => void
   onMoveGalaxy: (galaxyId: string, position: { x: number; y: number }) => void
   onCreateGalaxy: () => void
   onRenameGalaxy: (galaxyId: string) => void
@@ -27,6 +31,9 @@ export function UniverseSheet({
   galaxies,
   selectedGalaxyId,
   highlightGalaxyId = null,
+  editing: editingProp,
+  onEditingChange,
+  navigationLocked = false,
   onSelectGalaxy,
   onEnterGalaxy,
   onMoveGalaxy,
@@ -35,8 +42,16 @@ export function UniverseSheet({
   onDeleteGalaxy,
   onOpenReferenceLibrary,
 }: Props) {
+  const sheetRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<HTMLDivElement>(null)
   const [surfaceSize, setSurfaceSize] = useState({ w: 800, h: 500 })
+  const [uncontrolledEditing, setUncontrolledEditing] = useState(false)
+  const editing = editingProp ?? uncontrolledEditing
+  const setEditing = (next: boolean) => {
+    onEditingChange?.(next)
+    if (editingProp === undefined) setUncontrolledEditing(next)
+  }
+
   const dragRef = useRef<{
     galaxyId: string
     pointerId: number
@@ -80,6 +95,19 @@ export function UniverseSheet({
     [offsetX, offsetY, scale, width, height],
   )
 
+  const originPctFromEvent = (event: React.MouseEvent<HTMLElement>) => {
+    const sheet = sheetRef.current
+    if (!sheet) return { x: 50, y: 50 }
+    const sheetRect = sheet.getBoundingClientRect()
+    const targetRect = event.currentTarget.getBoundingClientRect()
+    const cx = targetRect.left + targetRect.width / 2 - sheetRect.left
+    const cy = targetRect.top + targetRect.height / 2 - sheetRect.top
+    return {
+      x: sheetRect.width > 0 ? (cx / sheetRect.width) * 100 : 50,
+      y: sheetRect.height > 0 ? (cy / sheetRect.height) * 100 : 50,
+    }
+  }
+
   const onPointerDownGateway = (
     event: React.PointerEvent<HTMLButtonElement>,
     galaxy: GalaxyDocumentV03,
@@ -88,7 +116,8 @@ export function UniverseSheet({
     event.preventDefault()
     event.stopPropagation()
     onSelectGalaxy(galaxy.id)
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (!editing || navigationLocked) return
+    event.currentTarget.setPointerCapture?.(event.pointerId)
     dragRef.current = {
       galaxyId: galaxy.id,
       pointerId: event.pointerId,
@@ -102,6 +131,7 @@ export function UniverseSheet({
   }
 
   const onPointerMoveGateway = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!editing) return
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     const logical = toLogical(event.clientX, event.clientY)
@@ -114,48 +144,94 @@ export function UniverseSheet({
     dragRef.current = null
     const logical = toLogical(event.clientX, event.clientY)
     setDragPreview(null)
+    if (!editing) return
     const moved =
       Math.hypot(logical.x - drag.origin.x, logical.y - drag.origin.y) > 2
     if (moved) onMoveGalaxy(drag.galaxyId, logical)
   }
 
+  const enterGalaxy = (galaxyId: string, event: React.MouseEvent<HTMLElement>) => {
+    if (navigationLocked) return
+    setEditing(false)
+    onEnterGalaxy(galaxyId, originPctFromEvent(event))
+  }
+
   return (
-    <div className="universe-sheet" data-testid="universe-sheet">
+    <div
+      ref={sheetRef}
+      className={[
+        'universe-sheet',
+        editing ? 'universe-sheet--editing' : 'universe-sheet--exploring',
+      ].join(' ')}
+      data-testid="universe-sheet"
+      data-editing={editing ? 'true' : 'false'}
+    >
       <div className="universe-sheet__toolbar">
         <div className="universe-sheet__toolbar-left">
           <span className="universe-sheet__title">Universe</span>
           <span className="universe-sheet__meta">
             {width} × {height} · {galaxies.length} galaxies
+            {editing ? ' · Edit Mode' : ''}
           </span>
         </div>
         <div className="universe-sheet__toolbar-actions">
-          <button type="button" className="btn" onClick={onOpenReferenceLibrary}>
-            Reference Library
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            data-testid="universe-new-galaxy"
-            onClick={onCreateGalaxy}
-          >
-            + Galaxy
-          </button>
           <button
             type="button"
             className="btn"
-            disabled={!selectedGalaxyId}
-            onClick={() => selectedGalaxyId && onRenameGalaxy(selectedGalaxyId)}
+            data-testid="universe-reference-library"
+            onClick={onOpenReferenceLibrary}
           >
-            Rename
+            Reference Library
           </button>
-          <button
-            type="button"
-            className="btn btn--danger"
-            disabled={!selectedGalaxyId || galaxies.length <= 1}
-            onClick={() => selectedGalaxyId && onDeleteGalaxy(selectedGalaxyId)}
-          >
-            Delete
-          </button>
+          {editing ? (
+            <>
+              <button
+                type="button"
+                className="btn btn--primary"
+                data-testid="universe-new-galaxy"
+                disabled={navigationLocked}
+                onClick={onCreateGalaxy}
+              >
+                + Galaxy
+              </button>
+              <button
+                type="button"
+                className="btn"
+                data-testid="universe-rename-galaxy"
+                disabled={!selectedGalaxyId || navigationLocked}
+                onClick={() => selectedGalaxyId && onRenameGalaxy(selectedGalaxyId)}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                data-testid="universe-delete-galaxy"
+                disabled={!selectedGalaxyId || galaxies.length <= 1 || navigationLocked}
+                onClick={() => selectedGalaxyId && onDeleteGalaxy(selectedGalaxyId)}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="btn"
+                data-testid="universe-edit-done"
+                onClick={() => setEditing(false)}
+              >
+                Done
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn"
+              data-testid="universe-edit-toggle"
+              disabled={navigationLocked}
+              onClick={() => setEditing(true)}
+            >
+              Edit Universe
+            </button>
+          )}
         </div>
       </div>
 
@@ -187,6 +263,7 @@ export function UniverseSheet({
                   'galaxy-gateway',
                   selected ? 'galaxy-gateway--selected' : '',
                   highlighted ? 'galaxy-gateway--highlight' : '',
+                  editing ? 'galaxy-gateway--editable' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -203,7 +280,7 @@ export function UniverseSheet({
                 onDoubleClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  onEnterGalaxy(galaxy.id)
+                  enterGalaxy(galaxy.id, e)
                 }}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -220,7 +297,9 @@ export function UniverseSheet({
       </div>
 
       <p className="universe-sheet__hint">
-        Drag to move · Double-click to enter · At least one Galaxy required
+        {editing
+          ? 'Edit Mode · Drag gateways to move · Double-click to enter · Done to finish'
+          : 'Explore · Select a Galaxy · Double-click to enter · Edit Universe to rearrange'}
       </p>
     </div>
   )

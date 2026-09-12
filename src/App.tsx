@@ -127,6 +127,12 @@ import type { GraphAppWorldState } from './persistence/worldTypes'
 import { UniverseSheet } from './components/UniverseSheet'
 import { ReferenceLibrary } from './components/ReferenceLibrary'
 import { useWorldShell } from './useWorldShell'
+import {
+  type SheetTransition,
+  sheetTransitionDurationMs,
+  waitMs,
+} from './sheetTransition'
+import { universeGatewayOriginPct } from './galaxyRootCenter'
 import { snapshotFromGalaxyGraph } from './galaxyCanvas'
 import { stripWorldReferenceLinksForPortableExport } from './graphDocument'
 
@@ -478,6 +484,50 @@ export default function App() {
     setError: setWorldError,
   })
   const { nav } = worldShell
+  const [sheetTransition, setSheetTransition] = useState<SheetTransition>({ phase: 'idle' })
+  const [centerOnRootToken, setCenterOnRootToken] = useState(0)
+  const [universeEditing, setUniverseEditing] = useState(false)
+  const sheetTransitionLock = sheetTransition.phase !== 'idle'
+
+  const requestEnterGalaxy = useCallback(
+    async (galaxyId: string, originPct: { x: number; y: number }) => {
+      if (sheetTransition.phase !== 'idle') return
+      setUniverseEditing(false)
+      setSheetTransition({ phase: 'entering-galaxy', galaxyId, originPct })
+      const ms = sheetTransitionDurationMs()
+      await waitMs(ms)
+      await worldShell.enterGalaxy(galaxyId)
+      setCenterOnRootToken((n) => n + 1)
+      await waitMs(ms)
+      setSheetTransition({ phase: 'idle' })
+    },
+    [sheetTransition.phase, worldShell],
+  )
+
+  const requestReturnToUniverse = useCallback(async () => {
+    if (sheetTransition.phase !== 'idle') return
+    if (nav.mode !== 'galaxy' || !worldState) {
+      await worldShell.returnToUniverse()
+      setUniverseEditing(false)
+      return
+    }
+    const galaxyId = nav.galaxyId
+    const galaxy = worldState.world.galaxies.find((g) => g.id === galaxyId)
+    const originPct = galaxy
+      ? universeGatewayOriginPct(galaxy.universePosition, {
+          width: worldState.world.universe.width,
+          height: worldState.world.universe.height,
+        })
+      : { x: 50, y: 50 }
+    setSheetTransition({ phase: 'leaving-galaxy', galaxyId, originPct })
+    const ms = sheetTransitionDurationMs()
+    await waitMs(ms)
+    await worldShell.returnToUniverse()
+    setUniverseEditing(false)
+    await waitMs(ms)
+    setSheetTransition({ phase: 'idle' })
+  }, [sheetTransition.phase, nav, worldState, worldShell])
+
   const autosaveControls = useGraphAutosave(
     autosaveSnapshot,
     worldState,
@@ -2312,7 +2362,8 @@ export default function App() {
                     type="button"
                     className="btn"
                     data-testid="return-to-universe"
-                    onClick={() => void worldShell.returnToUniverse()}
+                    onClick={() => void requestReturnToUniverse()}
+                    disabled={sheetTransitionLock}
                   >
                     ↑ Universe
                   </button>
@@ -2403,83 +2454,139 @@ export default function App() {
               </p>
             ) : null}
 
-            {nav.mode === 'universe' && worldState ? (
-              <UniverseSheet
-                width={worldState.world.universe.width}
-                height={worldState.world.universe.height}
-                galaxies={worldState.world.galaxies}
-                selectedGalaxyId={worldShell.selectedUniverseGalaxyId}
-                highlightGalaxyId={worldShell.highlightGalaxyId}
-                onSelectGalaxy={worldShell.setSelectedUniverseGalaxyId}
-                onEnterGalaxy={(id) => void worldShell.enterGalaxy(id)}
-                onMoveGalaxy={(id, pos) => void worldShell.handleMoveGalaxy(id, pos)}
-                onCreateGalaxy={() => void worldShell.handleCreateGalaxy()}
-                onRenameGalaxy={(id) => void worldShell.handleRenameGalaxy(id)}
-                onDeleteGalaxy={(id) => void worldShell.handleDeleteGalaxy(id)}
-                onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
-              />
-            ) : (
-            <TreeWorkspace
-              inspectorWidth={inspectorWidth}
-              onOpenSymbolEditor={setSymbolEditorKind}
-              flowNodes={flowNodes}
-              edges={flowEdges}
-              poweredIds={poweredIds}
-              powerFlowMeta={powerFlowMeta}
-              voidHighlightEnabled={voidHighlightEnabled}
-              gridSnapEnabled={gridSnapEnabled}
-              gridSnapScale={gridSnapScale}
-              selectedNode={selectedNode}
-              selectedData={selectedData}
-              masteryLabel={selectedMasteryLabel}
-              masteryTierCount={selectedMasteryTierCount}
-              orbitMembers={orbitMembers}
-              focusLogId={focusLogId}
-              onFocusLogConsumed={() => setFocusLogId(null)}
-              onCreateFromTemplate={createFromTemplate}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={handleEdgesChange}
-              onConnect={onConnect}
-              isValidConnection={isValidConnection}
-              onSelectionChange={onSelectionChange}
-              onPaneClick={onPaneClick}
-              onNodeClick={onNodeClick}
-              onNodeDoubleClick={onNodeDoubleClick}
-              onNodeContextMenu={onNodeContextMenu}
-              floatingVideoNodeIds={floatingVideoNodeIds}
-              onCloseFloatingVideo={onCloseFloatingVideo}
-              onPinnedLogSelect={handlePinnedLogSelect}
-              onNodeDragStart={onNodeDragStart}
-              onNodeDrag={onNodeDrag}
-              onNodeDragStop={onNodeDragStop}
-              onEdgeDoubleClick={onEdgeDoubleClick}
-              onInspectorResizeStart={onInspectorResizeStart}
-              commit={commit}
-              selectedIdRef={selectedIdRef}
-              setNodes={setNodes}
-              stack={stack}
-              restoreFlowSelection={restoreFlowSelection}
-              onRename={onRenameNode}
-              onChangeKind={changeKind}
-              onChangeSymbolId={onChangeSymbolId}
-              onChangeStages={onChangeStages}
-              onChangeMarkdown={onChangeMarkdown}
-              references={worldState?.world.references ?? []}
-              onChangeReferenceId={onChangeReferenceId}
-              onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
-              onChangeConnectEnabled={changeConnectEnabled}
-              onChangeOrbitTierCount={changeOrbitTierCount}
-              onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
-              onChangeOrbitStartAngle={changeOrbitStartAngle}
-              onChangeOrbitOrder={changeOrbitOrder}
-              onChangeOrbitLocked={changeOrbitLocked}
-              onChangeOrbitCapacity={changeOrbitCapacity}
-              onChangeRootOrbitCapacity={changeRootOrbitCapacity}
-              onChangeRootOrbitStartAngle={changeRootOrbitStartAngle}
-              onDetachFromMastery={detachFromMastery}
-              onDeleteNode={deleteNode}
-            />
-            )}
+            {(() => {
+              const showUniverse =
+                (nav.mode === 'universe' || sheetTransition.phase === 'leaving-galaxy') && !!worldState
+              const showGalaxy =
+                nav.mode === 'galaxy' || sheetTransition.phase === 'entering-galaxy'
+              const originPct =
+                sheetTransition.phase === 'idle'
+                  ? { x: 50, y: 50 }
+                  : sheetTransition.originPct
+              const universeLayerClass = [
+                'sheet-layer',
+                'sheet-layer--universe',
+                sheetTransition.phase === 'entering-galaxy' ? 'sheet-layer--universe-leaving' : '',
+                sheetTransition.phase === 'leaving-galaxy' ? 'sheet-layer--universe-entering' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              const galaxyLayerClass = [
+                'sheet-layer',
+                'sheet-layer--galaxy',
+                sheetTransition.phase === 'entering-galaxy' ? 'sheet-layer--galaxy-entering' : '',
+                sheetTransition.phase === 'leaving-galaxy' ? 'sheet-layer--galaxy-leaving' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
+                <div
+                  className={[
+                    'sheet-stage',
+                    sheetTransitionLock ? 'sheet-stage--locked' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {showUniverse && worldState ? (
+                    <div
+                      className={universeLayerClass}
+                      style={{
+                        transformOrigin: `${originPct.x}% ${originPct.y}%`,
+                      }}
+                    >
+                      <UniverseSheet
+                        width={worldState.world.universe.width}
+                        height={worldState.world.universe.height}
+                        galaxies={worldState.world.galaxies}
+                        selectedGalaxyId={worldShell.selectedUniverseGalaxyId}
+                        highlightGalaxyId={
+                          sheetTransition.phase === 'leaving-galaxy' ||
+                          sheetTransition.phase === 'entering-galaxy'
+                            ? null
+                            : worldShell.highlightGalaxyId
+                        }
+                        editing={universeEditing}
+                        onEditingChange={setUniverseEditing}
+                        navigationLocked={sheetTransitionLock}
+                        onSelectGalaxy={worldShell.setSelectedUniverseGalaxyId}
+                        onEnterGalaxy={(id, origin) => void requestEnterGalaxy(id, origin)}
+                        onMoveGalaxy={(id, pos) => void worldShell.handleMoveGalaxy(id, pos)}
+                        onCreateGalaxy={() => void worldShell.handleCreateGalaxy()}
+                        onRenameGalaxy={(id) => void worldShell.handleRenameGalaxy(id)}
+                        onDeleteGalaxy={(id) => void worldShell.handleDeleteGalaxy(id)}
+                        onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
+                      />
+                    </div>
+                  ) : null}
+                  {showGalaxy ? (
+                    <div className={galaxyLayerClass}>
+                      <TreeWorkspace
+                        inspectorWidth={inspectorWidth}
+                        onOpenSymbolEditor={setSymbolEditorKind}
+                        flowNodes={flowNodes}
+                        edges={flowEdges}
+                        poweredIds={poweredIds}
+                        powerFlowMeta={powerFlowMeta}
+                        voidHighlightEnabled={voidHighlightEnabled}
+                        gridSnapEnabled={gridSnapEnabled}
+                        gridSnapScale={gridSnapScale}
+                        selectedNode={selectedNode}
+                        selectedData={selectedData}
+                        masteryLabel={selectedMasteryLabel}
+                        masteryTierCount={selectedMasteryTierCount}
+                        orbitMembers={orbitMembers}
+                        focusLogId={focusLogId}
+                        onFocusLogConsumed={() => setFocusLogId(null)}
+                        onCreateFromTemplate={createFromTemplate}
+                        onNodesChange={handleNodesChange}
+                        onEdgesChange={handleEdgesChange}
+                        onConnect={onConnect}
+                        isValidConnection={isValidConnection}
+                        onSelectionChange={onSelectionChange}
+                        onPaneClick={onPaneClick}
+                        onNodeClick={onNodeClick}
+                        onNodeDoubleClick={onNodeDoubleClick}
+                        onNodeContextMenu={onNodeContextMenu}
+                        floatingVideoNodeIds={floatingVideoNodeIds}
+                        onCloseFloatingVideo={onCloseFloatingVideo}
+                        onPinnedLogSelect={handlePinnedLogSelect}
+                        onNodeDragStart={onNodeDragStart}
+                        onNodeDrag={onNodeDrag}
+                        onNodeDragStop={onNodeDragStop}
+                        onEdgeDoubleClick={onEdgeDoubleClick}
+                        onInspectorResizeStart={onInspectorResizeStart}
+                        commit={commit}
+                        selectedIdRef={selectedIdRef}
+                        setNodes={setNodes}
+                        stack={stack}
+                        restoreFlowSelection={restoreFlowSelection}
+                        onRename={onRenameNode}
+                        onChangeKind={changeKind}
+                        onChangeSymbolId={onChangeSymbolId}
+                        onChangeStages={onChangeStages}
+                        onChangeMarkdown={onChangeMarkdown}
+                        references={worldState?.world.references ?? []}
+                        onChangeReferenceId={onChangeReferenceId}
+                        onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
+                        onChangeConnectEnabled={changeConnectEnabled}
+                        onChangeOrbitTierCount={changeOrbitTierCount}
+                        onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
+                        onChangeOrbitStartAngle={changeOrbitStartAngle}
+                        onChangeOrbitOrder={changeOrbitOrder}
+                        onChangeOrbitLocked={changeOrbitLocked}
+                        onChangeOrbitCapacity={changeOrbitCapacity}
+                        onChangeRootOrbitCapacity={changeRootOrbitCapacity}
+                        onChangeRootOrbitStartAngle={changeRootOrbitStartAngle}
+                        onDetachFromMastery={detachFromMastery}
+                        onDeleteNode={deleteNode}
+                        centerOnRootToken={centerOnRootToken}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })()}
 
             <ReferenceLibrary
               open={worldShell.referenceLibraryOpen}

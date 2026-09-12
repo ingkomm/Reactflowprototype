@@ -1,4 +1,4 @@
-import { useCallback, useRef, type DragEvent, type MouseEvent as ReactMouseEvent, type RefObject, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type DragEvent, type MouseEvent as ReactMouseEvent, type RefObject, type Dispatch, type SetStateAction } from 'react'
 import {
   ReactFlow,
   Background,
@@ -37,6 +37,8 @@ import { DEFAULT_ICON_BY_KIND } from '../types'
 import type { NodeTemplatePayload } from '../nodeTemplate'
 import { readPalettePayload } from '../nodeTemplate'
 import { NODE_SIZE } from '../orbit'
+import { GALAXY_ENTER_ROOT_ZOOM, rootCenterFromNodes } from '../galaxyRootCenter'
+import { INITIAL_NODE_ID } from '../types'
 import type { PowerFlowMeta } from '../power'
 import { FloatingVideoPopup } from './FloatingVideoPopup'
 import { FloatingVideoProvider } from '../FloatingVideoContext'
@@ -118,6 +120,44 @@ export type TreeWorkspaceProps = {
   onChangeRootOrbitStartAngle: (tier: OrbitTier, degrees: number) => void
   onDetachFromMastery: (nodeId: string) => void
   onDeleteNode: (nodeId: string) => void
+  /** Bump on Galaxy enter to center viewport on Root once (not on every node edit). */
+  centerOnRootToken?: number
+}
+
+
+function CenterOnRootController({ token }: { token: number }) {
+  const { setCenter, getNodes } = useReactFlow()
+  const appliedTokenRef = useRef(0)
+
+  useEffect(() => {
+    if (!token || token === appliedTokenRef.current) return
+    appliedTokenRef.current = token
+
+    let outer = 0
+    let inner = 0
+    outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        const center = rootCenterFromNodes(getNodes())
+        if (!center) {
+          const fallback = getNodes().find((n) => n.id === INITIAL_NODE_ID)
+          if (!fallback) return
+          const size = NODE_SIZE.initial
+          setCenter(fallback.position.x + size / 2, fallback.position.y + size / 2, {
+            zoom: GALAXY_ENTER_ROOT_ZOOM,
+            duration: 0,
+          })
+          return
+        }
+        setCenter(center.x, center.y, { zoom: GALAXY_ENTER_ROOT_ZOOM, duration: 0 })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(outer)
+      cancelAnimationFrame(inner)
+    }
+  }, [token, setCenter, getNodes])
+
+  return null
 }
 
 /** Stable shell for canvas + library + inspector (must not be nested inside App). */
@@ -180,6 +220,7 @@ export function TreeWorkspace({
   onChangeRootOrbitStartAngle,
   onDetachFromMastery,
   onDeleteNode,
+  centerOnRootToken = 0,
 }: TreeWorkspaceProps) {
   const canvasWrapperRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
@@ -276,7 +317,6 @@ export function TreeWorkspace({
               connectionLineType={ConnectionLineType.Straight}
               connectionLineComponent={RootAwareConnectionLine}
               connectionLineStyle={connectionLineStyle}
-              fitView
               elevateNodesOnSelect={false}
               deleteKeyCode={['Backspace', 'Delete']}
               defaultEdgeOptions={defaultEdgeOptions}
@@ -290,6 +330,7 @@ export function TreeWorkspace({
                 restoreSelection={restoreFlowSelection}
               />
               <ZoomKeyboardController />
+              <CenterOnRootController token={centerOnRootToken} />
               {gridSnapEnabled ? (
                 <Background
                   variant={BackgroundVariant.Dots}
