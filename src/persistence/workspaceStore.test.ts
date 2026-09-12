@@ -799,3 +799,97 @@ describe('legacy migration slot completion regressions', () => {
   })
 })
 
+
+describe('0.3-A1 final hardening: legacy read I/O vs no_legacy', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+  })
+
+  it('E: legacy migration needed + legacy getItem throws → failed (not no_legacy)', async () => {
+    const memory = new Map<string, string>()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => {
+          if (k === LEGACY_STORAGE_KEY || k === LEGACY_BACKUP_KEY) {
+            throw new DOMException(`blocked legacy read for ${k}`, 'SecurityError')
+          }
+          return memory.get(k) ?? null
+        },
+        setItem: (k: string, v: string) => {
+          memory.set(k, v)
+        },
+        removeItem: (k: string) => {
+          memory.delete(k)
+        },
+        clear: () => memory.clear(),
+        key: (i: number) => [...memory.keys()][i] ?? null,
+        get length() {
+          return memory.size
+        },
+      },
+    })
+
+    // Empty v0.2 destination → legacy migration would be required if keys were readable.
+    const store = installMemoryWorkspaceStore(createMemoryFsBackend())
+    const result = await migrateLegacyLocalStorageIfNeeded(store)
+    expect(result.status).toBe('failed')
+    expect(result.status).not.toBe('no_legacy')
+    if (result.status === 'failed') {
+      expect(result.message.toLowerCase()).toMatch(/legacy/)
+    }
+  })
+
+  it('Browser WorkspaceStore loadCurrent returns io when getItem throws', async () => {
+    const memory = new Map<string, string>()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => memory.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          memory.set(k, v)
+        },
+        removeItem: (k: string) => {
+          memory.delete(k)
+        },
+        clear: () => memory.clear(),
+        key: (i: number) => [...memory.keys()][i] ?? null,
+        get length() {
+          return memory.size
+        },
+      },
+    })
+    setWorkspaceStoreTestHooks({ isDesktop: false })
+    const store = await getWorkspaceStore()
+
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => {
+          if (k === LEGACY_STORAGE_KEY) {
+            throw new DOMException('blocked', 'SecurityError')
+          }
+          return memory.get(k) ?? null
+        },
+        setItem: (k: string, v: string) => {
+          memory.set(k, v)
+        },
+        removeItem: (k: string) => {
+          memory.delete(k)
+        },
+        clear: () => memory.clear(),
+        key: (i: number) => [...memory.keys()][i] ?? null,
+        get length() {
+          return memory.size
+        },
+      },
+    })
+
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(false)
+    if (!loaded.ok) {
+      expect(loaded.reason).toBe('io')
+      expect(loaded.reason).not.toBe('missing')
+    }
+  })
+})

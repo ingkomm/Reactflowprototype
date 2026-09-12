@@ -11,8 +11,11 @@ import { createMemoryFsBackend } from './fsBackend'
 import {
   BACKUP_MANIFEST_PATH,
   CURRENT_MANIFEST_PATH,
+  LEGACY_STORAGE_KEY,
+  getWorkspaceStore,
   installMemoryWorkspaceStore,
   resetWorkspaceStoreSingleton,
+  setWorkspaceStoreTestHooks,
 } from './workspaceStore'
 import {
   createNewSheet,
@@ -41,11 +44,14 @@ import {
   DEFAULT_UNIVERSE_WIDTH,
 } from './worldTypes'
 import {
+  WORLD_BACKUP_KEY,
   WORLD_BACKUP_MANIFEST_PATH,
   WORLD_CURRENT_MANIFEST_PATH,
+  WORLD_STORAGE_KEY,
   getWorldStore,
   installMemoryPersistencePair,
   migrateWorkspaceToWorldIfNeeded,
+  probeWorkspaceSlot,
   resetWorldStoreSingleton,
   setWorldStoreTestHooks,
   WorldStoreInitError,
@@ -813,3 +819,202 @@ describe('0.3-A1 startup fail-closed recovery', () => {
   })
 })
 
+
+describe('0.3-A1 final hardening: browser MISSING vs I/O', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
+  })
+
+  function installThrowingLocalStorage(
+    memory: Map<string, string>,
+    throwOnKeys: Set<string>,
+  ) {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => {
+          if (throwOnKeys.has(k)) {
+            throw new DOMException(`blocked read for ${k}`, 'SecurityError')
+          }
+          return memory.get(k) ?? null
+        },
+        setItem: (k: string, v: string) => {
+          memory.set(k, v)
+        },
+        removeItem: (k: string) => {
+          memory.delete(k)
+        },
+        clear: () => memory.clear(),
+        key: (i: number) => [...memory.keys()][i] ?? null,
+        get length() {
+          return memory.size
+        },
+      },
+    })
+  }
+
+  it('A: Browser WorldStore loadCurrent returns io when getItem throws (not missing)', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+    const store = await getWorldStore()
+
+    installThrowingLocalStorage(memory, new Set([WORLD_STORAGE_KEY]))
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(false)
+    if (!loaded.ok) {
+      expect(loaded.reason).toBe('io')
+      expect(loaded.reason).not.toBe('missing')
+    }
+  })
+
+  it('B: current getItem throws + backup missing → storageCorrupt, no bootstrap', async () => {
+    const memory = new Map<string, string>()
+    installThrowingLocalStorage(memory, new Set([WORLD_STORAGE_KEY]))
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(true)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).toBeNull()
+  })
+
+  it('C: current missing + backup getItem throws → storageCorrupt, no bootstrap', async () => {
+    const memory = new Map<string, string>()
+    installThrowingLocalStorage(memory, new Set([WORLD_BACKUP_KEY]))
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(true)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).toBeNull()
+  })
+
+  it('D: Browser WorkspaceStore v0.2 source getItem throw → probe failed (not missing)', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorkspaceStoreTestHooks({ isDesktop: false })
+    const workspace = await getWorkspaceStore()
+
+    installThrowingLocalStorage(memory, new Set([LEGACY_STORAGE_KEY]))
+    const probed = await probeWorkspaceSlot(workspace, 'current')
+    expect(probed.state).toBe('failed')
+    if (probed.state === 'failed') {
+      expect(probed.reason.toLowerCase()).toMatch(/io/)
+    }
+    expect(probed.state).not.toBe('missing')
+  })
+})
+
+describe('0.3-A1 final hardening: WorldStore init skips v0.2 when not needed', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
+  })
+
+  it('CASE A/B: valid v0.3 current+backup never calls getWorkspaceStore (trap count 0)', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+    const doc = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    expect((await saveDocumentToStorage(doc)).ok).toBe(true)
+    expect((await backupDocumentToStorage(doc)).ok).toBe(true)
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+
+    let workspaceInits = 0
+    setWorkspaceStoreTestHooks({
+      isDesktop: false,
+      onInit: () => {
+        workspaceInits += 1
+        throw new Error('v0.2 WorkspaceStore must not initialize when v0.3 is complete')
+      },
+    })
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const store = await getWorldStore()
+    expect(workspaceInits).toBe(0)
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(true)
+    const bak = await store.loadBackup()
+    expect(bak.ok).toBe(true)
+  })
+
+  it('CASE E: corrupt v0.3 current + valid backup recovers without opening Workspace', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+    const doc = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    expect((await saveDocumentToStorage(doc)).ok).toBe(true)
+    expect((await backupDocumentToStorage(doc)).ok).toBe(true)
+    memory.set(WORLD_STORAGE_KEY, '{corrupt-v03-current')
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+
+    let workspaceInits = 0
+    setWorkspaceStoreTestHooks({
+      isDesktop: false,
+      onInit: () => {
+        workspaceInits += 1
+        throw new Error('legacy/v0.2 must not gate v0.3 backup recovery')
+      },
+    })
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const initial = await resolveInitialGraphState()
+    expect(workspaceInits).toBe(0)
+    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).not.toBeNull()
+  })
+
+  it('CASE F: missing v0.3 current + valid backup recovers without opening Workspace', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    setWorldStoreTestHooks({ isDesktop: false })
+    const backupDoc = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: false })
+    expect((await backupDocumentToStorage(backupDoc)).ok).toBe(true)
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+
+    let workspaceInits = 0
+    setWorkspaceStoreTestHooks({
+      isDesktop: false,
+      onInit: () => {
+        workspaceInits += 1
+        throw new Error('legacy/v0.2 must not gate v0.3 backup recovery')
+      },
+    })
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const initial = await resolveInitialGraphState()
+    expect(workspaceInits).toBe(0)
+    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).not.toBeNull()
+  })
+
+  it('CASE C: missing v0.3 slots that need migration still open Workspace source', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(docWithSymbols([MARKUP])))
+
+    let workspaceInits = 0
+    setWorkspaceStoreTestHooks({
+      isDesktop: false,
+      onInit: () => {
+        workspaceInits += 1
+      },
+    })
+    setWorldStoreTestHooks({ isDesktop: false })
+
+    const store = await getWorldStore()
+    expect(workspaceInits).toBe(1)
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(true)
+  })
+})

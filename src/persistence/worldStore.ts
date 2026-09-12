@@ -43,6 +43,7 @@ import {
   type WorldManifestV03,
   type WorldSaveResult,
 } from './worldTypes'
+import { readBrowserStorageKey } from './browserStorage'
 import {
   getWorkspaceStore,
   installMemoryWorkspaceStore,
@@ -313,14 +314,6 @@ function createBrowserWorldStore(): WorldStore {
   const CURRENT_KEY = WORLD_STORAGE_KEY
   const BACKUP_KEY = WORLD_BACKUP_KEY
 
-  const readKey = (key: string): string | null => {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  }
-
   const writeKey = (key: string, value: string): WorldSaveResult => {
     if (utf8ByteLength(value) > MAX_BROWSER_AUTOSAVE_BYTES) {
       return { ok: false, reason: 'too_large', message: 'browser autosave limit exceeded' }
@@ -334,10 +327,13 @@ function createBrowserWorldStore(): WorldStore {
   }
 
   const loadKey = async (key: string): Promise<WorldLoadResult> => {
-    const raw = readKey(key)
-    if (raw == null) return { ok: false, reason: 'missing', message: 'missing' }
+    const read = readBrowserStorageKey(key)
+    if (!read.ok) {
+      return { ok: false, reason: 'io', message: read.message }
+    }
+    if (read.value == null) return { ok: false, reason: 'missing', message: 'missing' }
 
-    const manifest = parseWorldManifestJson(raw)
+    const manifest = parseWorldManifestJson(read.value)
     if (!manifest) {
       return { ok: false, reason: 'corrupt', message: 'corrupt world localStorage payload' }
     }
@@ -346,9 +342,12 @@ function createBrowserWorldStore(): WorldStore {
   }
 
   const previousMap = async (key: string): Promise<Map<string, string> | undefined> => {
-    const raw = readKey(key)
-    if (!raw) return undefined
-    const manifest = parseWorldManifestJson(raw)
+    const read = readBrowserStorageKey(key)
+    if (!read.ok) {
+      throw new Error(read.message)
+    }
+    if (!read.value) return undefined
+    const manifest = parseWorldManifestJson(read.value)
     if (!manifest) return undefined
     return galaxySymbolAssetIdMap(manifest)
   }
@@ -356,9 +355,12 @@ function createBrowserWorldStore(): WorldStore {
   const browserRefs = async (): Promise<Set<string>> => {
     const keep = new Set<string>()
     for (const key of [CURRENT_KEY, BACKUP_KEY]) {
-      const raw = readKey(key)
-      if (!raw) continue
-      const manifest = parseWorldManifestJson(raw)
+      const read = readBrowserStorageKey(key)
+      if (!read.ok) {
+        throw new Error(read.message)
+      }
+      if (!read.value) continue
+      const manifest = parseWorldManifestJson(read.value)
       if (!manifest) continue
       for (const id of collectAssetIdsFromWorldManifest(manifest)) keep.add(id)
     }
@@ -407,10 +409,18 @@ function createBrowserWorldStore(): WorldStore {
     kind: 'browser',
     assets,
     async hasCurrent() {
-      return readKey(CURRENT_KEY) != null
+      const read = readBrowserStorageKey(CURRENT_KEY)
+      if (!read.ok) {
+        throw new Error(read.message)
+      }
+      return read.value != null
     },
     async hasBackup() {
-      return readKey(BACKUP_KEY) != null
+      const read = readBrowserStorageKey(BACKUP_KEY)
+      if (!read.ok) {
+        throw new Error(read.message)
+      }
+      return read.value != null
     },
     loadCurrent: () => loadKey(CURRENT_KEY),
     loadBackup: () => loadKey(BACKUP_KEY),
@@ -600,6 +610,19 @@ async function planSlotMigration(
 }
 
 /**
+ * True when getWorldStore must acquire v0.2 Workspace as a migration source.
+ * v0.2 is not a permanent runtime dependency: if any v0.3 slot is already valid,
+ * missing sibling slots are optional and must not gate startup on legacy/v0.2 init.
+ */
+async function worldNeedsMigrationSource(worldStore: WorldStore): Promise<boolean> {
+  const current = await probeWorldSlot(worldStore, 'current')
+  const backup = await probeWorldSlot(worldStore, 'backup')
+  const anyValid = current.state === 'valid' || backup.state === 'valid'
+  if (anyValid) return false
+  return current.state === 'missing' || backup.state === 'missing'
+}
+
+/**
  * Migrate v0.2 Workspace current/backup slots into v0.3 World slots independently.
  * Destination-first: a valid v0.3 slot never depends on reading its v0.2 source.
  * Never deletes or overwrites v0.2 source. Never overwrites an existing v0.3 slot
@@ -710,21 +733,7 @@ export async function getWorldStore(): Promise<WorldStore> {
 
   singletonPromise = (async () => {
     try {
-      let workspace: WorkspaceStore
-      try {
-        workspace = await getWorkspaceStore()
-      } catch (err) {
-        if (err instanceof WorkspaceStoreInitError) {
-          initFailure = new WorldStoreInitError(err.message, {
-            cause: err,
-            reason: 'workspace_init',
-          })
-          singleton = null
-          throw initFailure
-        }
-        throw err
-      }
-
+      // Create v0.3 WorldStore first — do not open v0.2 Workspace until destination probes say we need it.
       let store: WorldStore
       if (isDesktop) {
         try {
@@ -742,19 +751,34 @@ export async function getWorldStore(): Promise<WorldStore> {
           singleton = null
           throw initFailure
         }
-      } else if (workspace.kind === 'memory') {
-        store = createFsWorldStore(createMemoryFsBackend(), 'memory')
       } else {
         store = createBrowserWorldStore()
       }
 
-      const migration = await migrateWorkspaceToWorldIfNeeded(workspace, store)
-      if (migration.status === 'failed') {
-        initFailure = new WorldStoreInitError(`World migration failed: ${migration.message}`, {
-          reason: 'world_migration',
-        })
-        singleton = null
-        throw initFailure
+      if (await worldNeedsMigrationSource(store)) {
+        let workspace: WorkspaceStore
+        try {
+          workspace = await getWorkspaceStore()
+        } catch (err) {
+          if (err instanceof WorkspaceStoreInitError) {
+            initFailure = new WorldStoreInitError(err.message, {
+              cause: err,
+              reason: 'workspace_init',
+            })
+            singleton = null
+            throw initFailure
+          }
+          throw err
+        }
+
+        const migration = await migrateWorkspaceToWorldIfNeeded(workspace, store)
+        if (migration.status === 'failed') {
+          initFailure = new WorldStoreInitError(`World migration failed: ${migration.message}`, {
+            reason: 'world_migration',
+          })
+          singleton = null
+          throw initFailure
+        }
       }
 
       singleton = store

@@ -16,6 +16,7 @@ import {
 import { MAX_BROWSER_AUTOSAVE_BYTES, utf8ByteLength } from '../limits'
 import { isDesktopGraphExportSupported } from '../platform/graphExport'
 import type { AssetStore } from './assetStore'
+import { readBrowserStorageKey } from './browserStorage'
 import { createFileAssetStore, createLocalStorageAssetStore } from './fileAssetStore'
 import {
   createMemoryFsBackend,
@@ -299,14 +300,6 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
   const CURRENT_KEY = LEGACY_STORAGE_KEY
   const BACKUP_KEY = LEGACY_BACKUP_KEY
 
-  const readKey = (key: string): string | null => {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  }
-
   const writeKey = (key: string, value: string): WorkspaceSaveResult => {
     if (utf8ByteLength(value) > MAX_BROWSER_AUTOSAVE_BYTES) {
       return { ok: false, reason: 'too_large', message: 'browser autosave limit exceeded' }
@@ -320,24 +313,30 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
   }
 
   const loadKey = async (key: string): Promise<WorkspaceLoadResult> => {
-    const raw = readKey(key)
-    if (raw == null) return { ok: false, reason: 'missing', message: 'missing' }
+    const read = readBrowserStorageKey(key)
+    if (!read.ok) {
+      return { ok: false, reason: 'io', message: read.message }
+    }
+    if (read.value == null) return { ok: false, reason: 'missing', message: 'missing' }
 
-    const manifest = parseWorkspaceManifestJson(raw)
+    const manifest = parseWorkspaceManifestJson(read.value)
     if (manifest) {
       const hydrated = await hydrateManifest(manifest, assets)
       return finalizeHydratedLoad(hydrated)
     }
 
-    const legacy = parseGraphDocumentJson(raw)
+    const legacy = parseGraphDocumentJson(read.value)
     if (legacy.ok) return { ok: true, document: legacy.document, issues: [] }
     return { ok: false, reason: 'corrupt', message: 'corrupt localStorage payload' }
   }
 
   const previousMap = async (key: string): Promise<Map<string, string> | undefined> => {
-    const raw = readKey(key)
-    if (!raw) return undefined
-    const manifest = parseWorkspaceManifestJson(raw)
+    const read = readBrowserStorageKey(key)
+    if (!read.ok) {
+      throw new Error(read.message)
+    }
+    if (!read.value) return undefined
+    const manifest = parseWorkspaceManifestJson(read.value)
     if (!manifest) return undefined
     return symbolIdToAssetIdMap(manifest)
   }
@@ -345,9 +344,12 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
   const browserRefs = async (): Promise<Set<string>> => {
     const keep = new Set<string>()
     for (const key of [CURRENT_KEY, BACKUP_KEY]) {
-      const raw = readKey(key)
-      if (!raw) continue
-      const manifest = parseWorkspaceManifestJson(raw)
+      const read = readBrowserStorageKey(key)
+      if (!read.ok) {
+        throw new Error(read.message)
+      }
+      if (!read.value) continue
+      const manifest = parseWorkspaceManifestJson(read.value)
       if (!manifest) continue
       for (const id of collectAssetIdsFromManifest(manifest)) keep.add(id)
     }
@@ -390,10 +392,18 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
     kind: 'browser',
     assets,
     async hasCurrent() {
-      return readKey(CURRENT_KEY) != null
+      const read = readBrowserStorageKey(CURRENT_KEY)
+      if (!read.ok) {
+        throw new Error(read.message)
+      }
+      return read.value != null
     },
     async hasBackup() {
-      return readKey(BACKUP_KEY) != null
+      const read = readBrowserStorageKey(BACKUP_KEY)
+      if (!read.ok) {
+        throw new Error(read.message)
+      }
+      return read.value != null
     },
     loadCurrent: () => loadKey(CURRENT_KEY),
     loadBackup: () => loadKey(BACKUP_KEY),
@@ -432,13 +442,22 @@ export async function migrateLegacyLocalStorageIfNeeded(
 ): Promise<LegacyMigrationResult> {
   let primaryRaw: string | null = null
   let backupRaw: string | null = null
-  try {
-    primaryRaw = localStorage.getItem(LEGACY_STORAGE_KEY)
-    backupRaw = localStorage.getItem(LEGACY_BACKUP_KEY)
-  } catch {
-    // Cannot read legacy keys — treat as nothing to migrate (do not fail init).
-    return { status: 'no_legacy' }
+  const primaryRead = readBrowserStorageKey(LEGACY_STORAGE_KEY)
+  if (!primaryRead.ok) {
+    return {
+      status: 'failed',
+      message: `legacy primary localStorage read failed (${primaryRead.message})`,
+    }
   }
+  const backupRead = readBrowserStorageKey(LEGACY_BACKUP_KEY)
+  if (!backupRead.ok) {
+    return {
+      status: 'failed',
+      message: `legacy backup localStorage read failed (${backupRead.message})`,
+    }
+  }
+  primaryRaw = primaryRead.value
+  backupRaw = backupRead.value
 
   const legacyPrimaryExists = primaryRaw != null
   const legacyBackupExists = backupRaw != null
@@ -535,6 +554,8 @@ type WorkspaceStoreTestHooks = {
   isDesktop?: boolean | null
   /** When set, replaces Tauri AppData FS factory for tests. */
   createDesktopFs?: (() => Promise<FsBackend>) | null
+  /** Test-only: invoked when getWorkspaceStore begins a real init (not cached singleton). */
+  onInit?: (() => void) | null
 }
 
 let testHooks: WorkspaceStoreTestHooks = {}
@@ -568,6 +589,8 @@ export async function getWorkspaceStore(): Promise<WorkspaceStore> {
   if (initFailure) throw initFailure
   if (singleton) return singleton
   if (singletonPromise) return singletonPromise
+
+  testHooks.onInit?.()
 
   const isDesktop =
     testHooks.isDesktop != null ? testHooks.isDesktop : isDesktopGraphExportSupported()
