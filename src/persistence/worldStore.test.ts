@@ -9,6 +9,7 @@ import {
 import { EMPTY_GRAPH_EDGES, EMPTY_GRAPH_NODES } from '../emptyGraph'
 import { createMemoryFsBackend } from './fsBackend'
 import {
+  BACKUP_MANIFEST_PATH,
   CURRENT_MANIFEST_PATH,
   installMemoryWorkspaceStore,
   resetWorkspaceStoreSingleton,
@@ -22,6 +23,7 @@ import {
 } from '../useGraphApp'
 import {
   BOOTSTRAP_KEY,
+  backupDocumentToStorage,
   loadDocumentFromStorage,
   saveDocumentToStorage,
   writeBootstrapChoice,
@@ -596,3 +598,218 @@ describe('0.3-A1 hardening regressions', () => {
     expect(state.world.galaxies[1]!.universePosition).toEqual({ x: 200, y: 200 })
   })
 })
+
+describe('0.3-A1 destination-first migration', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
+  })
+
+  it('v0.3 current valid + v0.2 current corrupt → succeeds without reading/overwriting v0.3', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const good = wrapGraphAsDefaultWorld(docWithSymbols([MARKUP], { gridSnapEnabled: true }))
+    expect((await world.saveCurrent(good)).ok).toBe(true)
+    const before = JSON.stringify((await world.loadCurrent() as { ok: true; world: unknown }).world)
+
+    await fs.mkdir('storage-v02', { recursive: true })
+    await fs.writeTextFile(CURRENT_MANIFEST_PATH, '{corrupt-v02-current')
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('already_migrated')
+
+    const after = await world.loadCurrent()
+    expect(after.ok).toBe(true)
+    if (!after.ok) return
+    expect(JSON.stringify(after.world)).toBe(before)
+    expect(await fs.readTextFile(CURRENT_MANIFEST_PATH)).toBe('{corrupt-v02-current')
+  })
+
+  it('v0.3 current valid → corresponding v0.2 current load is never called', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const good = wrapGraphAsDefaultWorld(docWithSymbols([MARKUP]))
+    expect((await world.saveCurrent(good)).ok).toBe(true)
+
+    let v02CurrentLoads = 0
+    const originalLoad = workspace.loadCurrent.bind(workspace)
+    workspace.loadCurrent = async () => {
+      v02CurrentLoads += 1
+      throw new Error('v0.2 current must not be probed when v0.3 current is valid')
+    }
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('already_migrated')
+    expect(v02CurrentLoads).toBe(0)
+
+    workspace.loadCurrent = originalLoad
+    const loaded = await world.loadCurrent()
+    expect(loaded.ok).toBe(true)
+  })
+
+  it('v0.3 backup valid + v0.2 backup corrupt → succeeds', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const bak = wrapGraphAsDefaultWorld(docWithSymbols([RASTER_MARKUP]))
+    expect((await world.saveBackup(bak)).ok).toBe(true)
+    // Also put a valid current so overall isn't no_source-only edge
+    expect((await world.saveCurrent(wrapGraphAsDefaultWorld(docWithSymbols([MARKUP])))).ok).toBe(true)
+
+    await fs.mkdir('storage-v02', { recursive: true })
+    await fs.writeTextFile(
+      BACKUP_MANIFEST_PATH,
+      '{corrupt-v02-backup',
+    )
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('already_migrated')
+    const loaded = await world.loadBackup()
+    expect(loaded.ok).toBe(true)
+  })
+
+  it('v0.3 current missing + v0.2 current corrupt → migration failed', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    await fs.mkdir('storage-v02', { recursive: true })
+    await fs.writeTextFile(CURRENT_MANIFEST_PATH, '{corrupt-v02-current')
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('failed')
+    expect(await world.hasCurrent()).toBe(false)
+  })
+
+  it('v0.3 current corrupt + v0.2 current valid → fail closed, destination unchanged', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const source = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    expect((await workspace.saveCurrent(source)).ok).toBe(true)
+
+    const corrupt = '{corrupt-v03-current'
+    await fs.writeTextFile(WORLD_CURRENT_MANIFEST_PATH, corrupt)
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('failed')
+    expect(await fs.readTextFile(WORLD_CURRENT_MANIFEST_PATH)).toBe(corrupt)
+  })
+
+  it('v0.3 current valid + backup missing + v0.2 backup valid → only backup migrates', async () => {
+    const fs = createMemoryFsBackend()
+    const { workspace, world } = installMemoryPersistencePair(fs)
+    const currentGraph = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    const backupGraph = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: false })
+    expect((await world.saveCurrent(wrapGraphAsDefaultWorld(currentGraph))).ok).toBe(true)
+    expect((await workspace.saveBackup(backupGraph)).ok).toBe(true)
+
+    const currentJsonBefore = JSON.stringify(
+      (await world.loadCurrent() as { ok: true; world: unknown }).world,
+    )
+
+    let v02CurrentLoads = 0
+    const originalLoad = workspace.loadCurrent.bind(workspace)
+    workspace.loadCurrent = async () => {
+      v02CurrentLoads += 1
+      return originalLoad()
+    }
+
+    const result = await migrateWorkspaceToWorldIfNeeded(workspace, world)
+    expect(result.status).toBe('migrated')
+    expect(v02CurrentLoads).toBe(0)
+
+    const currentAfter = await world.loadCurrent()
+    expect(currentAfter.ok).toBe(true)
+    if (!currentAfter.ok) return
+    expect(JSON.stringify(currentAfter.world)).toBe(currentJsonBefore)
+
+    const bak = await world.loadBackup()
+    expect(bak.ok).toBe(true)
+    if (!bak.ok) return
+    expect(graphDocumentsEqual(backupGraph, getActiveGalaxyGraph(bak.world)!)).toBe(true)
+
+    workspace.loadCurrent = originalLoad
+  })
+})
+
+describe('0.3-A1 startup fail-closed recovery', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+    resetWorldStoreSingleton()
+  })
+
+  it('A: current I/O failure + backup missing → storageCorrupt, no bootstrap', async () => {
+    const fs = createMemoryFsBackend()
+    installMemoryPersistencePair(fs)
+    await fs.mkdir('storage-v03', { recursive: true })
+    await fs.writeTextFile(WORLD_CURRENT_MANIFEST_PATH, '{"storageVersion":"0.3"}')
+
+    const originalRead = fs.readTextFile.bind(fs)
+    fs.readTextFile = async (path) => {
+      if (String(path).includes('storage-v03') && String(path).includes('current.json')) {
+        throw new Error('forced current I/O failure')
+      }
+      return originalRead(path)
+    }
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(true)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).toBeNull()
+  })
+
+  it('B: current corrupt + backup valid → recover from backup', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    const doc = docWithSymbols([MARKUP], { gridSnapEnabled: true })
+    expect((await saveDocumentToStorage(doc)).ok).toBe(true)
+    expect((await backupDocumentToStorage(doc)).ok).toBe(true)
+
+    // Corrupt current while leaving backup intact.
+    const { WORLD_CURRENT_KEY } = await import('./autosave')
+    memory.set(WORLD_CURRENT_KEY, '{not-json')
+
+    resetWorldStoreSingleton()
+    resetWorkspaceStoreSingleton()
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).not.toBeNull()
+    if (!initial.snapshot) return
+    expect(initial.snapshot.settings.gridSnapEnabled).toBe(true)
+  })
+
+  it('C: current missing + backup valid → recover from backup', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    const backupDoc = docWithSymbols([RASTER_MARKUP], { gridSnapEnabled: false })
+    expect((await backupDocumentToStorage(backupDoc)).ok).toBe(true)
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).not.toBeNull()
+    const loaded = await loadDocumentFromStorage()
+    expect(loaded.ok).toBe(true)
+  })
+
+  it('D: current missing + backup I/O/corrupt → storageCorrupt, no bootstrap', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+    const { WORLD_BACKUP_STORAGE_KEY } = await import('./autosave')
+    memory.set(WORLD_BACKUP_STORAGE_KEY, '{corrupt-backup')
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(true)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).toBeNull()
+  })
+
+  it('E: current missing + backup missing → bootstrap path allowed', async () => {
+    const memory = new Map<string, string>()
+    installBrowserLocalStorage(memory)
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(false)
+    expect(initial.needsBootstrap).toBe(true)
+    expect(initial.snapshot).toBeNull()
+  })
+})
+

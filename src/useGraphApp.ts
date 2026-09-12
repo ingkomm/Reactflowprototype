@@ -10,7 +10,6 @@ import {
 import { EMPTY_GRAPH_EDGES, EMPTY_GRAPH_NODES } from './emptyGraph'
 import {
   backupDocumentToStorage,
-  hasStoredDocument,
   loadDocumentFromStorage,
   readBootstrapChoice,
   restoreBackupFromStorage,
@@ -81,6 +80,7 @@ export async function resolveInitialGraphState(): Promise<{
   storageCorrupt: boolean
 }> {
   try {
+    // Fail-closed: decide from load*/restore* results only — never hasStoredDocument().
     const stored = await loadDocumentFromStorage()
     if (stored.ok) {
       // Rewrite migrated legacy docs so the next load stays clean.
@@ -93,31 +93,34 @@ export async function resolveInitialGraphState(): Promise<{
       }
     }
 
-    if (await hasStoredDocument()) {
-      const backup = await restoreBackupFromStorage()
-      if (backup.ok) {
-        const rewritten = await saveDocumentToStorage(backup.document, backup.worldState)
-        return {
-          snapshot: snapshotFromDocument(backup.document),
-          worldState: rewritten.ok ? rewritten.worldState : backup.worldState,
-          needsBootstrap: false,
-          storageCorrupt: false,
-        }
-      }
-      return { snapshot: null, worldState: null, needsBootstrap: false, storageCorrupt: true }
-    }
-
-    const choice = readBootstrapChoice()
-    if (choice) {
+    const backup = await restoreBackupFromStorage()
+    if (backup.ok) {
+      // Recover from backup into current (covers corrupt/io current and missing current).
+      const rewritten = await saveDocumentToStorage(backup.document, backup.worldState)
       return {
-        snapshot: flowFromBootstrap(choice),
-        worldState: null,
+        snapshot: snapshotFromDocument(backup.document),
+        worldState: rewritten.ok ? rewritten.worldState : backup.worldState,
         needsBootstrap: false,
         storageCorrupt: false,
       }
     }
 
-    return { snapshot: null, worldState: null, needsBootstrap: true, storageCorrupt: false }
+    // Truly empty storage — only missing+missing may bootstrap.
+    if (stored.reason === 'missing' && backup.reason === 'missing') {
+      const choice = readBootstrapChoice()
+      if (choice) {
+        return {
+          snapshot: flowFromBootstrap(choice),
+          worldState: null,
+          needsBootstrap: false,
+          storageCorrupt: false,
+        }
+      }
+      return { snapshot: null, worldState: null, needsBootstrap: true, storageCorrupt: false }
+    }
+
+    // Any non-missing load failure without a recoverable backup → corrupt, no bootstrap.
+    return { snapshot: null, worldState: null, needsBootstrap: false, storageCorrupt: true }
   } catch (err) {
     if (err instanceof WorldStoreInitError || err instanceof WorkspaceStoreInitError) {
       return { snapshot: null, worldState: null, needsBootstrap: false, storageCorrupt: true }
@@ -159,10 +162,16 @@ export function useGraphAutosave(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snapshotRef = useRef(snapshot)
   const worldStateRef = useRef(worldState)
+  const onWorldStateChangeRef = useRef(onWorldStateChange)
+  const onStatusRef = useRef(onStatus)
   const generationRef = useRef(0)
   snapshotRef.current = snapshot
   worldStateRef.current = worldState
+  onWorldStateChangeRef.current = onWorldStateChange
+  onStatusRef.current = onStatus
 
+  // Callbacks held in refs so worldState updates (and unstable onStatus identities)
+  // cannot re-arm the autosave timer by themselves.
   const flush = useCallback(() => {
     if (!enabled) return
     const generation = ++generationRef.current
@@ -171,13 +180,13 @@ export function useGraphAutosave(
     void persistSnapshot(pending, pendingWorld).then((result) => {
       if (generation !== generationRef.current) return
       if (result.ok) {
-        onWorldStateChange(result.worldState)
-        onStatus?.('saved')
+        onWorldStateChangeRef.current(result.worldState)
+        onStatusRef.current?.('saved')
       } else {
-        onStatus?.('failed', result.reason)
+        onStatusRef.current?.('failed', result.reason)
       }
     })
-  }, [enabled, onStatus, onWorldStateChange])
+  }, [enabled])
 
   useEffect(() => {
     if (!enabled) return

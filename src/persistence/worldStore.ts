@@ -506,7 +506,6 @@ export type SlotProbe<T> =
   | { state: 'valid'; value: T }
   | { state: 'failed'; reason: string }
 
-type SlotAction = 'nothing' | 'migrate' | 'already' | 'preserve' | 'fail'
 
 function probeFromLoadResult<T>(
   loaded: { ok: true; value: T } | { ok: false; reason: string; message: string },
@@ -544,20 +543,65 @@ export async function probeWorldSlot(
   })
 }
 
-function decideSlotAction(
-  source: SlotProbe<unknown>,
-  dest: SlotProbe<unknown>,
-): SlotAction {
-  if (source.state === 'failed' || dest.state === 'failed') return 'fail'
-  if (source.state === 'missing' && dest.state === 'missing') return 'nothing'
-  if (source.state === 'valid' && dest.state === 'missing') return 'migrate'
-  if (source.state === 'valid' && dest.state === 'valid') return 'already'
-  // source missing + dest valid
-  return 'preserve'
+type SlotPlan =
+  | { action: 'already' }
+  | { action: 'nothing' }
+  | { action: 'migrate' }
+  | { action: 'blocked' } // corrupt/io dest with no migratable source — not init-fatal alone
+  | { action: 'fail'; message: string }
+
+/**
+ * Destination-first plan for one slot.
+ * Valid v0.3 destination short-circuits — corresponding v0.2 source is never probed.
+ * Corrupt destination is never overwritten; if a valid v0.2 source exists, migration fails.
+ * If destination is corrupt and source is missing, slot is blocked (startup may recover via backup).
+ */
+async function planSlotMigration(
+  workspace: WorkspaceStore,
+  worldStore: WorldStore,
+  slot: 'current' | 'backup',
+): Promise<SlotPlan> {
+  const dest = await probeWorldSlot(worldStore, slot)
+  if (dest.state === 'valid') {
+    return { action: 'already' }
+  }
+
+  if (dest.state === 'failed') {
+    // May probe source only to decide fail vs blocked — never overwrite dest.
+    const source = await probeWorkspaceSlot(workspace, slot)
+    if (source.state === 'valid') {
+      return {
+        action: 'fail',
+        message: `v0.3 ${slot} is ${dest.reason.split(':')[0]}; refusing to overwrite with v0.2 source`,
+      }
+    }
+    if (source.state === 'failed') {
+      return {
+        action: 'fail',
+        message: `v0.3 ${slot} probe failed (${dest.reason}); v0.2 ${slot} also failed (${source.reason})`,
+      }
+    }
+    // source missing — corrupt dest stands, but no migration overwrite was attempted
+    return { action: 'blocked' }
+  }
+
+  // Destination missing — only then probe the v0.2 source for this slot.
+  const source = await probeWorkspaceSlot(workspace, slot)
+  if (source.state === 'valid') {
+    return { action: 'migrate' }
+  }
+  if (source.state === 'missing') {
+    return { action: 'nothing' }
+  }
+  return {
+    action: 'fail',
+    message: `v0.2 ${slot} probe failed (${source.reason})`,
+  }
 }
 
 /**
  * Migrate v0.2 Workspace current/backup slots into v0.3 World slots independently.
+ * Destination-first: a valid v0.3 slot never depends on reading its v0.2 source.
  * Never deletes or overwrites v0.2 source. Never overwrites an existing v0.3 slot
  * (including corrupt destination — fail closed, do not treat as missing).
  */
@@ -565,50 +609,29 @@ export async function migrateWorkspaceToWorldIfNeeded(
   workspace: WorkspaceStore,
   worldStore: WorldStore,
 ): Promise<WorldMigrationResult> {
-  const sourceCurrent = await probeWorkspaceSlot(workspace, 'current')
-  const sourceBackup = await probeWorkspaceSlot(workspace, 'backup')
-  const destCurrent = await probeWorldSlot(worldStore, 'current')
-  const destBackup = await probeWorldSlot(worldStore, 'backup')
-
-  const currentAction = decideSlotAction(sourceCurrent, destCurrent)
-  const backupAction = decideSlotAction(sourceBackup, destBackup)
-
-  if (currentAction === 'fail') {
-    const reason =
-      sourceCurrent.state === 'failed'
-        ? `v0.2 current probe failed (${sourceCurrent.reason})`
-        : destCurrent.state === 'failed'
-          ? `v0.3 current probe failed (${destCurrent.reason})`
-          : 'current slot migration failed'
-    return { status: 'failed', message: reason }
-  }
-  if (backupAction === 'fail') {
-    const reason =
-      sourceBackup.state === 'failed'
-        ? `v0.2 backup probe failed (${sourceBackup.reason})`
-        : destBackup.state === 'failed'
-          ? `v0.3 backup probe failed (${destBackup.reason})`
-          : 'backup slot migration failed'
-    return { status: 'failed', message: reason }
+  const currentPlan = await planSlotMigration(workspace, worldStore, 'current')
+  if (currentPlan.action === 'fail') {
+    return { status: 'failed', message: currentPlan.message }
   }
 
-  const bothSourcesMissing =
-    sourceCurrent.state === 'missing' && sourceBackup.state === 'missing'
-  const bothDestsMissing =
-    destCurrent.state === 'missing' && destBackup.state === 'missing'
-  if (bothSourcesMissing && bothDestsMissing) {
+  const backupPlan = await planSlotMigration(workspace, worldStore, 'backup')
+  if (backupPlan.action === 'fail') {
+    return { status: 'failed', message: backupPlan.message }
+  }
+
+  if (currentPlan.action === 'nothing' && backupPlan.action === 'nothing') {
     return { status: 'no_source' }
   }
 
   let didMigrate = false
 
-  if (currentAction === 'migrate') {
+  if (currentPlan.action === 'migrate') {
     const result = await migrateOneWorkspaceSlot(workspace, worldStore, 'current')
     if (!result.ok) return { status: 'failed', message: result.message }
     didMigrate = true
   }
 
-  if (backupAction === 'migrate') {
+  if (backupPlan.action === 'migrate') {
     const result = await migrateOneWorkspaceSlot(workspace, worldStore, 'backup')
     if (!result.ok) return { status: 'failed', message: result.message }
     didMigrate = true

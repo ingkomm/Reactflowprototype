@@ -312,20 +312,44 @@ export default function App() {
     nodesRef.current = nodes
   })
 
-  useGraphAutosave(
-    {
+  // Stabilize snapshot identity so worldState-only updates cannot re-arm autosave.
+  const autosaveSnapshot = useMemo(
+    () => ({
       nodes,
       edges,
       customSymbols,
-      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
-    },
-    worldState,
-    setWorldState,
-    workspaceReady && !bootstrapPending && !storageCorrupt,
-    (status, reason) => {
+      settings: {
+        gridSnapEnabled,
+        gridSnapScale,
+        voidHighlightEnabled,
+        defaultSymbolColors,
+      },
+    }),
+    [
+      nodes,
+      edges,
+      customSymbols,
+      gridSnapEnabled,
+      gridSnapScale,
+      voidHighlightEnabled,
+      defaultSymbolColors,
+    ],
+  )
+
+  const onAutosaveStatus = useCallback(
+    (status: SaveStatus, reason?: SaveFailureReason) => {
       setSaveStatus(status)
       setSaveFailureReason(reason ?? null)
     },
+    [],
+  )
+
+  useGraphAutosave(
+    autosaveSnapshot,
+    worldState,
+    setWorldState,
+    workspaceReady && !bootstrapPending && !storageCorrupt,
+    onAutosaveStatus,
   )
 
   useEffect(() => {
