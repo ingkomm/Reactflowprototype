@@ -24,6 +24,11 @@ import {
   WorkspaceStoreInitError,
   getWorkspaceStore,
 } from './workspaceStore'
+import { resolveInitialGraphState } from '../useGraphApp'
+import {
+  BOOTSTRAP_KEY,
+  writeBootstrapChoice,
+} from './autosave'
 import { WORKSPACE_STORAGE_VERSION } from './workspaceTypes'
 
 const DEMO_PNG =
@@ -44,6 +49,27 @@ function docWithSymbols(markups: string[]) {
       markup,
     })),
     settings: {},
+  })
+}
+
+
+function installLegacyLocalStorage(memory: Map<string, string>) {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => memory.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        memory.set(k, v)
+      },
+      removeItem: (k: string) => {
+        memory.delete(k)
+      },
+      clear: () => memory.clear(),
+      key: (i: number) => [...memory.keys()][i] ?? null,
+      get length() {
+        return memory.size
+      },
+    },
   })
 }
 
@@ -120,7 +146,7 @@ describe('workspace store foundation', () => {
 
     const store = installMemoryWorkspaceStore(createMemoryFsBackend())
     const migrated = await migrateLegacyLocalStorageIfNeeded(store)
-    expect(migrated.migrated).toBe(true)
+    expect(migrated.status).toBe('migrated')
 
     const loaded = await store.loadCurrent()
     expect(loaded.ok).toBe(true)
@@ -166,7 +192,7 @@ describe('workspace store foundation', () => {
     memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(stale))
 
     const migrated = await migrateLegacyLocalStorageIfNeeded(store)
-    expect(migrated.migrated).toBe(false)
+    expect(migrated.status).toBe('already_migrated')
 
     const loaded = await store.loadCurrent()
     expect(loaded.ok).toBe(true)
@@ -207,7 +233,7 @@ describe('workspace store foundation', () => {
     }
 
     const migrated = await migrateLegacyLocalStorageIfNeeded(store)
-    expect(migrated.migrated).toBe(false)
+    expect(migrated.status).toBe('failed')
     expect(memory.get(LEGACY_STORAGE_KEY)).toBe(legacyRaw)
     expect(memory.get(LEGACY_BACKUP_KEY)).toBe(legacyRaw)
     expect(await store.hasCurrent()).toBe(false)
@@ -499,3 +525,119 @@ describe('workspace store integrity regressions', () => {
     expect(loaded.issues?.some((i) => i.code === 'corrupt_asset')).toBe(true)
   })
 })
+
+
+describe('legacy migration init failure regressions', () => {
+  beforeEach(() => {
+    resetWorkspaceStoreSingleton()
+  })
+
+  it('A: migration save failure makes getWorkspaceStore reject (not succeed)', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    const primary = docWithSymbols([MARKUP])
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(primary))
+
+    const fs = createMemoryFsBackend()
+    const originalWrite = fs.writeTextFile.bind(fs)
+    fs.writeTextFile = async () => {
+      throw new Error('forced migration save failure')
+    }
+
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+    await expect(getWorkspaceStore()).rejects.toMatchObject({
+      reason: 'legacy_migration',
+    })
+
+    fs.writeTextFile = originalWrite
+  })
+
+  it('B: after migration failure, legacy primary/backup keys remain unchanged', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    const primary = docWithSymbols([MARKUP])
+    const backup = docWithSymbols([RASTER_MARKUP])
+    const primaryRaw = serializeGraphDocument(primary)
+    const backupRaw = serializeGraphDocument(backup)
+    memory.set(LEGACY_STORAGE_KEY, primaryRaw)
+    memory.set(LEGACY_BACKUP_KEY, backupRaw)
+
+    const fs = createMemoryFsBackend()
+    fs.writeTextFile = async () => {
+      throw new Error('forced migration save failure')
+    }
+
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+    expect(memory.get(LEGACY_STORAGE_KEY)).toBe(primaryRaw)
+    expect(memory.get(LEGACY_BACKUP_KEY)).toBe(backupRaw)
+  })
+
+  it('C: migration failure blocks bootstrap empty/demo fallback in resolveInitialGraphState', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(docWithSymbols([MARKUP])))
+    writeBootstrapChoice('empty')
+    expect(memory.get(BOOTSTRAP_KEY)).toBe('empty')
+
+    const fs = createMemoryFsBackend()
+    fs.writeTextFile = async () => {
+      throw new Error('forced migration save failure')
+    }
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    const initial = await resolveInitialGraphState()
+    expect(initial.storageCorrupt).toBe(true)
+    expect(initial.needsBootstrap).toBe(false)
+    expect(initial.snapshot).toBeNull()
+  })
+
+  it('D: after clearing the failure, retry can migrate legacy and load current', async () => {
+    const memory = new Map<string, string>()
+    installLegacyLocalStorage(memory)
+    memory.set(LEGACY_STORAGE_KEY, serializeGraphDocument(docWithSymbols([MARKUP])))
+
+    const fs = createMemoryFsBackend()
+    const originalWrite = fs.writeTextFile.bind(fs)
+    let failWrites = true
+    fs.writeTextFile = async (path, contents) => {
+      if (failWrites) throw new Error('forced migration save failure')
+      return originalWrite(path, contents)
+    }
+
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+    await expect(getWorkspaceStore()).rejects.toBeInstanceOf(WorkspaceStoreInitError)
+
+    // Clear init failure and allow writes — migration should succeed on retry.
+    failWrites = false
+    resetWorkspaceStoreSingleton()
+    setWorkspaceStoreTestHooks({
+      isDesktop: true,
+      createDesktopFs: async () => fs,
+    })
+
+    const store = await getWorkspaceStore()
+    const loaded = await store.loadCurrent()
+    expect(loaded.ok).toBe(true)
+    if (!loaded.ok) return
+    expect(loaded.document.customSymbols[0]?.markup).toBe(MARKUP)
+    // Legacy keys remain (never deleted).
+    expect(memory.get(LEGACY_STORAGE_KEY)).toBeTruthy()
+  })
+})
+

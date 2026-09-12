@@ -419,12 +419,19 @@ function createBrowserWorkspaceStore(): WorkspaceStore {
   }
 }
 
+/** Result of attempting legacy localStorage → v0.2 workspace migration. */
+export type LegacyMigrationResult =
+  | { status: 'no_legacy' }
+  | { status: 'already_migrated' }
+  | { status: 'migrated' }
+  | { status: 'failed'; message: string }
+
 /** Migrate legacy localStorage GraphDocument → workspace store (once). Never deletes legacy keys. */
 export async function migrateLegacyLocalStorageIfNeeded(
   store: WorkspaceStore,
-): Promise<{ migrated: boolean; message?: string }> {
+): Promise<LegacyMigrationResult> {
   if (await store.hasCurrent()) {
-    return { migrated: false }
+    return { status: 'already_migrated' }
   }
 
   let primaryRaw: string | null = null
@@ -433,13 +440,14 @@ export async function migrateLegacyLocalStorageIfNeeded(
     primaryRaw = localStorage.getItem(LEGACY_STORAGE_KEY)
     backupRaw = localStorage.getItem(LEGACY_BACKUP_KEY)
   } catch {
-    return { migrated: false, message: 'localStorage unavailable' }
+    // Cannot read legacy keys — treat as nothing to migrate (do not fail init).
+    return { status: 'no_legacy' }
   }
 
-  if (!primaryRaw && !backupRaw) return { migrated: false }
+  if (!primaryRaw && !backupRaw) return { status: 'no_legacy' }
 
   if (primaryRaw && parseWorkspaceManifestJson(primaryRaw)) {
-    return { migrated: false }
+    return { status: 'no_legacy' }
   }
 
   let migratedPrimary = false
@@ -449,14 +457,14 @@ export async function migrateLegacyLocalStorageIfNeeded(
       const saved = await store.saveCurrent(parsed.document)
       if (!saved.ok) {
         return {
-          migrated: false,
+          status: 'failed',
           message: saved.message ?? `primary migration failed (${saved.reason})`,
         }
       }
       const verify = await store.loadCurrent()
       if (!verify.ok) {
         return {
-          migrated: false,
+          status: 'failed',
           message: `primary migration verify failed (${verify.reason})`,
         }
       }
@@ -475,22 +483,26 @@ export async function migrateLegacyLocalStorageIfNeeded(
       const saved = await store.saveBackup(parsed.document)
       if (!saved.ok) {
         return {
-          migrated: migratedPrimary,
+          status: 'failed',
           message: saved.message ?? `backup migration failed (${saved.reason})`,
         }
       }
     }
   }
 
-  return { migrated: migratedPrimary }
+  return migratedPrimary ? { status: 'migrated' } : { status: 'no_legacy' }
 }
-
 
 export class WorkspaceStoreInitError extends Error {
   readonly code = 'workspace_store_init_failed' as const
-  constructor(message: string, options?: { cause?: unknown }) {
+  readonly reason: 'desktop_fs' | 'legacy_migration'
+  constructor(
+    message: string,
+    options?: { cause?: unknown; reason?: 'desktop_fs' | 'legacy_migration' },
+  ) {
     super(message, options)
     this.name = 'WorkspaceStoreInitError'
+    this.reason = options?.reason ?? 'desktop_fs'
   }
 }
 
@@ -543,15 +555,28 @@ export async function getWorkspaceStore(): Promise<WorkspaceStore> {
           ? await testHooks.createDesktopFs()
           : await createTauriAppDataFsBackend()
         const store = createFsWorkspaceStore(fs, 'desktop')
-        await migrateLegacyLocalStorageIfNeeded(store)
+        const migration = await migrateLegacyLocalStorageIfNeeded(store)
+        if (migration.status === 'failed') {
+          initFailure = new WorkspaceStoreInitError(
+            `Legacy workspace migration failed: ${migration.message}`,
+            { reason: 'legacy_migration' },
+          )
+          singleton = null
+          throw initFailure
+        }
         singleton = store
         return store
       } catch (err) {
+        if (err instanceof WorkspaceStoreInitError) {
+          initFailure = err
+          singleton = null
+          throw err
+        }
         initFailure = new WorkspaceStoreInitError(
           err instanceof Error
             ? err.message
             : 'Desktop AppData workspace store failed to initialize',
-          { cause: err },
+          { cause: err, reason: 'desktop_fs' },
         )
         singleton = null
         throw initFailure

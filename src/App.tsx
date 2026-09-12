@@ -2242,7 +2242,7 @@ export default function App() {
 
             {storageCorrupt && (
               <p className="import-error" role="alert">
-                저장된 데이터가 손상되었습니다. JSON을 불러와 주세요.
+                저장소 초기화 또는 데이터 이전에 실패했습니다. 앱을 다시 시작하거나 JSON을 불러와 주세요.
               </p>
             )}
 
