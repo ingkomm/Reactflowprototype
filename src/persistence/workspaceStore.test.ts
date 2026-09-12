@@ -169,6 +169,48 @@ describe('workspace store foundation', () => {
     expect(loaded.document.customSymbols).toHaveLength(1)
   })
 
+  it('keeps legacy keys intact when migration save fails', async () => {
+    const memory = new Map<string, string>()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => memory.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          memory.set(k, v)
+        },
+        removeItem: (k: string) => {
+          memory.delete(k)
+        },
+        clear: () => memory.clear(),
+        key: (i: number) => [...memory.keys()][i] ?? null,
+        get length() {
+          return memory.size
+        },
+      },
+    })
+
+    const primary = docWithSymbols([MARKUP])
+    const legacyRaw = serializeGraphDocument(primary)
+    memory.set(LEGACY_STORAGE_KEY, legacyRaw)
+    memory.set(LEGACY_BACKUP_KEY, legacyRaw)
+
+    const fs = createMemoryFsBackend()
+    const store = installMemoryWorkspaceStore(fs)
+    const originalWrite = fs.writeTextFile.bind(fs)
+    fs.writeTextFile = async () => {
+      throw new Error('forced migration write failure')
+    }
+
+    const migrated = await migrateLegacyLocalStorageIfNeeded(store)
+    expect(migrated.migrated).toBe(false)
+    expect(memory.get(LEGACY_STORAGE_KEY)).toBe(legacyRaw)
+    expect(memory.get(LEGACY_BACKUP_KEY)).toBe(legacyRaw)
+    expect(await store.hasCurrent()).toBe(false)
+
+    // Restore writes so the suite can continue using the same fs helper.
+    fs.writeTextFile = originalWrite
+  })
+
   it('keeps latest state under concurrent autosave races', async () => {
     const store = installMemoryWorkspaceStore(createMemoryFsBackend())
     const writes = Array.from({ length: 8 }, (_, i) => {
