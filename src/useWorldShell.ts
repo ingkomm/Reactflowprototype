@@ -3,7 +3,11 @@ import type { ReferenceDraft } from './components/ReferenceLibrary'
 import { snapshotFromGalaxyGraph } from './galaxyCanvas'
 import type { NavigationState } from './navigation'
 import { clearActiveJsonPath } from './persistence/activeJsonPath'
-import { commitWorldMutation, materializeWorldState } from './persistence/worldActions'
+import {
+  commitWorldMutation,
+  materializeWorldState,
+  resolveWorldMutationSnapshot,
+} from './persistence/worldActions'
 import { getGalaxyById } from './persistence/worldDocument'
 import {
   createGalaxy,
@@ -60,7 +64,7 @@ export function useWorldShell(options: {
     ) => {
       if (!worldState) return false
       cancelPendingAutosave()
-      const snapshot = opts?.materialize === false ? null : getSnapshot()
+      const snapshot = resolveWorldMutationSnapshot(nav.mode, opts, getSnapshot)
       try {
         const result = await commitWorldMutation(worldState, snapshot, mutator, {
           backupFirst: opts?.backupFirst,
@@ -77,7 +81,7 @@ export function useWorldShell(options: {
         return false
       }
     },
-    [worldState, cancelPendingAutosave, getSnapshot, setWorldState, setError],
+    [worldState, nav.mode, cancelPendingAutosave, getSnapshot, setWorldState, setError],
   )
 
   const enterGalaxy = useCallback(
@@ -144,10 +148,19 @@ export function useWorldShell(options: {
     }
     setWorldState(result.worldState)
     setNav({ mode: 'universe' })
+    resetSessionUi()
     setSelectedUniverseGalaxyId(leftId)
     setHighlightGalaxyId(leftId)
     window.setTimeout(() => setHighlightGalaxyId(null), 400)
-  }, [worldState, nav, cancelPendingAutosave, getSnapshot, setWorldState, setError])
+  }, [
+    worldState,
+    nav,
+    cancelPendingAutosave,
+    getSnapshot,
+    setWorldState,
+    setError,
+    resetSessionUi,
+  ])
 
   const handleCreateGalaxy = useCallback(async () => {
     await runMutation((ws) => {
@@ -181,6 +194,11 @@ export function useWorldShell(options: {
       const galaxy = getGalaxyById(worldState.world, galaxyId)
       if (!galaxy) return
       if (!window.confirm(`Delete Galaxy "${galaxy.name}"? This cannot be undone.`)) return
+
+      const deletingActive = worldState.activeGalaxyId === galaxyId
+      const remaining = worldState.world.galaxies.filter((g) => g.id !== galaxyId)
+      const fallbackGalaxy = deletingActive ? remaining[0] ?? null : null
+
       const ok = await runMutation(
         (ws) => {
           const world = deleteGalaxy(ws.world, galaxyId)
@@ -190,9 +208,20 @@ export function useWorldShell(options: {
         },
         { backupFirst: true },
       )
-      if (ok) setSelectedUniverseGalaxyId((id) => (id === galaxyId ? null : id))
+      if (!ok) return
+
+      setSelectedUniverseGalaxyId((id) => (id === galaxyId ? null : id))
+
+      // Active delete is a Galaxy-switch transaction for hidden runtime only.
+      // Stay in Universe mode — do not auto-enter the fallback Galaxy.
+      if (deletingActive && fallbackGalaxy) {
+        applyCanvas(snapshotFromGalaxyGraph(fallbackGalaxy.graph))
+        resetSessionUi()
+        setActiveJsonPath(null)
+        clearActiveJsonPath()
+      }
     },
-    [worldState, runMutation, setError],
+    [worldState, runMutation, setError, applyCanvas, resetSessionUi, setActiveJsonPath],
   )
 
   const handleMoveGalaxy = useCallback(

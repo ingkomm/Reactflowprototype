@@ -1,6 +1,6 @@
 /**
  * Commit helpers for World-level mutations (Galaxy / Reference).
- * Always materialize the live canvas graph into the active Galaxy first.
+ * Materialize the live canvas only when a snapshot is supplied (Galaxy mode).
  */
 import { snapshotToDocument, type GraphPersistInput } from '../useGraphApp'
 import {
@@ -10,6 +10,20 @@ import {
 } from './autosave'
 import type { GraphAppWorldState } from './worldTypes'
 import { replaceGalaxyGraph } from './worldDocument'
+
+/**
+ * Galaxy mode: live React canvas is the active Galaxy source of truth.
+ * Universe mode: worldState.world is SoT — never materialize the hidden canvas.
+ */
+export function resolveWorldMutationSnapshot(
+  navMode: 'galaxy' | 'universe',
+  opts: { materialize?: boolean } | undefined,
+  getSnapshot: () => GraphPersistInput,
+): GraphPersistInput | null {
+  if (opts?.materialize === false) return null
+  if (navMode !== 'galaxy') return null
+  return getSnapshot()
+}
 
 export function materializeWorldState(
   worldState: GraphAppWorldState,

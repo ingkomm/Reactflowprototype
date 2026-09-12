@@ -2253,46 +2253,52 @@ export default function App() {
               </div>
 
               <div className="topbar__actions">
-                <label className="topbar__toggle">
-                  <input
-                    type="checkbox"
-                    checked={gridSnapEnabled}
-                    onChange={(e) => setGridSnapEnabled(e.target.checked)}
-                  />
-                  <span>그리드 스냅</span>
-                </label>
-                {gridSnapEnabled ? (
-                  <label className="topbar__scale">
-                    <span>Scale</span>
-                    <select
-                      value={gridSnapScale}
-                      onChange={(e) => setGridSnapScale(normalizeGridSnapScale(Number(e.target.value)))}
-                      aria-label="그리드 스냅 Scale"
+                {nav.mode === 'galaxy' ? (
+                  <>
+                    <label className="topbar__toggle">
+                      <input
+                        type="checkbox"
+                        checked={gridSnapEnabled}
+                        onChange={(e) => setGridSnapEnabled(e.target.checked)}
+                      />
+                      <span>그리드 스냅</span>
+                    </label>
+                    {gridSnapEnabled ? (
+                      <label className="topbar__scale">
+                        <span>Scale</span>
+                        <select
+                          value={gridSnapScale}
+                          onChange={(e) =>
+                            setGridSnapScale(normalizeGridSnapScale(Number(e.target.value)))
+                          }
+                          aria-label="그리드 스냅 Scale"
+                        >
+                          {GRID_SNAP_SCALE_OPTIONS.map((scale) => (
+                            <option key={scale} value={scale}>
+                              {scale}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <label className="topbar__toggle">
+                      <input
+                        type="checkbox"
+                        checked={voidHighlightEnabled}
+                        onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
+                      />
+                      <span>빈 슬롯 표시</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--danger"
+                      onClick={deleteSelected}
+                      disabled={!selectedId}
                     >
-                      {GRID_SNAP_SCALE_OPTIONS.map((scale) => (
-                        <option key={scale} value={scale}>
-                          {scale}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      Delete Selected
+                    </button>
+                  </>
                 ) : null}
-                <label className="topbar__toggle">
-                  <input
-                    type="checkbox"
-                    checked={voidHighlightEnabled}
-                    onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
-                  />
-                  <span>빈 슬롯 표시</span>
-                </label>
-                <button
-                  type="button"
-                  className="btn btn--danger"
-                  onClick={deleteSelected}
-                  disabled={!selectedId}
-                >
-                  Delete Selected
-                </button>
                 <button
                   type="button"
                   className="btn"
@@ -2311,67 +2317,71 @@ export default function App() {
                     ↑ Universe
                   </button>
                 ) : null}
-                <button type="button" className="btn" onClick={handleNewSheet}>
-                  새 시트
-                </button>
-                <div className="topbar__file-actions">
-                  <button
-                    type="button"
-                    className="topbar__file-btn"
-                    data-testid="topbar-save-json"
-                    onClick={() => void handleSaveJson()}
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    className="topbar__file-btn"
-                    data-testid="topbar-save-json-as"
-                    onClick={() => void handleSaveJsonAs()}
-                  >
-                    Save As
-                  </button>
-                  <button
-                    type="button"
-                    className="topbar__file-btn"
-                    data-testid="topbar-open-json"
-                    onClick={() => void handleOpenJson()}
-                  >
-                    Load
-                  </button>
-                  {isDesktopGraphExportSupported() ? (
-                    <span className="topbar__active-json" title={activeJsonPath ?? undefined}>
-                      Active:{' '}
-                      {activeJsonPath
-                        ? activeJsonPath.replace(/^.*[/\\]/, '') || activeJsonPath
-                        : 'none'}
-                    </span>
-                  ) : null}
-                </div>
-                {saveStatus === 'failed' && (
-                  <span
-                    className="topbar__save-status topbar__save-status--failed"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {saveFailureReason === 'too_large'
-                      ? '저장 실패 (용량 초과)'
-                      : saveFailureReason === 'io'
-                        ? '저장 실패 (디스크 I/O)'
-                        : '저장 실패'}
-                  </span>
-                )}
-                <input
-                  ref={importInputRef}
-                  type="file"
-                  accept="application/json,.json"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    e.target.value = ''
-                    if (file) void handleImportJson(file)
-                  }}
-                />
+                {nav.mode === 'galaxy' ? (
+                  <>
+                    <button type="button" className="btn" onClick={handleNewSheet}>
+                      새 시트
+                    </button>
+                    <div className="topbar__file-actions">
+                      <button
+                        type="button"
+                        className="topbar__file-btn"
+                        data-testid="topbar-save-json"
+                        onClick={() => void handleSaveJson()}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="topbar__file-btn"
+                        data-testid="topbar-save-json-as"
+                        onClick={() => void handleSaveJsonAs()}
+                      >
+                        Save As
+                      </button>
+                      <button
+                        type="button"
+                        className="topbar__file-btn"
+                        data-testid="topbar-open-json"
+                        onClick={() => void handleOpenJson()}
+                      >
+                        Load
+                      </button>
+                      {isDesktopGraphExportSupported() ? (
+                        <span className="topbar__active-json" title={activeJsonPath ?? undefined}>
+                          Active:{' '}
+                          {activeJsonPath
+                            ? activeJsonPath.replace(/^.*[/\\]/, '') || activeJsonPath
+                            : 'none'}
+                        </span>
+                      ) : null}
+                    </div>
+                    {saveStatus === 'failed' && (
+                      <span
+                        className="topbar__save-status topbar__save-status--failed"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {saveFailureReason === 'too_large'
+                          ? '저장 실패 (용량 초과)'
+                          : saveFailureReason === 'io'
+                            ? '저장 실패 (디스크 I/O)'
+                            : '저장 실패'}
+                      </span>
+                    )}
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (file) void handleImportJson(file)
+                      }}
+                    />
+                  </>
+                ) : null}
               </div>
             </header>
 
