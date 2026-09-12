@@ -213,21 +213,11 @@ export type ImportJsonResult =
   | { ok: true; snapshot: GraphAppSnapshot }
   | { ok: false; message: string }
 
-export async function importGraphJsonFile(
-  file: File,
+/** Shared import core for browser File input and Desktop native open. */
+export function importGraphJsonText(
+  text: string,
   current: GraphPersistInput,
-): Promise<ImportJsonResult> {
-  if (file.size > MAX_JSON_BYTES) {
-    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
-  }
-
-  let text: string
-  try {
-    text = await file.text()
-  } catch {
-    return { ok: false, message: '파일을 읽을 수 없습니다.' }
-  }
-
+): ImportJsonResult {
   if (text.length > MAX_JSON_BYTES) {
     return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
   }
@@ -268,4 +258,22 @@ export async function importGraphJsonFile(
   }
 
   return { ok: true, snapshot }
+}
+
+export async function importGraphJsonFile(
+  file: File,
+  current: GraphPersistInput,
+): Promise<ImportJsonResult> {
+  if (file.size > MAX_JSON_BYTES) {
+    return { ok: false, message: `JSON 파일이 너무 큽니다 (최대 ${MAX_JSON_BYTES} bytes).` }
+  }
+
+  let text: string
+  try {
+    text = await file.text()
+  } catch {
+    return { ok: false, message: '파일을 읽을 수 없습니다.' }
+  }
+
+  return importGraphJsonText(text, current)
 }

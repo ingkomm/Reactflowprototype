@@ -29,7 +29,9 @@ import { createVideoMediaId, canFloatNodeVideos } from './videoMedia'
 import type { NodeTemplatePayload } from './nodeTemplate'
 import {
   isDesktopGraphExportSupported,
-  saveGraphJsonDesktop,
+  openGraphJsonDesktop,
+  saveGraphJsonAsDesktop,
+  saveGraphJsonToPathDesktop,
 } from './platform/graphExport'
 import { stagesForKind } from './stage'
 import { createLogId, createNodeId, createStageId } from './ids'
@@ -109,6 +111,7 @@ import {
   commitBootstrapChoice,
   createNewSheet,
   importGraphJsonFile,
+  importGraphJsonText,
   resolveInitialGraphState,
   sanitizeFlowEdges,
   useGraphAutosave,
@@ -284,6 +287,8 @@ export default function App() {
   const [pinnedViewerBounds, setPinnedViewerBounds] = useState<Record<string, ViewerPanelBounds>>({})
   const pinnedZCounterRef = useRef(50)
   const [focusLogId, setFocusLogId] = useState<string | null>(null)
+  /** Session-only external JSON path (Desktop). Not part of GraphDocument / autosave. */
+  const [activeJsonPath, setActiveJsonPath] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
   const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
@@ -413,29 +418,6 @@ export default function App() {
     setSelectedId(pasted.id)
     return true
   }, [commit, setNodes, stack])
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      const tag = target?.tagName?.toLowerCase()
-      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
-
-      const mod = event.ctrlKey || event.metaKey
-      if (!mod) return
-
-      const key = event.key.toLowerCase()
-      if (key === 'c') {
-        if (copySelectedNode()) event.preventDefault()
-        return
-      }
-      if (key === 'v') {
-        if (pasteClipboardNode()) event.preventDefault()
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [copySelectedNode, pasteClipboardNode])
 
   // Keep title-bearing satellites above mastery orbits / elevate selection.
   useEffect(() => {
@@ -1385,40 +1367,39 @@ export default function App() {
     [commit, gridSnapEnabled, gridSnapScale, setNodes, stack],
   )
 
-  const handleExportJson = useCallback(async () => {
+  const serializeCurrentGraph = useCallback(() => {
     const document = buildGraphDocument({
       nodes: stateRef.current.nodes,
       edges: stateRef.current.edges,
       customSymbols,
-      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+      settings: {
+        gridSnapEnabled,
+        gridSnapScale,
+        voidHighlightEnabled,
+        defaultSymbolColors,
+      },
     })
-    if (isDesktopGraphExportSupported()) {
-      const result = await saveGraphJsonDesktop(serializeGraphDocument(document))
-      if (result.status === 'cancelled') return
-      if (result.status === 'error') {
-        setImportError(result.message)
-        return
-      }
-      setImportError(null)
-      return
-    }
-    downloadGraphDocument(document)
-    setImportError(null)
-  }, [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled])
+    return serializeGraphDocument(document)
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    voidHighlightEnabled,
+  ])
 
-  const handleImportJson = useCallback(
-    async (file: File) => {
-      const result = await importGraphJsonFile(file, {
-        nodes: stateRef.current.nodes,
-        edges: stateRef.current.edges,
-        customSymbols,
-        settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
-      })
-      if (!result.ok) {
-        setImportError(result.message)
-        return
+  const applyImportedSnapshot = useCallback(
+    (imported: {
+      nodes: PassiveFlowNode[]
+      edges: Edge[]
+      customSymbols: typeof customSymbols
+      settings: {
+        gridSnapEnabled?: boolean
+        gridSnapScale?: number
+        voidHighlightEnabled?: boolean
+        defaultSymbolColors?: typeof defaultSymbolColors
       }
-      const imported = result.snapshot
+    }) => {
       resetHistory()
       setCustomSymbols(imported.customSymbols)
       setDefaultSymbolColors(imported.settings.defaultSymbolColors ?? {})
@@ -1441,20 +1422,158 @@ export default function App() {
       setPinnedViewerBounds({})
       setFloatingVideoNodeIds([])
     },
+    [resetHistory, setEdges, setNodes, stack],
+  )
+
+  const handleSaveJson = useCallback(async () => {
+    if (isDesktopGraphExportSupported()) {
+      const json = serializeCurrentGraph()
+      const result = activeJsonPath
+        ? await saveGraphJsonToPathDesktop(activeJsonPath, json)
+        : await saveGraphJsonAsDesktop(json)
+      if (result.status === 'cancelled') return
+      if (result.status === 'error') {
+        setImportError(result.message)
+        return
+      }
+      setActiveJsonPath(result.path)
+      setImportError(null)
+      return
+    }
+    const document = buildGraphDocument({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    downloadGraphDocument(document)
+    setImportError(null)
+  }, [
+    activeJsonPath,
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    serializeCurrentGraph,
+    voidHighlightEnabled,
+  ])
+
+  const handleSaveJsonAs = useCallback(async () => {
+    if (isDesktopGraphExportSupported()) {
+      const json = serializeCurrentGraph()
+      const result = await saveGraphJsonAsDesktop(json)
+      if (result.status === 'cancelled') return
+      if (result.status === 'error') {
+        setImportError(result.message)
+        return
+      }
+      setActiveJsonPath(result.path)
+      setImportError(null)
+      return
+    }
+    const document = buildGraphDocument({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    downloadGraphDocument(document)
+    setImportError(null)
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    serializeCurrentGraph,
+    voidHighlightEnabled,
+  ])
+
+  const handleImportJson = useCallback(
+    async (file: File) => {
+      const result = await importGraphJsonFile(file, {
+        nodes: stateRef.current.nodes,
+        edges: stateRef.current.edges,
+        customSymbols,
+        settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+      })
+      if (!result.ok) {
+        setImportError(result.message)
+        return
+      }
+      applyImportedSnapshot(result.snapshot)
+    },
     [
+      applyImportedSnapshot,
       customSymbols,
       defaultSymbolColors,
       gridSnapEnabled,
       gridSnapScale,
-      resetHistory,
-      setEdges,
-      setNodes,
-      stack,
       voidHighlightEnabled,
     ],
   )
 
+  const handleOpenJson = useCallback(async () => {
+    if (!isDesktopGraphExportSupported()) {
+      importInputRef.current?.click()
+      return
+    }
+    const opened = await openGraphJsonDesktop()
+    if (opened.status === 'cancelled') return
+    if (opened.status === 'error') {
+      setImportError(opened.message)
+      return
+    }
+    const result = importGraphJsonText(opened.text, {
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    if (!result.ok) {
+      setImportError(result.message)
+      return
+    }
+    applyImportedSnapshot(result.snapshot)
+    setActiveJsonPath(opened.path)
+  }, [
+    applyImportedSnapshot,
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    voidHighlightEnabled,
+  ])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey
+      if (!mod) return
+
+      const key = event.key.toLowerCase()
+
+      // Document save: works even when input/textarea is focused.
+      if (!event.altKey && !event.shiftKey && key === 's') {
+        event.preventDefault()
+        void handleSaveJson()
+        return
+      }
+
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+
+      if (key === 'c') {
+        if (copySelectedNode()) event.preventDefault()
+        return
+      }
+      if (key === 'v') {
+        if (pasteClipboardNode()) event.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [copySelectedNode, handleSaveJson, pasteClipboardNode])
 
   const handleNewSheet = useCallback(() => {
     const confirmed = window.confirm(
@@ -1489,6 +1608,7 @@ export default function App() {
     setPinnedViewers([])
     setPinnedViewerBounds({})
     setFloatingVideoNodeIds([])
+    setActiveJsonPath(null)
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -1662,6 +1782,11 @@ export default function App() {
   }, [pinnedViewers, contextMenu, contextMenuNode])
 
   const handlePinnedLogSelect = useCallback((nodeId: string, logId: string) => {
+    setSelectedId(nodeId)
+    setFocusLogId(logId)
+  }, [])
+
+  const handleViewerEditLog = useCallback((nodeId: string, logId: string) => {
     setSelectedId(nodeId)
     setFocusLogId(logId)
   }, [])
@@ -2021,16 +2146,38 @@ export default function App() {
                 <button type="button" className="btn" onClick={handleNewSheet}>
                   새 시트
                 </button>
-                <button type="button" className="btn" onClick={() => void handleExportJson()}>
-                  JSON 내보내기
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="topbar-save-json"
+                  onClick={() => void handleSaveJson()}
+                >
+                  저장
                 </button>
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => importInputRef.current?.click()}
+                  data-testid="topbar-save-json-as"
+                  onClick={() => void handleSaveJsonAs()}
                 >
-                  JSON 불러오기
+                  다른 이름으로 저장
                 </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="topbar-open-json"
+                  onClick={() => void handleOpenJson()}
+                >
+                  불러오기
+                </button>
+                {isDesktopGraphExportSupported() ? (
+                  <span className="topbar__active-json" title={activeJsonPath ?? undefined}>
+                    Active:{' '}
+                    {activeJsonPath
+                      ? activeJsonPath.replace(/^.*[/\\]/, '') || activeJsonPath
+                      : '없음'}
+                  </span>
+                ) : null}
                 {saveStatus === 'failed' && (
                   <span
                     className="topbar__save-status topbar__save-status--failed"
@@ -2206,6 +2353,7 @@ export default function App() {
                       ? (bounds) => handlePinnedBoundsChange(entry.nodeId, bounds)
                       : undefined
                   }
+                  onEditLog={(logId) => handleViewerEditLog(entry.nodeId, logId)}
                 />
               )
             })}

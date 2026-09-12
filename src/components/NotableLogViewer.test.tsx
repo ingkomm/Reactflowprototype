@@ -175,7 +175,85 @@ describe('NotableLogViewer interactions', () => {
     view.unmount()
   })
 
-  it('exposes no edit callbacks and remounts clean session via key', () => {
+  it('shows 수정 for selected log and calls onEditLog with selected id', () => {
+    const onEditLog = vi.fn()
+    const view = mount(
+      <NotableLogViewer
+        open
+        x={10}
+        y={10}
+        nodeLabel="Drill"
+        markdown={'summary'}
+        logs={sampleLogs}
+        onClose={() => undefined}
+        onEditLog={onEditLog}
+      />,
+    )
+    const edit = view.host.querySelector('[data-testid="notable-log-edit"]') as HTMLButtonElement
+    expect(edit).toBeTruthy()
+    expect(edit.className.split(/\s+/)).toContain('btn')
+    expect(edit.className.split(/\s+/)).not.toContain('btn--ghost')
+    act(() => {
+      edit.click()
+    })
+    // Default selection is newest-first timeline[0] = sampleLogs[1]
+    expect(onEditLog).toHaveBeenCalledWith(sampleLogs[1]!.id)
+
+    const older = view.host.querySelector(
+      '[data-testid="notable-log-item-' + sampleLogs[0]!.id + '"]',
+    ) as HTMLButtonElement
+    act(() => {
+      older.click()
+    })
+    act(() => {
+      ;(view.host.querySelector('[data-testid="notable-log-edit"]') as HTMLButtonElement).click()
+    })
+    expect(onEditLog).toHaveBeenLastCalledWith(sampleLogs[0]!.id)
+    view.unmount()
+  })
+
+  it('edit button works when pinned=true on same viewer path', () => {
+    const onEditLog = vi.fn()
+    const view = mount(
+      <NotableLogViewer
+        open
+        pinned
+        modal={false}
+        closeOnEscape={false}
+        x={10}
+        y={10}
+        nodeLabel="Pinned"
+        markdown={'summary'}
+        logs={sampleLogs}
+        onClose={() => undefined}
+        onEditLog={onEditLog}
+      />,
+    )
+    act(() => {
+      ;(view.host.querySelector('[data-testid="notable-log-edit"]') as HTMLButtonElement).click()
+    })
+    expect(onEditLog).toHaveBeenCalledWith(sampleLogs[1]!.id)
+    view.unmount()
+  })
+
+  it('hides 수정 when onEditLog is omitted', () => {
+    const view = mount(
+      <NotableLogViewer
+        open
+        x={10}
+        y={10}
+        nodeLabel="A"
+        markdown={'summary A'}
+        logs={sampleLogs}
+        onClose={() => undefined}
+      />,
+    )
+    expect(view.host.querySelector('[data-testid="notable-log-edit"]')).toBeNull()
+    expect(view.host.querySelector('textarea')).toBeNull()
+    view.unmount()
+  })
+
+    it('exposes no edit callbacks and remounts clean session via key', () => {
     let closed = 0
     const view = mount(
       <NotableLogViewer

@@ -202,8 +202,16 @@
   border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
 }
 
-.notable-log-viewer__note-date {
+.notable-log-viewer__note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 8px;
+}
+
+.notable-log-viewer__note-date {
+  margin: 0;
   font-size: 0.8rem;
   color: #9eb0bf;
 }

@@ -219,6 +219,58 @@ describe('DailyLogPanel compact + editor modal', () => {
     expect(isDailyLogDraftDirty({ ...base, localVideoPath: '/videos/a.mp4' }, base)).toBe(true)
   })
 
+  it('edit mode: cancel is ghost, primary is solid btn labeled 수정', () => {
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="edit"
+        initial={{
+          date: '2026-09-05',
+          note: 'n',
+          videoUrl: '',
+          localVideoPath: '',
+        }}
+        onClose={() => undefined}
+        onSave={() => null}
+      />,
+    )
+    const footer = document.body.querySelector('.daily-log-editor-modal__footer') as HTMLElement
+    const buttons = [...footer.querySelectorAll('button')]
+    const cancel = buttons.find((b) => b.textContent === '취소')!
+    const primary = document.body.querySelector(
+      '[data-testid="daily-log-editor-save"]',
+    ) as HTMLButtonElement
+    expect(cancel.className.split(/\s+/)).toEqual(expect.arrayContaining(['btn', 'btn--ghost']))
+    expect(primary.className.split(/\s+/)).toContain('btn')
+    expect(primary.className.split(/\s+/)).not.toContain('btn--ghost')
+    expect(primary.textContent).toBe('수정')
+    view.unmount()
+  })
+
+  it('add mode: primary is solid btn labeled 저장', () => {
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{
+          date: '2026-09-05',
+          note: '',
+          videoUrl: '',
+          localVideoPath: '',
+        }}
+        onClose={() => undefined}
+        onSave={() => null}
+      />,
+    )
+    const primary = document.body.querySelector(
+      '[data-testid="daily-log-editor-save"]',
+    ) as HTMLButtonElement
+    expect(primary.className.split(/\s+/)).toContain('btn')
+    expect(primary.className.split(/\s+/)).not.toContain('btn--ghost')
+    expect(primary.textContent).toBe('저장')
+    view.unmount()
+  })
+
   it('browser shows desktop-only hint and no crash for local draft fields', () => {
     const view = mount(
       <DailyLogEditorModal

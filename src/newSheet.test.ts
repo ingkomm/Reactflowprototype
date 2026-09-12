@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import {
   createNewSheet,
   importGraphJsonFile,
+  importGraphJsonText,
   snapshotToDocument,
   commitBootstrapChoice,
   resolveInitialGraphState,
@@ -17,6 +18,7 @@ import {
   writeBootstrapChoice,
 } from './persistence/autosave'
 import { serializeGraphDocument } from './graphDocument'
+import { MAX_JSON_BYTES } from './limits'
 
 function memoryStorage(opts?: { failKeys?: Set<string> }) {
   const map = new Map<string, string>()
@@ -249,5 +251,86 @@ describe('writeBootstrapChoice / startup recovery', () => {
   it('does not export restorePreviousBackup manual swap API', async () => {
     const mod = await import('./useGraphApp')
     expect('restorePreviousBackup' in mod).toBe(false)
+  })
+})
+
+
+describe('importGraphJsonText shared core', () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: memoryStorage(),
+      configurable: true,
+    })
+  })
+
+  const current = {
+    nodes: SEED_NODES,
+    edges: SEED_EDGES,
+    customSymbols: [],
+    settings: {},
+  }
+
+  it('accepts valid JSON text', () => {
+    const importedDoc = snapshotToDocument({
+      nodes: EMPTY_GRAPH_NODES,
+      edges: EMPTY_GRAPH_EDGES,
+      customSymbols: [],
+      settings: {},
+    })
+    localStorage.setItem(STORAGE_KEY, serializeGraphDocument(snapshotToDocument(current)))
+    const result = importGraphJsonText(serializeGraphDocument(importedDoc), current)
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects invalid JSON text without mutating storage', () => {
+    const primary = serializeGraphDocument(snapshotToDocument(current))
+    localStorage.setItem(STORAGE_KEY, primary)
+    localStorage.setItem(BACKUP_KEY, '{"keep":"me"}')
+    const result = importGraphJsonText('{not-json', current)
+    expect(result.ok).toBe(false)
+    expect(localStorage.getItem(BACKUP_KEY)).toBe('{"keep":"me"}')
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(primary)
+  })
+
+  it('rejects oversized text', () => {
+    const huge = 'x'.repeat(MAX_JSON_BYTES + 1)
+    const result = importGraphJsonText(huge, current)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.message).toMatch(/너무 큽니다/)
+  })
+
+  it('aborts when current backup fails', () => {
+    const store = memoryStorage({ failKeys: new Set([BACKUP_KEY]) })
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: store,
+      configurable: true,
+    })
+    const primary = serializeGraphDocument(snapshotToDocument(current))
+    localStorage.setItem(STORAGE_KEY, primary)
+    const importedDoc = snapshotToDocument({
+      nodes: EMPTY_GRAPH_NODES,
+      edges: EMPTY_GRAPH_EDGES,
+      customSymbols: [],
+      settings: {},
+    })
+    const result = importGraphJsonText(serializeGraphDocument(importedDoc), current)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.message).toMatch(/백업/)
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(primary)
+  })
+
+  it('File import uses the same text core', async () => {
+    localStorage.setItem(STORAGE_KEY, serializeGraphDocument(snapshotToDocument(current)))
+    const importedDoc = snapshotToDocument({
+      nodes: EMPTY_GRAPH_NODES,
+      edges: EMPTY_GRAPH_EDGES,
+      customSymbols: [],
+      settings: {},
+    })
+    const file = new File([serializeGraphDocument(importedDoc)], 'ok.json', {
+      type: 'application/json',
+    })
+    const result = await importGraphJsonFile(file, current)
+    expect(result.ok).toBe(true)
   })
 })

@@ -26,6 +26,8 @@ type Props = {
   onPin?: (position: { x: number; y: number }) => void
   onBoundsChange?: (bounds: ViewerPanelBounds) => void
   onActivate?: () => void
+  /** Request edit of the selected Daily Log via App focusLogId path. */
+  onEditLog?: (logId: string) => void
 }
 
 function logHasVideo(log: TrainingLog): boolean {
@@ -57,6 +59,7 @@ export function NotableLogViewer({
   onPin,
   onBoundsChange,
   onActivate,
+  onEditLog,
 }: Props) {
   const showModal = modal ?? !pinned
   const escapeCloses = closeOnEscape ?? !pinned
@@ -194,8 +197,21 @@ export function NotableLogViewer({
                 </ul>
               </aside>
 
-              <div className="notable-log-viewer__detail" data-testid="notable-log-detail">
-                <p className="notable-log-viewer__note-date">{selectedLog?.date}</p>
+                            <div className="notable-log-viewer__detail" data-testid="notable-log-detail">
+                <div className="notable-log-viewer__note-head">
+                  <p className="notable-log-viewer__note-date">{selectedLog?.date}</p>
+                  {selectedLog && onEditLog ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      data-testid="notable-log-edit"
+                      onClick={() => onEditLog(selectedLog.id)}
+                    >
+                      수정
+                    </button>
+                  ) : null}
+                </div>
+
 
                 {videos.length > 0 ? (
                   <div className="notable-log-viewer__video" data-testid="notable-video-pane">

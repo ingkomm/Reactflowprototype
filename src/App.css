@@ -88,6 +88,15 @@
   accent-color: #9fe8dd;
 }
 
+.topbar__active-json {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .topbar__scale {
   display: flex;
   align-items: center;

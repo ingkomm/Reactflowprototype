@@ -258,11 +258,11 @@ export function DailyLogEditorModal({ open, mode, initial, onClose, onSave }: Pr
           </button>
           <button
             type="button"
-            className="btn btn--ghost"
+            className="btn"
             data-testid="daily-log-editor-save"
             onClick={handleSave}
           >
-            저장
+            {mode === 'edit' ? '수정' : '저장'}
           </button>
         </footer>
       </div>
