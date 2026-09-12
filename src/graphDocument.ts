@@ -304,6 +304,13 @@ function normalizePassiveNodeData(value: unknown, kindFallback: PassiveKind = 's
   if (media.length > 0) data.media = media
 
   if (resolvedKind === 'shard') {
+    if (value.referenceId === null) data.referenceId = null
+    else if (typeof value.referenceId === 'string' && value.referenceId.trim()) {
+      data.referenceId = value.referenceId.trim()
+    }
+  }
+
+  if (resolvedKind === 'shard') {
     const existingMarkdown = typeof value.markdown === 'string' ? value.markdown : ''
     const fromLogs = trainingLogsToMarkdown(legacyShardLogs)
     const markdown = existingMarkdown.trim() || fromLogs
@@ -494,11 +501,29 @@ function normalizePassiveDataForExport(data: PassiveNodeData): PassiveNodeData {
   const cloned = structuredClone(data)
   if (cloned.kind === 'shard') {
     cloned.stages = []
-  } else if (cloned.kind === 'notable') {
-    cloned.stages = ensureNotableStages(cloned.stages ?? [])
+  } else {
+    delete cloned.referenceId
+    if (cloned.kind === 'notable') {
+      cloned.stages = ensureNotableStages(cloned.stages ?? [])
+    }
   }
   return absorbNodeMediaIntoDailyLogs(cloned)
 }
+
+/** Portable Graph JSON must not carry World-global reference ids (dangling). */
+export function stripWorldReferenceLinksForPortableExport(
+  document: GraphDocumentV01,
+): GraphDocumentV01 {
+  return {
+    ...document,
+    nodes: document.nodes.map((node) => {
+      const data = { ...(node.data as PassiveNodeData) }
+      if ('referenceId' in data) delete data.referenceId
+      return { ...node, data }
+    }),
+  }
+}
+
 
 export function buildGraphDocument(input: GraphExportInput): GraphDocumentV01 {
   const syncedNodes = syncConnectInitialSlotsFromEdges(

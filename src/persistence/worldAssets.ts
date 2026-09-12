@@ -94,6 +94,7 @@ export async function buildWorldManifestFromDocument(
       schemaVersion: world.schemaVersion,
       universe: { ...world.universe },
       galaxies,
+      references: world.references.map((r) => ({ ...r })),
     },
     assets: assetMetas,
   }
@@ -129,6 +130,10 @@ export async function hydrateWorldManifest(
       schemaVersion: manifest.world.schemaVersion,
       universe: { ...manifest.world.universe },
       galaxies,
+      // Missing references on legacy v0.3 manifests → empty library.
+      references: Array.isArray(manifest.world.references)
+        ? manifest.world.references.map((r) => ({ ...r }))
+        : [],
     },
     issues,
   }

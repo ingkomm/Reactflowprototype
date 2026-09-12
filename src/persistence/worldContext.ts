@@ -3,7 +3,8 @@
  * React (App / useGraphApp) owns GraphAppWorldState explicitly.
  */
 import type { GraphDocumentV01 } from '../graphDocument'
-import { replaceGalaxyGraph, wrapGraphAsDefaultWorld } from './worldDocument'
+import { getGalaxyById, replaceGalaxyGraph, wrapGraphAsDefaultWorld } from './worldDocument'
+import { chooseInitialGalaxyId } from './worldGalaxies'
 import {
   DEFAULT_GALAXY_ID,
   type GraphAppWorldState,
@@ -11,6 +12,7 @@ import {
 } from './worldTypes'
 
 export type { GraphAppWorldState }
+export { chooseInitialGalaxyId }
 
 /** @deprecated Alias — prefer GraphAppWorldState. */
 export type ActiveWorldContext = GraphAppWorldState
@@ -36,5 +38,27 @@ export function worldStateFromLoadedWorld(
   world: WorldDocumentV03,
   activeGalaxyId: string = DEFAULT_GALAXY_ID,
 ): GraphAppWorldState {
-  return { world, activeGalaxyId: activeGalaxyId || DEFAULT_GALAXY_ID }
+  const id =
+    activeGalaxyId && world.galaxies.some((g) => g.id === activeGalaxyId)
+      ? activeGalaxyId
+      : chooseInitialGalaxyId(world)
+  return { world, activeGalaxyId: id }
+}
+
+/**
+ * Autosave result means "this galaxy graph was saved" — merge graph only.
+ * Keep current names / positions / other galaxies / references.
+ */
+export function mergeAutosavedGalaxyGraph(
+  current: GraphAppWorldState,
+  saved: GraphAppWorldState,
+): GraphAppWorldState {
+  const savedGalaxyId = saved.activeGalaxyId
+  const savedGalaxy = getGalaxyById(saved.world, savedGalaxyId)
+  if (!savedGalaxy) return current
+  if (!getGalaxyById(current.world, savedGalaxyId)) return current
+  return {
+    world: replaceGalaxyGraph(current.world, savedGalaxyId, savedGalaxy.graph),
+    activeGalaxyId: current.activeGalaxyId,
+  }
 }

@@ -193,6 +193,11 @@ export type PassiveNodeData = {
   classId?: string
   /** @deprecated Ignored — legacy dot icon reference. */
   customIconId?: string | null
+  /**
+   * Shard only: World-global Reference Library id.
+   * Shard label and Reference title are independent.
+   */
+  referenceId?: string | null
   /** Optional external videos attached to this node. */
   media?: VideoMedia[]
 }

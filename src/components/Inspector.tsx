@@ -61,6 +61,9 @@ type Props = {
   onChangeSymbolId: (nodeId: string, symbolId: string) => void
   onChangeStages: (nodeId: string, stages: StageData[]) => void
   onChangeMarkdown: (nodeId: string, markdown: string) => void
+  references?: { id: string; title: string; ddc?: string }[]
+  onChangeReferenceId?: (nodeId: string, referenceId: string | null) => void
+  onOpenReferenceLibrary?: () => void
   onChangeConnectEnabled: (nodeId: string, enabled: boolean) => void
   onChangeOrbitTierCount: (masteryId: string, tierCount: OrbitTierCount) => void
   onChangeSatelliteOrbitTier: (satelliteId: string, tier: OrbitTier) => void
@@ -87,6 +90,9 @@ export function Inspector({
   onChangeSymbolId,
   onChangeStages,
   onChangeMarkdown,
+  references = [],
+  onChangeReferenceId,
+  onOpenReferenceLibrary,
   onChangeConnectEnabled,
   onChangeOrbitTierCount,
   onChangeSatelliteOrbitTier,
@@ -526,6 +532,40 @@ export function Inspector({
           </div>
         </>
       )}
+
+
+      {data.kind === 'shard' && onChangeReferenceId ? (
+        <div className="field" data-testid="inspector-reference">
+          <span>Reference</span>
+          <select
+            value={data.referenceId ?? ''}
+            onChange={(e) =>
+              onChangeReferenceId(nodeId, e.target.value ? e.target.value : null)
+            }
+            aria-label="Linked Reference"
+          >
+            <option value="">None</option>
+            {references.map((ref) => (
+              <option key={ref.id} value={ref.id}>
+                {ref.ddc ? `${ref.ddc} — ${ref.title}` : ref.title}
+              </option>
+            ))}
+          </select>
+          {onOpenReferenceLibrary ? (
+            <button
+              type="button"
+              className="btn"
+              style={{ marginTop: 8 }}
+              onClick={onOpenReferenceLibrary}
+            >
+              Open Reference Library
+            </button>
+          ) : null}
+          <p className="field-hint">
+            Shard label과 Reference title은 별개입니다. Reference는 World-global Source identity입니다.
+          </p>
+        </div>
+      ) : null}
 
       {data.kind === 'shard' && (
         <label className="field">

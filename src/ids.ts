@@ -1,9 +1,25 @@
 /** Full-UUID entity ids for newly created graph objects. Existing ids are never rewritten. */
 
-export type EntityIdKind = 'node' | 'log' | 'media' | 'edge' | 'symbol' | 'stage'
+export type EntityIdKind =
+  | 'node'
+  | 'log'
+  | 'media'
+  | 'edge'
+  | 'symbol'
+  | 'stage'
+  | 'galaxy'
+  | 'ref'
 
 export function createEntityId(kind: EntityIdKind): string {
   return `${kind}_${crypto.randomUUID()}`
+}
+
+export function createGalaxyId(): string {
+  return createEntityId('galaxy')
+}
+
+export function createReferenceId(): string {
+  return createEntityId('ref')
 }
 
 export function createNodeId(): string {

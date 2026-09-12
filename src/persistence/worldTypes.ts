@@ -37,10 +37,31 @@ export type GalaxyDocumentV03 = {
   graph: GraphDocumentV01
 }
 
+/**
+ * World-global Source identity (Reference Library).
+ * Sibling of Universe — not nested under Universe.
+ */
+export type ReferenceDocumentV03 = {
+  id: string
+  title: string
+  /** Dewey Decimal / user classification address (free-form). */
+  ddc?: string
+  /** Author / organization / creator. */
+  creator?: string
+  /** Publication / revision year (free text ok). */
+  year?: string
+  /** URL / DOI / ISBN / file path / standard number / source locator. */
+  locator?: string
+  /** Short global note about the source itself. */
+  note?: string
+}
+
 export type WorldDocumentV03 = {
   schemaVersion: WorldSchemaVersion
   universe: UniverseDocumentV03
   galaxies: GalaxyDocumentV03[]
+  /** World-global Reference Library. Absent on legacy v0.3 files → normalize to []. */
+  references: ReferenceDocumentV03[]
 }
 
 export type GalaxyManifestGraphV03 = Omit<GraphDocumentV01, 'customSymbols'> & {
@@ -64,6 +85,8 @@ export type WorldManifestV03 = {
     schemaVersion: WorldSchemaVersion
     universe: UniverseDocumentV03
     galaxies: GalaxyManifestV03[]
+    /** Optional for backward compatibility with references-missing v0.3 manifests. */
+    references?: ReferenceDocumentV03[]
   }
   assets: AssetMetaV02[]
 }

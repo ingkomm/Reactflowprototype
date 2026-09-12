@@ -16,7 +16,8 @@ import {
   WORLD_STORAGE_KEY,
   type WorldStore,
 } from './worldStore'
-import { DEFAULT_GALAXY_ID, type GraphAppWorldState } from './worldTypes'
+import { type GraphAppWorldState } from './worldTypes'
+import { chooseInitialGalaxyId } from './worldGalaxies'
 import { getActiveGalaxyGraph } from './worldDocument'
 
 export const STORAGE_KEY = LEGACY_STORAGE_KEY
@@ -84,14 +85,15 @@ function graphFromWorldLoad(
   if (!loaded.ok) {
     return { ok: false, reason: mapLoadReason(loaded.reason) }
   }
-  const graph = getActiveGalaxyGraph(loaded.world, DEFAULT_GALAXY_ID)
+  const galaxyId = chooseInitialGalaxyId(loaded.world)
+  const graph = getActiveGalaxyGraph(loaded.world, galaxyId)
   if (!graph) {
     return { ok: false, reason: 'corrupt' }
   }
   return {
     ok: true,
     document: graph,
-    worldState: worldStateFromLoadedWorld(loaded.world, DEFAULT_GALAXY_ID),
+    worldState: worldStateFromLoadedWorld(loaded.world, galaxyId),
   }
 }
 
@@ -145,4 +147,23 @@ export function storageFailureMessage(
   if (reason === 'too_large') return '문서가 너무 커서 저장할 수 없습니다.'
   if (reason === 'io') return '저장소 I/O에 실패했습니다. 기존 문서는 유지됩니다.'
   return '로컬 저장에 실패했습니다 (용량 부족 등).'
+}
+
+/** Whole-World persistence (Universe / Reference / Multi-Galaxy mutations). */
+export async function saveWorldStateToStorage(
+  worldState: GraphAppWorldState,
+): Promise<StorageSaveResult> {
+  const store = await getWorldStore()
+  const saved = await store.saveCurrent(worldState.world)
+  if (saved.ok) return { ok: true, worldState }
+  return mapSaveFailure(saved)
+}
+
+export async function backupWorldStateToStorage(
+  worldState: GraphAppWorldState,
+): Promise<StorageSaveResult> {
+  const store = await getWorldStore()
+  const saved = await store.saveBackup(worldState.world)
+  if (saved.ok) return { ok: true, worldState }
+  return mapSaveFailure(saved)
 }

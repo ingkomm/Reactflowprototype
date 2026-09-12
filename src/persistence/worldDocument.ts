@@ -3,7 +3,7 @@
  * Composition: World → Galaxy → GraphDocumentV01 (unchanged).
  */
 import { validateGraphDocument, type GraphDocumentV01 } from '../graphDocument'
-import { MAX_GALAXIES } from '../limits'
+import { MAX_GALAXIES, MAX_REFERENCES } from '../limits'
 import {
   DEFAULT_GALAXY_ID,
   DEFAULT_GALAXY_NAME,
@@ -12,6 +12,7 @@ import {
   DEFAULT_UNIVERSE_WIDTH,
   WORLD_SCHEMA_VERSION,
   type GalaxyDocumentV03,
+  type ReferenceDocumentV03,
   type WorldDocumentV03,
 } from './worldTypes'
 
@@ -50,6 +51,7 @@ export function wrapGraphAsDefaultWorld(graph: GraphDocumentV01): WorldDocumentV
         graph,
       },
     ],
+    references: [],
   }
 }
 
@@ -81,6 +83,93 @@ export function getActiveGalaxyGraph(
   galaxyId: string = DEFAULT_GALAXY_ID,
 ): GraphDocumentV01 | null {
   return getGalaxyById(world, galaxyId)?.graph ?? null
+}
+
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function parseReferences(
+  value: unknown,
+  galaxies: GalaxyDocumentV03[],
+): { ok: true; references: ReferenceDocumentV03[] } | { ok: false; message: string } {
+  // Backward compatible: missing references → []
+  if (value == null) return { ok: true, references: [] }
+  if (!Array.isArray(value)) {
+    return { ok: false, message: 'world.references must be an array when present' }
+  }
+  if (value.length > MAX_REFERENCES) {
+    return { ok: false, message: `world exceeds Reference safety cap (${MAX_REFERENCES})` }
+  }
+  const seen = new Set<string>()
+  const references: ReferenceDocumentV03[] = []
+  for (let i = 0; i < value.length; i++) {
+    const item = value[i]
+    if (!item || typeof item !== 'object') {
+      return { ok: false, message: `references[${i}] must be an object` }
+    }
+    const r = item as Record<string, unknown>
+    if (!isNonEmptyString(r.id)) {
+      return { ok: false, message: `references[${i}].id must be a non-empty string` }
+    }
+    if (seen.has(r.id)) {
+      return { ok: false, message: `duplicate reference id: ${r.id}` }
+    }
+    seen.add(r.id)
+    if (!isNonEmptyString(r.title)) {
+      return { ok: false, message: `references[${i}].title must be a non-empty string` }
+    }
+    const optionalString = (key: string): string | undefined => {
+      const v = r[key]
+      if (v == null) return undefined
+      if (typeof v !== 'string') {
+        throw new Error(`references[${i}].${key} must be a string when present`)
+      }
+      const trimmed = v.trim()
+      return trimmed.length > 0 ? trimmed : undefined
+    }
+    let ddc: string | undefined
+    let creator: string | undefined
+    let year: string | undefined
+    let locator: string | undefined
+    let note: string | undefined
+    try {
+      ddc = optionalString('ddc')
+      creator = optionalString('creator')
+      year = optionalString('year')
+      locator = optionalString('locator')
+      note = optionalString('note')
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err) }
+    }
+    references.push({
+      id: r.id.trim(),
+      title: r.title.trim(),
+      ...(ddc ? { ddc } : {}),
+      ...(creator ? { creator } : {}),
+      ...(year ? { year } : {}),
+      ...(locator ? { locator } : {}),
+      ...(note ? { note } : {}),
+    })
+  }
+
+  // Referential integrity: shard.referenceId must exist in references
+  const refIds = new Set(references.map((r) => r.id))
+  for (const galaxy of galaxies) {
+    for (const node of galaxy.graph.nodes) {
+      const data = node.data as { kind?: string; referenceId?: string | null }
+      if (data.kind !== 'shard') continue
+      if (data.referenceId == null || data.referenceId === '') continue
+      if (!refIds.has(data.referenceId)) {
+        return {
+          ok: false,
+          message: `dangling referenceId ${data.referenceId} on shard ${node.id} in galaxy ${galaxy.id}`,
+        }
+      }
+    }
+  }
+  return { ok: true, references }
 }
 
 export function validateWorldDocument(value: unknown): WorldParseResult {
@@ -169,12 +258,22 @@ export function validateWorldDocument(value: unknown): WorldParseResult {
     })
   }
 
+  let references: ReferenceDocumentV03[]
+  try {
+    const refsResult = parseReferences(root.references, galaxies)
+    if (!refsResult.ok) return refsResult
+    references = refsResult.references
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) }
+  }
+
   return {
     ok: true,
     world: {
       schemaVersion: WORLD_SCHEMA_VERSION,
       universe: { width: u.width, height: u.height },
       galaxies,
+      references,
     },
   }
 }

@@ -22,6 +22,7 @@ import {
 import { WorkspaceStoreInitError } from './persistence/workspaceStore'
 import { WorldStoreInitError } from './persistence/worldStore'
 import type { GraphAppWorldState } from './persistence/worldTypes'
+import { mergeAutosavedGalaxyGraph } from './persistence/worldContext'
 import { SEED_EDGES, SEED_NODES } from './seedGraph'
 import type { CustomSymbol, GraphDocumentSettings } from './types'
 import { MAX_PORTABLE_JSON_BYTES, utf8ByteLength } from './limits'
@@ -180,13 +181,26 @@ export function useGraphAutosave(
     void persistSnapshot(pending, pendingWorld).then((result) => {
       if (generation !== generationRef.current) return
       if (result.ok) {
-        onWorldStateChangeRef.current(result.worldState)
+        const current = worldStateRef.current
+        const merged =
+          current != null
+            ? mergeAutosavedGalaxyGraph(current, result.worldState)
+            : result.worldState
+        onWorldStateChangeRef.current(merged)
         onStatusRef.current?.('saved')
       } else {
         onStatusRef.current?.('failed', result.reason)
       }
     })
   }, [enabled])
+
+  const cancelPending = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    generationRef.current += 1
+  }, [])
 
   useEffect(() => {
     if (!enabled) return
@@ -203,6 +217,8 @@ export function useGraphAutosave(
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [enabled, flush])
+
+  return { cancelPending }
 }
 
 export type NewSheetResult =

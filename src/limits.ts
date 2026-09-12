@@ -19,6 +19,9 @@ export const MAX_CUSTOM_SYMBOLS = 100
 /** Safety cap for Galaxy count inside a WorldDocument (0.3). Not a product UI limit. */
 export const MAX_GALAXIES = 64
 
+/** Safety cap for World-global Reference Library entries (0.3). */
+export const MAX_REFERENCES = 5000
+
 export const MIN_ORBIT_TIER_CAPACITY = 1
 export const MAX_ORBIT_TIER_CAPACITY = 24
 

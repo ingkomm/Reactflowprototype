@@ -124,6 +124,12 @@ import {
   type SaveStatus,
 } from './useGraphApp'
 import type { GraphAppWorldState } from './persistence/worldTypes'
+import { UniverseSheet } from './components/UniverseSheet'
+import { ReferenceLibrary } from './components/ReferenceLibrary'
+import { useWorldShell } from './useWorldShell'
+import { snapshotFromGalaxyGraph } from './galaxyCanvas'
+import { stripWorldReferenceLinksForPortableExport } from './graphDocument'
+
 import { clampOrbitTierCapacity } from './limits'
 import { extractDailyLogsFromNodeData, absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
 import './App.css'
@@ -261,7 +267,10 @@ export default function App() {
   const [bootstrapPending, setBootstrapPending] = useState(true)
   const [storageCorrupt, setStorageCorrupt] = useState(false)
   const [worldState, setWorldState] = useState<GraphAppWorldState | null>(null)
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [worldError, setWorldError] = useState<string | null>(null)
+  const navModeRef = useRef<'universe' | 'galaxy'>('universe')
+  const cancelPendingRef = useRef<() => void>(() => {})
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveFailureReason, setSaveFailureReason] = useState<SaveFailureReason | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<PassiveFlowNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -344,13 +353,7 @@ export default function App() {
     [],
   )
 
-  useGraphAutosave(
-    autosaveSnapshot,
-    worldState,
-    setWorldState,
-    workspaceReady && !bootstrapPending && !storageCorrupt,
-    onAutosaveStatus,
-  )
+
 
   useEffect(() => {
     const onMove = (event: MouseEvent) => {
@@ -383,6 +386,38 @@ export default function App() {
     (nds: PassiveFlowNode[]) => withMasteryDragFlags(nds, selectedIdRef.current),
     [],
   )
+
+  const getPersistSnapshot = useCallback(
+    () => ({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: {
+        gridSnapEnabled,
+        gridSnapScale,
+        voidHighlightEnabled,
+        defaultSymbolColors,
+      },
+    }),
+    [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled],
+  )
+
+  const applyGalaxyCanvas = useCallback(
+    (session: ReturnType<typeof snapshotFromGalaxyGraph>) => {
+      setNodes(stack(session.nodes))
+      setEdges(sanitizeFlowEdges(session.nodes, session.edges))
+      setCustomSymbols(session.customSymbols)
+      setDefaultSymbolColors(session.settings.defaultSymbolColors ?? {})
+      setGridSnapEnabled(session.settings.gridSnapEnabled ?? false)
+      setGridSnapScale(
+        normalizeGridSnapScale(session.settings.gridSnapScale ?? DEFAULT_GRID_SNAP_SCALE),
+      )
+      setVoidHighlightEnabled(session.settings.voidHighlightEnabled ?? false)
+    },
+    [setEdges, setNodes, stack],
+  )
+
+
 
   useEffect(() => {
     let cancelled = false
@@ -419,6 +454,46 @@ export default function App() {
       setEdges(snap.edges)
     },
   })
+
+  const resetGalaxySessionUi = useCallback(() => {
+    setSelectedId(null)
+    setContextMenu(null)
+    setPinnedViewers([])
+    setPinnedViewerBounds({})
+    setFloatingVideoNodeIds([])
+    setFocusLogId(null)
+    setDragPreviewNodes(null)
+    clipboardRef.current = null
+    resetHistory()
+  }, [resetHistory])
+
+  const worldShell = useWorldShell({
+    worldState,
+    setWorldState,
+    getSnapshot: getPersistSnapshot,
+    cancelPendingAutosave: () => cancelPendingRef.current(),
+    applyCanvas: applyGalaxyCanvas,
+    resetSessionUi: resetGalaxySessionUi,
+    setActiveJsonPath,
+    setError: setWorldError,
+  })
+  const { nav } = worldShell
+  const autosaveControls = useGraphAutosave(
+    autosaveSnapshot,
+    worldState,
+    setWorldState,
+    workspaceReady && !bootstrapPending && !storageCorrupt && nav.mode === 'galaxy',
+    onAutosaveStatus,
+  )
+
+  useEffect(() => {
+    navModeRef.current = nav.mode
+  }, [nav.mode])
+
+  useEffect(() => {
+    cancelPendingRef.current = autosaveControls.cancelPending
+  }, [autosaveControls.cancelPending])
+
 
   const handleBootstrap = useCallback(
     (choice: 'empty' | 'demo') => {
@@ -1264,10 +1339,13 @@ export default function App() {
             if (resolvedKind === 'shard') {
               nextData.stages = []
               if (data.markdown) nextData.markdown = data.markdown
+              if (data.referenceId) nextData.referenceId = data.referenceId
             } else if (resolvedKind === 'notable') {
               if (data.markdown) nextData.markdown = data.markdown
+              delete nextData.referenceId
             } else {
               delete nextData.markdown
+              delete nextData.referenceId
             }
             return { ...node, data: nextData }
           }
@@ -1430,7 +1508,7 @@ export default function App() {
         defaultSymbolColors,
       },
     })
-    return serializeGraphDocument(document)
+    return serializeGraphDocument(stripWorldReferenceLinksForPortableExport(document))
   }, [
     customSymbols,
     defaultSymbolColors,
@@ -1497,7 +1575,7 @@ export default function App() {
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     })
-    downloadGraphDocument(document)
+    downloadGraphDocument(stripWorldReferenceLinksForPortableExport(document))
     setImportError(null)
   }, [
     activeJsonPath,
@@ -1528,7 +1606,7 @@ export default function App() {
       customSymbols,
       settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
     })
-    downloadGraphDocument(document)
+    downloadGraphDocument(stripWorldReferenceLinksForPortableExport(document))
     setImportError(null)
   }, [
     customSymbols,
@@ -2147,6 +2225,19 @@ export default function App() {
     [updateNodeData],
   )
 
+  const onChangeReferenceId = useCallback(
+    (nodeId: string, referenceId: string | null) =>
+      updateNodeData(nodeId, (d) => {
+        if (d.kind !== 'shard') {
+          const next = { ...d }
+          delete next.referenceId
+          return next
+        }
+        return { ...d, referenceId }
+      }),
+    [updateNodeData],
+  )
+
   return (
     <CustomSymbolProvider customSymbols={customSymbols} defaultSymbolColors={defaultSymbolColors}>
       <ReactFlowProvider>
@@ -2202,6 +2293,24 @@ export default function App() {
                 >
                   Delete Selected
                 </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="open-reference-library"
+                  onClick={() => worldShell.setReferenceLibraryOpen(true)}
+                >
+                  Reference Library
+                </button>
+                {nav.mode === 'galaxy' ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    data-testid="return-to-universe"
+                    onClick={() => void worldShell.returnToUniverse()}
+                  >
+                    ↑ Universe
+                  </button>
+                ) : null}
                 <button type="button" className="btn" onClick={handleNewSheet}>
                   새 시트
                 </button>
@@ -2278,6 +2387,28 @@ export default function App() {
               </p>
             )}
 
+            {worldError ? (
+              <p className="import-error" role="alert">
+                {worldError}
+              </p>
+            ) : null}
+
+            {nav.mode === 'universe' && worldState ? (
+              <UniverseSheet
+                width={worldState.world.universe.width}
+                height={worldState.world.universe.height}
+                galaxies={worldState.world.galaxies}
+                selectedGalaxyId={worldShell.selectedUniverseGalaxyId}
+                highlightGalaxyId={worldShell.highlightGalaxyId}
+                onSelectGalaxy={worldShell.setSelectedUniverseGalaxyId}
+                onEnterGalaxy={(id) => void worldShell.enterGalaxy(id)}
+                onMoveGalaxy={(id, pos) => void worldShell.handleMoveGalaxy(id, pos)}
+                onCreateGalaxy={() => void worldShell.handleCreateGalaxy()}
+                onRenameGalaxy={(id) => void worldShell.handleRenameGalaxy(id)}
+                onDeleteGalaxy={(id) => void worldShell.handleDeleteGalaxy(id)}
+                onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
+              />
+            ) : (
             <TreeWorkspace
               inspectorWidth={inspectorWidth}
               onOpenSymbolEditor={setSymbolEditorKind}
@@ -2323,6 +2454,9 @@ export default function App() {
               onChangeSymbolId={onChangeSymbolId}
               onChangeStages={onChangeStages}
               onChangeMarkdown={onChangeMarkdown}
+              references={worldState?.world.references ?? []}
+              onChangeReferenceId={onChangeReferenceId}
+              onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
               onChangeConnectEnabled={changeConnectEnabled}
               onChangeOrbitTierCount={changeOrbitTierCount}
               onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
@@ -2334,6 +2468,23 @@ export default function App() {
               onChangeRootOrbitStartAngle={changeRootOrbitStartAngle}
               onDetachFromMastery={detachFromMastery}
               onDeleteNode={deleteNode}
+            />
+            )}
+
+            <ReferenceLibrary
+              open={worldShell.referenceLibraryOpen}
+              world={
+                worldState?.world ?? {
+                  schemaVersion: '0.3',
+                  universe: { width: 1600, height: 1000 },
+                  galaxies: [],
+                  references: [],
+                }
+              }
+              onClose={() => worldShell.setReferenceLibraryOpen(false)}
+              onCreate={worldShell.handleCreateReference}
+              onUpdate={worldShell.handleUpdateReference}
+              onDelete={worldShell.handleDeleteReference}
             />
 
             <PinnedViewerTetherOverlay
