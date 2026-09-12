@@ -1,0 +1,167 @@
+import type { StageData, TrainingLog, VideoMedia } from './types'
+import { createLogId } from './ids'
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+
+export function formatPracticeDate(date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function isValidPracticeDate(value: string): boolean {
+  return DATE_RE.test(value.trim())
+}
+
+export function createDailyLog(
+  date: string = formatPracticeDate(),
+  note?: string,
+  media?: VideoMedia[],
+): TrainingLog {
+  const log: TrainingLog = {
+    id: createLogId(),
+    date: date.trim(),
+  }
+  const trimmedNote = note?.trim()
+  if (trimmedNote) log.note = trimmedNote
+  if (media?.length) log.media = media
+  return log
+}
+
+function legacyDateFromLog(raw: Record<string, unknown>): string | null {
+  if (typeof raw.date === 'string' && isValidPracticeDate(raw.date)) {
+    return raw.date.trim()
+  }
+  if (typeof raw.label === 'string' && isValidPracticeDate(raw.label)) {
+    return raw.label.trim()
+  }
+  return null
+}
+
+function legacyNoteFromLog(raw: Record<string, unknown>, resolvedDate: string): string | undefined {
+  if (typeof raw.note === 'string' && raw.note.trim()) return raw.note.trim()
+  if (typeof raw.label === 'string') {
+    const label = raw.label.trim()
+    if (label && label !== resolvedDate && !isValidPracticeDate(label)) return label
+  }
+  return undefined
+}
+
+/** Convert one legacy log entry into daily logs without dropping memo, media, or day count. */
+export function migrateLegacyTrainingLogs(value: unknown): TrainingLog[] {
+  if (!value || typeof value !== 'object') return []
+  const raw = value as Record<string, unknown>
+  if (typeof raw.id !== 'string' || !raw.id.trim()) return []
+
+  const date = legacyDateFromLog(raw) ?? formatPracticeDate()
+  const note = legacyNoteFromLog(raw, date)
+  const media = Array.isArray(raw.media) ? (raw.media as VideoMedia[]) : undefined
+  const count =
+    typeof raw.count === 'number' && Number.isFinite(raw.count)
+      ? Math.max(1, Math.floor(raw.count))
+      : 1
+
+  if (count <= 1) {
+    const log = createDailyLog(date, note, media)
+    log.id = raw.id.trim()
+    return [log]
+  }
+
+  // Legacy {date, count:N} → N entries all sharing the same date (no invented prior days).
+  const logs: TrainingLog[] = []
+  for (let i = 0; i < count; i++) {
+    logs.push({
+      id: i === 0 ? raw.id.trim() : createLogId(),
+      date,
+      ...(i === 0 && note ? { note } : {}),
+      ...(i === 0 && media?.length ? { media } : {}),
+    })
+  }
+  return logs
+}
+
+
+/** Trim dates and sort; never merges same-date logs. */
+export function normalizeDailyLogs(logs: TrainingLog[]): TrainingLog[] {
+  return sortedDailyLogs(logs.map((log) => ({ ...log, date: log.date.trim() })))
+}
+
+/** Practice progression = log entry count (same-date entries each count). */
+export function countPracticeEntries(logs: TrainingLog[]): number {
+  return logs.length
+}
+
+export function countPracticeEntriesInStages(stages: StageData[]): number {
+  return stages.reduce((sum, stage) => sum + stage.logs.length, 0)
+}
+
+/** Newest date first; same-date entries keep their relative input order. */
+export function sortedDailyLogs(logs: TrainingLog[]): TrainingLog[] {
+  return logs
+    .map((log, index) => ({ log, index }))
+    .sort((a, b) => {
+      const byDate = b.log.date.localeCompare(a.log.date)
+      return byDate !== 0 ? byDate : a.index - b.index
+    })
+    .map(({ log }) => log)
+}
+
+export function upsertDailyLog(
+  logs: TrainingLog[],
+  entry: TrainingLog,
+): { logs: TrainingLog[]; error?: string } {
+  if (!isValidPracticeDate(entry.date)) {
+    return { logs, error: '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).' }
+  }
+  const next = logs.some((log) => log.id === entry.id)
+    ? logs.map((log) => (log.id === entry.id ? entry : log))
+    : [...logs, entry]
+  return { logs: normalizeDailyLogs(next) }
+}
+
+export function removeDailyLog(logs: TrainingLog[], logId: string): TrainingLog[] {
+  return logs.filter((log) => log.id !== logId)
+}
+
+export function memoPreview(note: string, maxLength = 72): string {
+  const trimmed = note.trim()
+  if (trimmed.length <= maxLength) return trimmed
+  return `${trimmed.slice(0, maxLength - 1)}…`
+}
+
+export function recentDailyLogs(logs: TrainingLog[], limit = 5): TrainingLog[] {
+  return sortedDailyLogs(logs).slice(0, limit)
+}
+
+
+export function dailyLogSummary(log: TrainingLog): string {
+  if (log.note?.trim()) return memoPreview(log.note)
+  if (log.media?.[0]?.url) return log.media[0].title || '동영상 기록'
+  return '날짜 기록'
+}
+
+/** First meaningful line for Timeline index (does not mutate note source). */
+export function dailyLogTimelineLabel(log: TrainingLog): string {
+  const note = log.note?.trim()
+  if (!note) return dailyLogSummary(log)
+
+  const lines = note.split(/\r?\n/)
+  let first = ''
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed) {
+      first = trimmed
+      break
+    }
+  }
+  if (!first) return dailyLogSummary(log)
+
+  if (/^```svg\b/i.test(first) || /^<svg[\s>]/i.test(first)) {
+    return 'SVG'
+  }
+
+  const cleaned = first.replace(/^#{1,6}\s+/, '').replace(/^[-*]\s+/, '').trim()
+  return cleaned || first
+}

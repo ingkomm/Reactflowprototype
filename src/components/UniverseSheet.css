@@ -1,0 +1,188 @@
+.universe-sheet {
+  --universe-ink: #e8eef7;
+  --universe-muted: #8b9bb0;
+  --universe-line: rgba(143, 160, 176, 0.28);
+  --universe-amber: #d4a24c;
+  --universe-teal: #3d9a8b;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(61, 154, 139, 0.08), transparent 45%),
+    radial-gradient(ellipse at 80% 80%, rgba(212, 162, 76, 0.06), transparent 40%),
+    linear-gradient(180deg, #05080d 0%, #080c12 55%, #030508 100%);
+  color: var(--universe-ink);
+}
+
+.universe-sheet__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--universe-line);
+  background: color-mix(in srgb, #05080d 88%, transparent);
+}
+
+.universe-sheet__toolbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.universe-sheet__title {
+  font-family: Manrope, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 1.15rem;
+}
+
+.universe-sheet__meta {
+  font-size: 0.75rem;
+  color: var(--universe-muted);
+  letter-spacing: 0.04em;
+}
+
+.universe-sheet__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.universe-sheet__viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.universe-sheet__space {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--universe-amber) 35%, transparent);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.universe-sheet__starfield {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 30% 70%, rgba(255, 255, 255, 0.28), transparent),
+    radial-gradient(1.5px 1.5px at 55% 35%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 75% 15%, rgba(255, 255, 255, 0.25), transparent),
+    radial-gradient(1px 1px at 88% 60%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1px 1px at 42% 88%, rgba(255, 255, 255, 0.22), transparent),
+    linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(12.5% - 0.5px),
+      rgba(143, 160, 176, 0.04) calc(12.5% - 0.5px),
+      rgba(143, 160, 176, 0.04) calc(12.5% + 0.5px),
+      transparent calc(12.5% + 0.5px)
+    );
+  background-size: auto, auto, auto, auto, auto, auto, 12.5% 100%;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.universe-sheet__frame {
+  position: absolute;
+  inset: 8px;
+  border: 1px dashed rgba(143, 160, 176, 0.12);
+  pointer-events: none;
+}
+
+.galaxy-gateway {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 72px;
+  height: 72px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  touch-action: none;
+}
+
+.galaxy-gateway--editable {
+  cursor: grab;
+}
+
+.galaxy-gateway--editable:active {
+  cursor: grabbing;
+}
+
+.galaxy-gateway__core {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 230, 170, 0.7), transparent 45%),
+    radial-gradient(circle at 50% 55%, #2a4038, #121820 72%);
+  box-shadow: 0 0 18px rgba(61, 154, 139, 0.35);
+}
+
+.galaxy-gateway__ring {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--universe-teal) 55%, transparent);
+  opacity: 0.85;
+}
+
+.galaxy-gateway__label {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--universe-ink);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.galaxy-gateway--selected .galaxy-gateway__ring {
+  border-color: var(--universe-amber);
+  box-shadow: 0 0 12px rgba(212, 162, 76, 0.35);
+}
+
+.galaxy-gateway--selected .galaxy-gateway__core {
+  box-shadow: 0 0 22px rgba(212, 162, 76, 0.4);
+}
+
+.galaxy-gateway--highlight {
+  animation: galaxy-gateway-pulse 280ms ease-out;
+}
+
+@keyframes galaxy-gateway-pulse {
+  from {
+    transform: translate(-50%, -50%) scale(1.18);
+    filter: brightness(1.25);
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galaxy-gateway--highlight {
+    animation: none;
+  }
+}
+
+.universe-sheet__hint {
+  margin: 0;
+  padding: 8px 16px 12px;
+  font-size: 0.75rem;
+  color: var(--universe-muted);
+  border-top: 1px solid var(--universe-line);
+}

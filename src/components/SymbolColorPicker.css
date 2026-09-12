@@ -1,0 +1,38 @@
+.symbol-color-picker {
+  display: grid;
+  gap: 6px;
+}
+
+.symbol-color-picker__label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.symbol-color-picker__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.symbol-color-picker__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #eef3f7 18%, transparent);
+  background: var(--swatch-color);
+  padding: 0;
+  cursor: pointer;
+}
+
+.symbol-color-picker__swatch.is-selected {
+  box-shadow:
+    0 0 0 2px #0d1218,
+    0 0 0 3px var(--swatch-color);
+}
+
+.symbol-color-picker__swatch:focus-visible {
+  outline: 2px solid #6cb6ea;
+  outline-offset: 2px;
+}

@@ -1,0 +1,2736 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+  type Connection,
+  type Edge,
+  type Node,
+  type OnSelectionChangeParams,
+  type IsValidConnection,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+
+import { type PassiveFlowNode } from './components/PassiveNode'
+import { TreeWorkspace } from './components/TreeWorkspace'
+import { classifyPassiveConnection, computePoweredNodeIds, computePowerFlowMeta, resolveRootConnectSlot, isValidRootPowerHandles, isEdgeActive } from './power'
+import type { PassiveKind, PassiveNodeData, OrbitTier, OrbitTierCount, StageData, CustomSymbol, VideoMedia, InitialConnectSlot, TrainingLog } from './types'
+import { INITIAL_NODE_ID, PASSIVE_KIND_LABEL } from './types'
+import { normalizeSymbolId, type SymbolEditorKind, DEFAULT_SYMBOL_ID } from './librarySymbols'
+import { CustomSymbolProvider } from './CustomSymbolContext'
+import { importSymbolFile } from './customSymbol'
+import { SymbolKindEditor } from './components/SymbolKindEditor'
+import {
+  buildGraphDocument,
+  downloadGraphDocument,
+  serializeGraphDocument,
+} from './graphDocument'
+import { createVideoMediaId, canFloatNodeVideos } from './videoMedia'
+import type { NodeTemplatePayload } from './nodeTemplate'
+import {
+  isDesktopGraphExportSupported,
+  openGraphJsonDesktop,
+  saveGraphJsonAsDesktop,
+  saveGraphJsonToPathDesktop,
+} from './platform/graphExport'
+import {
+  clearActiveJsonPath,
+  readActiveJsonPath,
+  writeActiveJsonPath,
+} from './persistence/activeJsonPath'
+import { stagesForKind } from './stage'
+import { createLogId, createNodeId, createStageId } from './ids'
+import {
+  DEFAULT_GRID_SNAP_SCALE,
+  GRID_SNAP_SCALE_OPTIONS,
+  normalizeGridSnapScale,
+  snapNodeCenter,
+} from './grid'
+import { createPassiveData, passiveLinkEdge, rootSocketLinkEdge, rootPowerLinkEdge, orbitLinkEdge } from './graphFactory'
+import { isRootSocketOccupied } from './rootGeometry'
+import {
+  DEFAULT_SELECTED_NODE_ID,
+} from './seedGraph'
+import {
+  assignSatelliteOrbitSlot,
+  canAcceptOrbitMember,
+  countOrbitTierMembers,
+  DEFAULT_ORBIT_START_ANGLE,
+  findOrbitAttachTarget,
+  getOrbitTierCapacity,
+  getOrderedTierSatellites,
+  getSatelliteOrbitSlot,
+  getSatelliteOrbitTier,
+  getTierStartAngle,
+  isMasteryKind,
+  isMasteryOrbitLocked,
+  isOrbitMemberKind,
+  layoutMasteryOrbit,
+  NODE_SIZE,
+  normalizeOrbitTier,
+  normalizeOrbitTierCount,
+  normalizeAngleDelta,
+  placeSatelliteFromDrag,
+  placeSatelliteOnMasteryOrbit,
+  rematerializeOrbitTierSlots,
+  removeSatelliteFromOrbitOrders,
+  rotateAllMasteryTiersByDelta,
+  setMasteryTierOrbitOrder,
+  setMasteryTierStartAngle,
+  snapshotMasteryTierAngles,
+  removeNodesAndRelayout,
+  snapOrbitAngle,
+  type SatelliteDragOrigin,
+  withMasteryDragFlags,
+} from './orbit'
+import {
+  applyRootBoundaryEject,
+  ensureRootFixed,
+  layoutRootOrbit,
+  placeNotableFromRootOrbitDrag,
+  stripRootOrbitWhenMasteryBound,
+  getRootOrbitCapacity,
+  setRootOrbitCapacity,
+  setRootOrbitStartAngle,
+  occupiedRootOrbitSlots,
+} from './rootOrbit'
+import { shouldSuppressOrbitSelectionClear } from './orbitInteractionGuard'
+import { useGraphHistory } from './useGraphHistory'
+import { FirstRunDialog } from './components/FirstRunDialog'
+import { NodeContextPopup } from './components/NodeContextPopup'
+import { ShardMarkdownPreview } from './components/ShardMarkdownPreview'
+import { NotableLogViewer } from './components/NotableLogViewer'
+import { PinnedViewerTetherOverlay } from './components/PinnedViewerTetherOverlay'
+import {
+  bringPinnedViewerToFront,
+  closePinnedViewer,
+  findPinnedViewer,
+  pinOrFocusViewer,
+  prunePinnedViewers,
+  prunePinnedViewersByKindMismatch,
+  type PinnedViewerEntry,
+  type PinnedViewerKind,
+  type ViewerPanelBounds,
+} from './pinnedViewer'
+import {
+  commitBootstrapChoice,
+  createNewSheet,
+  importGraphJsonFile,
+  importGraphJsonText,
+  resolveInitialGraphState,
+  sanitizeFlowEdges,
+  useGraphAutosave,
+  type SaveFailureReason,
+  type SaveStatus,
+} from './useGraphApp'
+import type { GraphAppWorldState } from './persistence/worldTypes'
+import { UniverseSheet } from './components/UniverseSheet'
+import { ReferenceLibrary } from './components/ReferenceLibrary'
+import { useWorldShell } from './useWorldShell'
+import {
+  type SheetTransition,
+  runEnterGalaxyTransition,
+  sheetTransitionDurationMs,
+  shouldShowGalaxyLayer,
+  shouldShowUniverseLayer,
+  waitMs,
+} from './sheetTransition'
+import { universeGatewayOriginPct } from './galaxyRootCenter'
+import { snapshotFromGalaxyGraph } from './galaxyCanvas'
+import { stripWorldReferenceLinksForPortableExport } from './graphDocument'
+
+import { clampOrbitTierCapacity } from './limits'
+import { extractDailyLogsFromNodeData, absorbNodeMediaIntoDailyLogs } from './dailyLogNode'
+import './App.css'
+
+function dailyLogsForNode(data: PassiveNodeData): TrainingLog[] {
+  return extractDailyLogsFromNodeData(data)
+}
+
+
+type NodeClipboard = {
+  data: PassiveNodeData
+  position: { x: number; y: number }
+}
+
+function cloneMediaList(media?: VideoMedia[]): VideoMedia[] | undefined {
+  if (!media?.length) return undefined
+  return media.map((item) => ({ ...item, id: createVideoMediaId() }))
+}
+
+function cloneStagesWithNewIds(stages: StageData[]): StageData[] {
+  return stages.map((stage) => ({
+    ...stage,
+    id: createStageId(),
+    logs: stage.logs.map((log) => ({
+      ...log,
+      id: createLogId(),
+      media: cloneMediaList(log.media),
+    })),
+  }))
+}
+
+/** Append `_N` using the next free number for this exact title stem. */
+function nextCopyLabel(baseLabel: string, existingLabels: Iterable<string>): string {
+  const escaped = baseLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`^${escaped}_(\\d+)$`)
+  let max = 0
+  for (const label of existingLabels) {
+    const match = label.match(re)
+    if (match) max = Math.max(max, Number(match[1]))
+  }
+  return `${baseLabel}_${max + 1}`
+}
+
+function buildPastedNode(
+  clipboard: NodeClipboard,
+  label: string,
+  offsetIndex: number,
+): PassiveFlowNode {
+  const source = clipboard.data
+  const kind = source.kind
+  const stages = cloneStagesWithNewIds(source.stages ?? [])
+  const data = absorbNodeMediaIntoDailyLogs({
+    label,
+    kind,
+    stages,
+    symbolId: source.symbolId,
+    customSymbolId: source.customSymbolId ?? null,
+    media: cloneMediaList(source.media),
+    ...(source.markdown && source.markdown.trim()
+      ? { markdown: source.markdown }
+      : {}),
+    ...(isMasteryKind(kind)
+      ? {
+          orbitStartAngle: source.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+          orbitOrder: [],
+          orbitTierCount: source.orbitTierCount ?? 1,
+        }
+      : kind === 'void'
+        ? { masteryId: null, voidPassing: source.voidPassing ?? false, orbitTier: 1 }
+        : kind === 'initial'
+          ? {}
+          : kind === 'connect'
+            ? { connectEnabled: source.connectEnabled ?? true }
+            : { masteryId: null, orbitTier: 1 }),
+  })
+
+  return {
+    id: createNodeId(),
+    type: 'passive',
+    position: {
+      x: clipboard.position.x + offsetIndex * 36,
+      y: clipboard.position.y + offsetIndex * 36,
+    },
+    dragHandle: '.node-drag-handle',
+    draggable: true,
+    data,
+  }
+}
+
+function resolveMasteryPair(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+): { mastery: PassiveFlowNode; satellite: PassiveFlowNode } | null {
+  const sourceData = source.data as PassiveNodeData
+  const targetData = target.data as PassiveNodeData
+
+  if (isMasteryKind(sourceData.kind) && isOrbitMemberKind(targetData.kind)) {
+    return { mastery: source, satellite: target }
+  }
+  if (isMasteryKind(targetData.kind) && isOrbitMemberKind(sourceData.kind)) {
+    return { mastery: target, satellite: source }
+  }
+  return null
+}
+
+function findLinkEdge(edges: Edge[], a: string, b: string, type?: 'center' | 'orbit') {
+  return edges.find((e) => {
+    if (type && e.type !== type) return false
+    return (e.source === a && e.target === b) || (e.source === b && e.target === a)
+  })
+}
+
+function classifyLink(
+  source: PassiveFlowNode,
+  target: PassiveFlowNode,
+  nodes: PassiveFlowNode[],
+) {
+  return classifyPassiveConnection(source, target, nodes)
+}
+
+function isRootConnectSlotTaken(
+  edges: Edge[],
+  slot: InitialConnectSlot,
+  exceptConnectId?: string,
+): boolean {
+  return isRootSocketOccupied(edges, slot, INITIAL_NODE_ID, exceptConnectId)
+}
+
+function sanitizeEdges(nodes: PassiveFlowNode[], edges: Edge[]): Edge[] {
+  return sanitizeFlowEdges(nodes, edges)
+}
+
+export default function App() {
+  const [workspaceReady, setWorkspaceReady] = useState(false)
+  const [bootstrapPending, setBootstrapPending] = useState(true)
+  const [storageCorrupt, setStorageCorrupt] = useState(false)
+  const [worldState, setWorldState] = useState<GraphAppWorldState | null>(null)
+  const [worldError, setWorldError] = useState<string | null>(null)
+  const navModeRef = useRef<'universe' | 'galaxy'>('universe')
+  const cancelPendingRef = useRef<() => void>(() => {})
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveFailureReason, setSaveFailureReason] = useState<SaveFailureReason | null>(null)
+  const [nodes, setNodes, onNodesChange] = useNodesState<PassiveFlowNode>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(false)
+  const [gridSnapScale, setGridSnapScale] = useState(DEFAULT_GRID_SNAP_SCALE)
+  const [voidHighlightEnabled, setVoidHighlightEnabled] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(DEFAULT_SELECTED_NODE_ID)
+  const [inspectorWidth, setInspectorWidth] = useState(360)
+  const [customSymbols, setCustomSymbols] = useState<CustomSymbol[]>([])
+  const [defaultSymbolColors, setDefaultSymbolColors] = useState<
+    Partial<Record<SymbolEditorKind, string>>
+  >({})
+  const [symbolEditorKind, setSymbolEditorKind] = useState<SymbolEditorKind | null>(null)
+  const [symbolImportError, setSymbolImportError] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [floatingVideoNodeIds, setFloatingVideoNodeIds] = useState<string[]>([])
+  const [contextMenu, setContextMenu] = useState<{ nodeId: string; x: number; y: number } | null>(null)
+  const [pinnedViewers, setPinnedViewers] = useState<PinnedViewerEntry[]>([])
+  const [pinnedViewerBounds, setPinnedViewerBounds] = useState<Record<string, ViewerPanelBounds>>({})
+  const pinnedZCounterRef = useRef(50)
+  const [focusLogId, setFocusLogId] = useState<string | null>(null)
+  /** Session-only external JSON path (Desktop). Not part of GraphDocument / autosave. */
+  const [activeJsonPath, setActiveJsonPath] = useState<string | null>(() => readActiveJsonPath())
+  const importInputRef = useRef<HTMLInputElement>(null)
+  /** Visual-only graph while dragging satellites — committed `nodes` stay until drop. */
+  const [dragPreviewNodes, setDragPreviewNodes] = useState<PassiveFlowNode[] | null>(null)
+  const resizingInspector = useRef(false)
+  const clipboardRef = useRef<NodeClipboard | null>(null)
+  const pasteSerialRef = useRef(0)
+  const orbitDragSessionRef = useRef<{
+    nodeId: string
+    originPosition: { x: number; y: number }
+    snapshotNodes: PassiveFlowNode[]
+    orbitOrigin?: {
+      masteryId: string
+      tier: OrbitTier
+      slot: number
+    }
+  } | null>(null)
+
+  const stateRef = useRef({ nodes, edges })
+  const selectedIdRef = useRef(selectedId)
+  const nodesRef = useRef(nodes)
+
+  useEffect(() => {
+    stateRef.current = { nodes, edges }
+    selectedIdRef.current = selectedId
+    nodesRef.current = nodes
+  })
+
+  // Stabilize snapshot identity so worldState-only updates cannot re-arm autosave.
+  const autosaveSnapshot = useMemo(
+    () => ({
+      nodes,
+      edges,
+      customSymbols,
+      settings: {
+        gridSnapEnabled,
+        gridSnapScale,
+        voidHighlightEnabled,
+        defaultSymbolColors,
+      },
+    }),
+    [
+      nodes,
+      edges,
+      customSymbols,
+      gridSnapEnabled,
+      gridSnapScale,
+      voidHighlightEnabled,
+      defaultSymbolColors,
+    ],
+  )
+
+  const onAutosaveStatus = useCallback(
+    (status: SaveStatus, reason?: SaveFailureReason) => {
+      setSaveStatus(status)
+      setSaveFailureReason(reason ?? null)
+    },
+    [],
+  )
+
+
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      if (!resizingInspector.current) return
+      const min = 280
+      const max = Math.min(760, Math.floor(window.innerWidth * 0.72))
+      const next = window.innerWidth - event.clientX
+      setInspectorWidth(Math.min(max, Math.max(min, next)))
+    }
+    const onUp = () => {
+      if (!resizingInspector.current) return
+      resizingInspector.current = false
+      document.body.classList.remove('is-resizing-inspector')
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const onInspectorResizeStart = useCallback((event: ReactMouseEvent) => {
+    event.preventDefault()
+    resizingInspector.current = true
+    document.body.classList.add('is-resizing-inspector')
+  }, [])
+
+  const stack = useCallback(
+    (nds: PassiveFlowNode[]) => withMasteryDragFlags(nds, selectedIdRef.current),
+    [],
+  )
+
+  const getPersistSnapshot = useCallback(
+    () => ({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: {
+        gridSnapEnabled,
+        gridSnapScale,
+        voidHighlightEnabled,
+        defaultSymbolColors,
+      },
+    }),
+    [customSymbols, defaultSymbolColors, gridSnapEnabled, gridSnapScale, voidHighlightEnabled],
+  )
+
+  const applyGalaxyCanvas = useCallback(
+    (session: ReturnType<typeof snapshotFromGalaxyGraph>) => {
+      setNodes(stack(session.nodes))
+      setEdges(sanitizeFlowEdges(session.nodes, session.edges))
+      setCustomSymbols(session.customSymbols)
+      setDefaultSymbolColors(session.settings.defaultSymbolColors ?? {})
+      setGridSnapEnabled(session.settings.gridSnapEnabled ?? false)
+      setGridSnapScale(
+        normalizeGridSnapScale(session.settings.gridSnapScale ?? DEFAULT_GRID_SNAP_SCALE),
+      )
+      setVoidHighlightEnabled(session.settings.voidHighlightEnabled ?? false)
+    },
+    [setEdges, setNodes, stack],
+  )
+
+
+
+  useEffect(() => {
+    let cancelled = false
+    void resolveInitialGraphState().then((initial) => {
+      if (cancelled) return
+      setBootstrapPending(initial.needsBootstrap)
+      setStorageCorrupt(initial.storageCorrupt)
+      setWorldState(initial.worldState)
+      if (initial.snapshot) {
+        setNodes(stack(initial.snapshot.nodes))
+        setEdges(sanitizeFlowEdges(initial.snapshot.nodes, initial.snapshot.edges))
+        setCustomSymbols(initial.snapshot.customSymbols)
+        setDefaultSymbolColors(initial.snapshot.settings.defaultSymbolColors ?? {})
+        setGridSnapEnabled(initial.snapshot.settings.gridSnapEnabled ?? false)
+        setGridSnapScale(
+          normalizeGridSnapScale(
+            initial.snapshot.settings.gridSnapScale ?? DEFAULT_GRID_SNAP_SCALE,
+          ),
+        )
+        setVoidHighlightEnabled(initial.snapshot.settings.voidHighlightEnabled ?? false)
+        setSelectedId(initial.snapshot.nodes[0]?.id ?? DEFAULT_SELECTED_NODE_ID)
+      }
+      setWorkspaceReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setEdges, setNodes, stack])
+
+  const { commit, reset: resetHistory } = useGraphHistory({
+    getState: () => stateRef.current,
+    setState: (snap) => {
+      setNodes(stack(snap.nodes))
+      setEdges(snap.edges)
+    },
+  })
+
+  const resetGalaxySessionUi = useCallback(() => {
+    setSelectedId(null)
+    setContextMenu(null)
+    setPinnedViewers([])
+    setPinnedViewerBounds({})
+    setFloatingVideoNodeIds([])
+    setFocusLogId(null)
+    setDragPreviewNodes(null)
+    clipboardRef.current = null
+    resetHistory()
+  }, [resetHistory])
+
+  const worldShell = useWorldShell({
+    worldState,
+    setWorldState,
+    getSnapshot: getPersistSnapshot,
+    cancelPendingAutosave: () => cancelPendingRef.current(),
+    applyCanvas: applyGalaxyCanvas,
+    resetSessionUi: resetGalaxySessionUi,
+    setActiveJsonPath,
+    setError: setWorldError,
+  })
+  const { nav } = worldShell
+  const [sheetTransition, setSheetTransition] = useState<SheetTransition>({ phase: 'idle' })
+  const [centerOnRootToken, setCenterOnRootToken] = useState(0)
+  const [universeEditing, setUniverseEditing] = useState(false)
+  const sheetTransitionLock = sheetTransition.phase !== 'idle'
+
+  const requestEnterGalaxy = useCallback(
+    async (galaxyId: string, originPct: { x: number; y: number }) => {
+      if (sheetTransition.phase !== 'idle') return
+      await runEnterGalaxyTransition({
+        galaxyId,
+        originPct,
+        setUniverseEditing,
+        setEntering: (id, origin) =>
+          setSheetTransition({ phase: 'entering-galaxy', galaxyId: id, originPct: origin }),
+        enterGalaxy: worldShell.enterGalaxy,
+        bumpCenterOnRootToken: () => setCenterOnRootToken((n) => n + 1),
+        setIdle: () => setSheetTransition({ phase: 'idle' }),
+      })
+    },
+    [sheetTransition.phase, worldShell],
+  )
+
+  const requestReturnToUniverse = useCallback(async () => {
+    if (sheetTransition.phase !== 'idle') return
+    if (nav.mode !== 'galaxy' || !worldState) {
+      await worldShell.returnToUniverse()
+      setUniverseEditing(false)
+      return
+    }
+    const galaxyId = nav.galaxyId
+    const galaxy = worldState.world.galaxies.find((g) => g.id === galaxyId)
+    const originPct = galaxy
+      ? universeGatewayOriginPct(galaxy.universePosition, {
+          width: worldState.world.universe.width,
+          height: worldState.world.universe.height,
+        })
+      : { x: 50, y: 50 }
+    setSheetTransition({ phase: 'leaving-galaxy', galaxyId, originPct })
+    const ms = sheetTransitionDurationMs()
+    await waitMs(ms)
+    await worldShell.returnToUniverse()
+    setUniverseEditing(false)
+    await waitMs(ms)
+    setSheetTransition({ phase: 'idle' })
+  }, [sheetTransition.phase, nav, worldState, worldShell])
+
+  const autosaveControls = useGraphAutosave(
+    autosaveSnapshot,
+    worldState,
+    setWorldState,
+    workspaceReady && !bootstrapPending && !storageCorrupt && nav.mode === 'galaxy',
+    onAutosaveStatus,
+  )
+
+  useEffect(() => {
+    navModeRef.current = nav.mode
+  }, [nav.mode])
+
+  useEffect(() => {
+    cancelPendingRef.current = autosaveControls.cancelPending
+  }, [autosaveControls.cancelPending])
+
+
+  const handleBootstrap = useCallback(
+    (choice: 'empty' | 'demo') => {
+      void commitBootstrapChoice(choice, worldState).then((result) => {
+        if (!result.ok) {
+          setImportError(result.message)
+          return
+        }
+        const snapshot = result.snapshot
+        setWorldState(result.worldState)
+        resetHistory()
+        setCustomSymbols(snapshot.customSymbols)
+        setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+        setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+        setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
+        setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+        setNodes(stack(snapshot.nodes))
+        setEdges(sanitizeFlowEdges(snapshot.nodes, snapshot.edges))
+        setSelectedId(snapshot.nodes[0]?.id ?? null)
+        setBootstrapPending(false)
+        setImportError(null)
+      })
+    },
+    [resetHistory, setEdges, setNodes, stack, worldState],
+  )
+
+  const copySelectedNode = useCallback(() => {
+    const currentId = selectedIdRef.current
+    if (!currentId) return false
+    const node = nodesRef.current.find((n) => n.id === currentId)
+    if (!node) return false
+    clipboardRef.current = {
+      data: structuredClone(node.data as PassiveNodeData),
+      position: { ...node.position },
+    }
+    pasteSerialRef.current = 0
+    return true
+  }, [])
+
+  const pasteClipboardNode = useCallback(() => {
+    const clip = clipboardRef.current
+    if (!clip) return false
+    commit()
+    pasteSerialRef.current += 1
+    const labels = nodesRef.current.map((n) => (n.data as PassiveNodeData).label)
+    const label = nextCopyLabel(clip.data.label, labels)
+    const pasted = buildPastedNode(clip, label, pasteSerialRef.current)
+    setNodes((nds) => stack([...nds, pasted]))
+    setSelectedId(pasted.id)
+    return true
+  }, [commit, setNodes, stack])
+
+  // Keep title-bearing satellites above mastery orbits / elevate selection.
+  useEffect(() => {
+    setNodes((nds) => withMasteryDragFlags(nds, selectedId))
+  }, [selectedId, setNodes])
+
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      const session = orbitDragSessionRef.current
+      const filtered = changes.filter((c) => {
+        if (c.type === 'position' && 'id' in c && c.id === INITIAL_NODE_ID) return false
+        if (session != null && c.type === 'position' && 'id' in c && c.id === session.nodeId) {
+          return false
+        }
+        return true
+      })
+      const removals = filtered.filter((c) => c.type === 'remove')
+      const rest = filtered.filter((c) => c.type !== 'remove')
+      if (rest.length > 0) onNodesChange(rest)
+      const blockedRemovals = removals.filter((c) => c.id !== INITIAL_NODE_ID)
+      if (blockedRemovals.length === 0) return
+
+      commit()
+      const removeIds = new Set(blockedRemovals.map((c) => c.id))
+      setNodes((nds) =>
+        removeNodesAndRelayout(nds, removeIds, selectedIdRef.current),
+      )
+      setEdges((eds) =>
+        eds.filter((e) => !removeIds.has(e.source) && !removeIds.has(e.target)),
+      )
+      setSelectedId((cur) => (cur && removeIds.has(cur) ? null : cur))
+      setFloatingVideoNodeIds((cur) => cur.filter((id) => !removeIds.has(id)))
+      setPinnedViewers((cur) => prunePinnedViewers(cur, nodesRef.current.map((n) => n.id).filter((id) => !removeIds.has(id))))
+      setPinnedViewerBounds((cur) => {
+        let changed = false
+        const next: Record<string, ViewerPanelBounds> = {}
+        for (const [id, bounds] of Object.entries(cur)) {
+          if (removeIds.has(id)) {
+            changed = true
+            continue
+          }
+          next[id] = bounds
+        }
+        return changed ? next : cur
+      })
+    },
+    [commit, onNodesChange, setEdges, setNodes],
+  )
+
+  const handleEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChange>[0]) => {
+      const removals = changes.filter((c) => c.type === 'remove')
+      if (removals.length > 0) {
+        commit()
+        const removedIds = new Set(removals.map((c) => c.id))
+        const removedEdges = edges.filter((e) => removedIds.has(e.id))
+        const connectIds = new Set<string>()
+        for (const e of removedEdges) {
+          const s = nodes.find((n) => n.id === e.source)
+          const t = nodes.find((n) => n.id === e.target)
+          if (!s || !t) continue
+          const sd = s.data as PassiveNodeData
+          const td = t.data as PassiveNodeData
+          if (sd.kind === 'initial' && td.kind === 'connect') connectIds.add(t.id)
+          if (td.kind === 'initial' && sd.kind === 'connect') connectIds.add(s.id)
+        }
+        if (connectIds.size > 0) {
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (!connectIds.has(node.id)) return node
+              const data = node.data as PassiveNodeData
+              if (data.initialSlot == null) return node
+              const { initialSlot: _slot, ...rest } = data
+              return { ...node, data: rest }
+            }),
+          )
+        }
+      }
+      onEdgesChange(changes)
+    },
+    [commit, edges, nodes, onEdgesChange, setNodes],
+  )
+
+  const poweredIds = useMemo(
+    () => computePoweredNodeIds(nodes, edges),
+    [nodes, edges],
+  )
+
+  const powerFlowMeta = useMemo(
+    () => computePowerFlowMeta(nodes, edges),
+    [nodes, edges],
+  )
+
+  // Persisted edges only — Power Core links are user-created, never derived.
+  const flowEdges = edges
+
+  // Drop invalid links and anything not reachable from Initial.
+  // Skip while a satellite drag preview is active so hover alone cannot prune edges.
+  useEffect(() => {
+    if (dragPreviewNodes) return
+    setEdges((eds) => {
+      const next = sanitizeEdges(nodes, eds)
+      const unchanged =
+        next.length === eds.length &&
+        next.every((e, i) => {
+          const prev = eds[i]
+          return (
+            prev != null &&
+            prev.id === e.id &&
+            isEdgeActive(prev) === isEdgeActive(e) &&
+            prev.source === e.source &&
+            prev.target === e.target &&
+            prev.sourceHandle === e.sourceHandle &&
+            prev.targetHandle === e.targetHandle
+          )
+        })
+      return unchanged ? eds : next
+    })
+  }, [nodes, edges, setEdges, dragPreviewNodes])
+
+  const flowNodes = dragPreviewNodes ?? nodes
+
+  const selectedNode = useMemo(
+    () => nodes.find((n) => n.id === selectedId) ?? null,
+    [nodes, selectedId],
+  )
+
+  const selectedData = (selectedNode?.data as PassiveNodeData | undefined) ?? null
+
+  const selectedMasteryLabel = useMemo(() => {
+    const masteryId = selectedData?.masteryId
+    if (!masteryId) return null
+    const mastery = nodes.find((n) => n.id === masteryId)
+    return (mastery?.data as PassiveNodeData | undefined)?.label ?? masteryId
+  }, [nodes, selectedData?.masteryId])
+
+  const selectedMasteryTierCount = useMemo(() => {
+    const masteryId = selectedData?.masteryId
+    if (!masteryId) return null
+    const mastery = nodes.find((n) => n.id === masteryId)
+    return normalizeOrbitTierCount((mastery?.data as PassiveNodeData | undefined)?.orbitTierCount)
+  }, [nodes, selectedData?.masteryId])
+
+  const orbitMembers = useMemo(() => {
+    if (!selectedNode || !selectedData || !isMasteryKind(selectedData.kind)) return []
+    const tierCount = normalizeOrbitTierCount(selectedData.orbitTierCount)
+    const members: {
+      id: string
+      label: string
+      kind: PassiveKind
+      order: number
+      tier: OrbitTier
+      tierSize: number
+    }[] = []
+    for (let t = 1; t <= tierCount; t++) {
+      const tier = t as OrbitTier
+      const tierSats = getOrderedTierSatellites(nodes, selectedNode.id, tier)
+      const capacity = getOrbitTierCapacity(selectedData, tier)
+      tierSats.forEach((sat, index) => {
+        const data = sat.data as PassiveNodeData
+        members.push({
+          id: sat.id,
+          label: data.label,
+          kind: data.kind,
+          order: (data.orbitSlot ?? index) + 1,
+          tier,
+          tierSize: capacity,
+        })
+      })
+    }
+    return members
+  }, [nodes, selectedData, selectedNode])
+
+  const isValidConnection = useCallback<IsValidConnection>(
+    (connection) => {
+      const source = nodes.find((n) => n.id === connection.source)
+      const target = nodes.find((n) => n.id === connection.target)
+      if (!source || !target || source.id === target.id) return false
+      const kind = classifyLink(source, target, nodes)
+      if (kind !== 'center' && kind !== 'orbit' && kind !== 'attach') {
+        return false
+      }
+      const sd = source.data as PassiveNodeData
+      const td = target.data as PassiveNodeData
+      if (sd.kind === 'initial' || td.kind === 'initial') {
+        if (kind !== 'center') return false
+        // Power Core ↔ Root Orbit Shard/Notable
+        if (
+          isValidRootPowerHandles(
+            source,
+            target,
+            connection.sourceHandle,
+            connection.targetHandle,
+          )
+        ) {
+          return true
+        }
+        // Rim socket ↔ Connect only
+        const slot = resolveRootConnectSlot(
+          source,
+          target,
+          connection.sourceHandle,
+          connection.targetHandle,
+        )
+        if (slot === null) return false
+        const connectId = sd.kind === 'connect' ? source.id : td.kind === 'connect' ? target.id : null
+        if (!connectId) return false
+        return !isRootConnectSlotTaken(edges, slot, connectId)
+      }
+      return true
+    },
+    [nodes, edges],
+  )
+
+  const attachSatellite = useCallback(
+    (masteryId: string, satelliteId: string, preferredTier?: OrbitTier) => {
+      if (isMasteryOrbitLocked(nodes, masteryId)) return
+      const mastery = nodes.find((n) => n.id === masteryId)
+      if (!mastery) return
+      const current = nodes.find((n) => n.id === satelliteId)
+      const alreadyOn =
+        (current?.data as PassiveNodeData | undefined)?.masteryId === masteryId
+      const swapOrigin = current ? { ...current.position } : { x: 0, y: 0 }
+
+      commit()
+      setNodes((nds) => {
+        const prevMasteryId = (current?.data as PassiveNodeData | undefined)?.masteryId ?? null
+        const oldMasteryId =
+          prevMasteryId && prevMasteryId !== masteryId ? prevMasteryId : null
+
+        let next = nds.map((node) => {
+          const data = node.data as PassiveNodeData
+          if (node.id === satelliteId) {
+            return {
+              ...node,
+              data: { ...data, masteryId },
+              draggable: true,
+            }
+          }
+          if (oldMasteryId && node.id === oldMasteryId && isMasteryKind(data.kind)) {
+            return {
+              ...node,
+              data: removeSatelliteFromOrbitOrders(data, satelliteId),
+            }
+          }
+          return node
+        })
+
+        const placed = placeSatelliteOnMasteryOrbit(next, masteryId, satelliteId, {
+          preferredTier,
+          swapOriginPosition: alreadyOn ? undefined : swapOrigin,
+        })
+        if (!placed) return nds
+
+        next = placed
+        if (oldMasteryId) {
+          next = layoutMasteryOrbit(next, oldMasteryId)
+        }
+        const stacked = stack(next)
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
+      })
+    },
+    [commit, nodes, setEdges, setNodes, stack],
+  )
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const source = nodes.find((n) => n.id === connection.source)
+      const target = nodes.find((n) => n.id === connection.target)
+      if (!source || !target) return
+
+      const linkKind = classifyLink(source, target, nodes)
+      if (linkKind === 'attach') {
+        const pair = resolveMasteryPair(source, target)
+        if (pair && !isMasteryOrbitLocked(nodes, pair.mastery.id)) {
+          attachSatellite(pair.mastery.id, pair.satellite.id)
+        }
+        return
+      }
+      if (linkKind !== 'center' && linkKind !== 'orbit') return
+
+      commit()
+
+      const sd = source.data as PassiveNodeData
+      const td = target.data as PassiveNodeData
+      const involvesRoot = sd.kind === 'initial' || td.kind === 'initial'
+      let rootConnectSlot: InitialConnectSlot | null = null
+      let rootId: string | null = null
+      let connectId: string | null = null
+      let isRootPower = false
+      if (involvesRoot) {
+        if (linkKind !== 'center') return
+        isRootPower = isValidRootPowerHandles(
+          source,
+          target,
+          connection.sourceHandle,
+          connection.targetHandle,
+        )
+        if (isRootPower) {
+          rootId = sd.kind === 'initial' ? source.id : target.id
+          const memberId = sd.kind === 'initial' ? target.id : source.id
+          setEdges((eds) => {
+            const existing = findLinkEdge(eds, source.id, target.id, 'center')
+            let next: Edge[]
+            if (existing) {
+              next = eds.filter((e) => e.id !== existing.id)
+            } else {
+              const without = eds.filter((e) => {
+                const pair =
+                  (e.source === rootId && e.target === memberId) ||
+                  (e.source === memberId && e.target === rootId)
+                return !pair
+              })
+              next = [...without, rootPowerLinkEdge(rootId!, memberId)]
+            }
+            return sanitizeEdges(nodes, next)
+          })
+          return
+        }
+        rootConnectSlot = resolveRootConnectSlot(
+          source,
+          target,
+          connection.sourceHandle,
+          connection.targetHandle,
+        )
+        if (rootConnectSlot === null) return
+        rootId = sd.kind === 'initial' ? source.id : target.id
+        connectId = sd.kind === 'connect' ? source.id : target.id
+        if (isRootConnectSlotTaken(edges, rootConnectSlot, connectId)) return
+        const existingRootLink = findLinkEdge(edges, source.id, target.id, 'center')
+        if (existingRootLink) {
+          const prevSlot = resolveRootConnectSlot(
+            source,
+            target,
+            existingRootLink.sourceHandle,
+            existingRootLink.targetHandle,
+          )
+          if (prevSlot === rootConnectSlot) {
+            // Toggle off: remove edge + clear initialSlot atomically.
+            setNodes((nds) =>
+              nds.map((node) => {
+                if (node.id !== connectId) return node
+                const data = node.data as PassiveNodeData
+                if (data.initialSlot == null) return node
+                const { initialSlot: _slot, ...rest } = data
+                return { ...node, data: rest }
+              }),
+            )
+            setEdges((eds) =>
+              sanitizeEdges(
+                nodes,
+                eds.filter((e) => e.id !== existingRootLink.id),
+              ),
+            )
+            return
+          }
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.id !== connectId) return node
+              const data = node.data as PassiveNodeData
+              return {
+                ...node,
+                data: { ...data, initialSlot: rootConnectSlot! },
+              }
+            }),
+          )
+          setEdges((eds) => {
+            const without = eds.filter((e) => {
+              const pair =
+                (e.source === rootId && e.target === connectId) ||
+                (e.source === connectId && e.target === rootId)
+              return !pair
+            })
+            return sanitizeEdges(nodes, [
+              ...without,
+              rootSocketLinkEdge(rootId!, connectId!, rootConnectSlot!)])
+          })
+          return
+        }
+        // Fresh Root↔Connect attach: record socket only — do not move Connect.
+        setNodes((nds) =>
+          nds.map((node) => {
+            if (node.id !== connectId) return node
+            const data = node.data as PassiveNodeData
+            return {
+              ...node,
+              data: { ...data, initialSlot: rootConnectSlot! },
+            }
+          }),
+        )
+      }
+
+      setEdges((eds) => {
+        const edgeType = linkKind === 'orbit' ? 'orbit' : 'center'
+        const existing = findLinkEdge(eds, source.id, target.id, edgeType)
+        let next: Edge[]
+        if (existing) {
+          next = eds.filter((e) => e.id !== existing.id)
+        } else if (linkKind === 'orbit') {
+          const orbitMasteryId = sd.masteryId ?? td.masteryId
+          if (!orbitMasteryId) return eds
+          next = [...eds, orbitLinkEdge(source.id, target.id, orbitMasteryId)]
+        } else if (involvesRoot && rootConnectSlot !== null && rootId && connectId) {
+          const withoutRoot = eds.filter((e) => {
+            const pair =
+              (e.source === rootId && e.target === connectId) ||
+              (e.source === connectId && e.target === rootId)
+            return !pair
+          })
+          next = [...withoutRoot, rootSocketLinkEdge(rootId, connectId, rootConnectSlot)]
+        } else {
+          next = [...eds, passiveLinkEdge(source.id, target.id)]
+        }
+        return sanitizeEdges(nodes, next)
+      })
+    },
+    [attachSatellite, commit, edges, nodes, setEdges, setNodes],
+  )
+
+  const detachFromMastery = useCallback(
+    (satelliteId: string) => {
+      const sat = nodes.find((n) => n.id === satelliteId)
+      const masteryId = (sat?.data as PassiveNodeData | undefined)?.masteryId
+      if (masteryId && isMasteryOrbitLocked(nodes, masteryId)) return
+      commit()
+      setNodes((nds) => {
+        let oldMasteryId: string | null = null
+        const next = nds.map((node) => {
+          const data = node.data as PassiveNodeData
+          if (node.id === satelliteId) {
+            oldMasteryId = data.masteryId ?? null
+            return {
+              ...node,
+              data: { ...data, masteryId: null },
+              draggable: true,
+            }
+          }
+          return node
+        }).map((node) => {
+          if (!oldMasteryId || node.id !== oldMasteryId) return node
+          const data = node.data as PassiveNodeData
+          return {
+            ...node,
+            data: removeSatelliteFromOrbitOrders(data, satelliteId),
+          }
+        })
+        if (!oldMasteryId) return stack(next)
+        return stack(layoutMasteryOrbit(next, oldMasteryId))
+      })
+    },
+    [commit, nodes, setNodes, stack],
+  )
+
+  const changeOrbitTierCount = useCallback(
+    (masteryId: string, tierCount: OrbitTierCount) => {
+      const mastery = nodes.find((n) => n.id === masteryId)
+      if (!mastery) return
+      const currentCount = normalizeOrbitTierCount(
+        (mastery.data as PassiveNodeData).orbitTierCount,
+      )
+      if (tierCount < currentCount) {
+        for (let t = tierCount + 1; t <= currentCount; t++) {
+          const tier = t as OrbitTier
+          const members = countOrbitTierMembers(nodes, masteryId, tier)
+          if (members > 0) {
+            window.alert(
+              `${tier}단에 노드가 ${members}개 있습니다. 해당 단의 노드를 제거한 뒤 단수를 줄여 주세요.`,
+            )
+            return
+          }
+        }
+      }
+      commit()
+      setNodes((nds) => {
+        let next = nds.map((node) => {
+          const data = node.data as PassiveNodeData
+          if (node.id === masteryId) {
+            return { ...node, data: { ...data, orbitTierCount: tierCount } }
+          }
+          if (data.masteryId === masteryId) {
+            return {
+              ...node,
+              data: {
+                ...data,
+                orbitTier: normalizeOrbitTier(data.orbitTier, tierCount),
+              },
+            }
+          }
+          return node
+        })
+        next = layoutMasteryOrbit(next, masteryId)
+        const stacked = stack(next)
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
+      })
+    },
+    [commit, nodes, setEdges, setNodes, stack],
+  )
+
+  const changeSatelliteOrbitTier = useCallback(
+    (satelliteId: string, tier: OrbitTier) => {
+      const satellite = nodes.find((n) => n.id === satelliteId)
+      if (!satellite) return
+      const masteryId = (satellite.data as PassiveNodeData).masteryId
+      if (!masteryId) return
+      const oldTier = getSatelliteOrbitTier(nodes, masteryId, satelliteId)
+      const mastery = nodes.find((n) => n.id === masteryId)
+      const tierCount = normalizeOrbitTierCount(
+        (mastery?.data as PassiveNodeData | undefined)?.orbitTierCount,
+      )
+      const newTier = normalizeOrbitTier(tier, tierCount)
+      if (oldTier !== newTier && !canAcceptOrbitMember(nodes, masteryId, newTier, satelliteId)) {
+        return
+      }
+      commit()
+      setNodes((nds) => {
+        let next = nds.map((node) => {
+          if (node.id !== satelliteId) return node
+          const data = node.data as PassiveNodeData
+          return {
+            ...node,
+            data: { ...data, orbitTier: newTier },
+          }
+        })
+        const masteryNode = next.find((n) => n.id === masteryId)
+        if (masteryNode) {
+          const md = masteryNode.data as PassiveNodeData
+          if (oldTier !== newTier) {
+            let mdNext = removeSatelliteFromOrbitOrders(md, satelliteId)
+            const newTierOrder = [...(mdNext.orbitOrderByTier?.[newTier] ?? []), satelliteId]
+            mdNext = setMasteryTierOrbitOrder(mdNext, newTier, newTierOrder)
+            next = next.map((node) =>
+              node.id === masteryId ? { ...node, data: mdNext } : node,
+            )
+          }
+        }
+        next = layoutMasteryOrbit(next, masteryId)
+        const stacked = stack(next)
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
+      })
+    },
+    [commit, nodes, setEdges, setNodes, stack],
+  )
+
+  const changeOrbitStartAngle = useCallback(
+    (masteryId: string, tier: OrbitTier, degrees: number) => {
+      const snapped = snapOrbitAngle(degrees)
+      commit()
+      setNodes((nds) => {
+        const next = nds.map((node) => {
+          if (node.id !== masteryId) return node
+          const data = node.data as PassiveNodeData
+          let nextData: PassiveNodeData
+          if (data.orbitLocked) {
+            const snapshot = snapshotMasteryTierAngles(data)
+            const refTier: OrbitTier = 1
+            const delta = normalizeAngleDelta(snapped - getTierStartAngle(data, refTier))
+            nextData = rotateAllMasteryTiersByDelta(data, snapshot, delta)
+          } else {
+            nextData = setMasteryTierStartAngle(data, tier, snapped)
+          }
+          return { ...node, data: nextData }
+        })
+        return stack(layoutMasteryOrbit(next, masteryId))
+      })
+    },
+    [commit, setNodes, stack],
+  )
+
+  const changeOrbitOrder = useCallback(
+    (masteryId: string, satelliteId: string, order1Based: number) => {
+      if (isMasteryOrbitLocked(nodes, masteryId)) return
+      commit()
+      setNodes((nds) => {
+        const tier = getSatelliteOrbitTier(nds, masteryId, satelliteId)
+        const slot = Math.max(0, order1Based - 1)
+        const next = assignSatelliteOrbitSlot(nds, masteryId, satelliteId, tier, slot)
+        return stack(layoutMasteryOrbit(next, masteryId))
+      })
+    },
+    [commit, nodes, setNodes, stack],
+  )
+
+  const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams) => {
+    if (shouldSuppressOrbitSelectionClear()) return
+    setSelectedId(selected[0]?.id ?? null)
+  }, [])
+
+  const restoreFlowSelection = useCallback(
+    (nodeId: string) => {
+      setSelectedId(nodeId)
+      setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === nodeId })))
+    },
+    [setNodes],
+  )
+
+  const updateNodeData = useCallback(
+    (nodeId: string, updater: (data: PassiveNodeData) => PassiveNodeData) => {
+      commit()
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: updater(node.data as PassiveNodeData) }
+            : node,
+        ),
+      )
+    },
+    [commit, setNodes],
+  )
+
+  const changeOrbitLocked = useCallback(
+    (masteryId: string, locked: boolean) => {
+      updateNodeData(masteryId, (d) => ({ ...d, orbitLocked: locked }))
+    },
+    [updateNodeData],
+  )
+
+  const changeOrbitCapacity = useCallback(
+    (masteryId: string, tier: OrbitTier, capacity: number) => {
+      const nextCapacity = clampOrbitTierCapacity(capacity)
+      const members = countOrbitTierMembers(nodes, masteryId, tier)
+      if (nextCapacity < members) {
+        window.alert(
+          `${tier}단에 노드가 ${members}개 있습니다. 용량이 가득 찬 상태에서는 더 줄일 수 없습니다. 노드를 제거한 뒤 다시 시도해 주세요.`,
+        )
+        return
+      }
+      const mastery = nodes.find((n) => n.id === masteryId)
+      const currentCapacity = mastery
+        ? getOrbitTierCapacity(mastery.data as PassiveNodeData, tier)
+        : nextCapacity
+      if (nextCapacity === currentCapacity) return
+
+      commit()
+      setNodes((nds) => {
+        let next = nds.map((node) => {
+          if (node.id !== masteryId) return node
+          const data = node.data as PassiveNodeData
+          return {
+            ...node,
+            data: {
+              ...data,
+              orbitCapacityByTier: {
+                ...(data.orbitCapacityByTier ?? {}),
+                [tier]: nextCapacity,
+              },
+            },
+          }
+        })
+        next = rematerializeOrbitTierSlots(next, masteryId, tier, nextCapacity)
+        const stacked = stack(layoutMasteryOrbit(next, masteryId))
+        setEdges((eds) => sanitizeEdges(stacked, eds))
+        return stacked
+      })
+    },
+    [commit, nodes, setEdges, setNodes, stack],
+  )
+
+  const changeRootOrbitCapacity = useCallback(
+    (tier: OrbitTier, capacity: number) => {
+      const root = nodes.find((n) => n.id === INITIAL_NODE_ID)
+      if (!root) return
+      const rootData = root.data as PassiveNodeData
+      const occupied = occupiedRootOrbitSlots(nodes, tier)
+      const minCap = occupied.size === 0 ? 1 : Math.max(...occupied) + 1
+      const nextCap = Math.max(minCap, Math.floor(capacity))
+      if (nextCap === getRootOrbitCapacity(rootData, tier)) return
+      commit()
+      setNodes((nds) => {
+        const next = nds.map((node) => {
+          if (node.id !== INITIAL_NODE_ID) return node
+          return {
+            ...node,
+            data: setRootOrbitCapacity(node.data as PassiveNodeData, tier, nextCap),
+          }
+        })
+        return stack(layoutRootOrbit(next))
+      })
+    },
+    [commit, nodes, setNodes, stack],
+  )
+
+  const changeRootOrbitStartAngle = useCallback(
+    (tier: OrbitTier, degrees: number) => {
+      commit()
+      setNodes((nds) => {
+        const next = nds.map((node) => {
+          if (node.id !== INITIAL_NODE_ID) return node
+          return {
+            ...node,
+            data: setRootOrbitStartAngle(node.data as PassiveNodeData, tier, degrees),
+          }
+        })
+        return stack(layoutRootOrbit(next))
+      })
+    },
+    [commit, setNodes, stack],
+  )
+
+  const changeConnectEnabled = useCallback(
+    (nodeId: string, enabled: boolean) => {
+      updateNodeData(nodeId, (d) => ({ ...d, connectEnabled: enabled }))
+    },
+    [updateNodeData],
+  )
+
+  const changeKind = useCallback(
+    (nodeId: string, kind: PassiveKind) => {
+      if (nodeId === INITIAL_NODE_ID) return
+      const current = nodes.find((n) => n.id === nodeId)
+      if (!current) return
+      const prev = current.data as PassiveNodeData
+      const affectedMasteries = new Set<string>()
+
+      if (prev.masteryId) affectedMasteries.add(prev.masteryId)
+      if (isMasteryKind(prev.kind) && !isMasteryKind(kind)) affectedMasteries.add(nodeId)
+
+      commit()
+      setNodes((nds) => {
+        let next = nds.map((node) => {
+          const data = node.data as PassiveNodeData
+
+          if (node.id === nodeId) {
+            const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
+            const nextData: PassiveNodeData = {
+              label: data.label,
+              kind: resolvedKind,
+              stages: stagesForKind(resolvedKind, data.stages),
+              symbolId: normalizeSymbolId(data.symbolId, customSymbols, resolvedKind),
+              ...(isMasteryKind(resolvedKind)
+                ? {
+                    orbitStartAngle: data.orbitStartAngle ?? DEFAULT_ORBIT_START_ANGLE,
+                    orbitStartAngleByTier: isMasteryKind(prev.kind)
+                      ? data.orbitStartAngleByTier
+                      : undefined,
+                    orbitOrder: isMasteryKind(prev.kind) ? (data.orbitOrder ?? []) : [],
+                    orbitOrderByTier: isMasteryKind(prev.kind)
+                      ? data.orbitOrderByTier
+                      : undefined,
+                    orbitCapacityByTier: isMasteryKind(prev.kind)
+                      ? data.orbitCapacityByTier
+                      : { 1: 6 },
+                    orbitLocked: data.orbitLocked ?? false,
+                    orbitTierCount: isMasteryKind(prev.kind)
+                      ? normalizeOrbitTierCount(data.orbitTierCount)
+                      : 1,
+                    masteryId: null,
+                  }
+                : resolvedKind === 'void'
+                  ? {
+                      masteryId:
+                        isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
+                          ? data.masteryId ?? null
+                          : null,
+                      voidPassing: prev.kind === 'void' ? (data.voidPassing ?? false) : false,
+                      orbitTier: normalizeOrbitTier(
+                        data.orbitTier,
+                        data.masteryId
+                          ? normalizeOrbitTierCount(
+                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
+                                ?.orbitTierCount,
+                            )
+                          : 1,
+                      ),
+                    }
+                : resolvedKind === 'initial'
+                  ? {}
+                  : resolvedKind === 'connect'
+                    ? {
+                        connectEnabled:
+                          prev.kind === 'connect' ? (data.connectEnabled ?? true) : true,
+                        initialSlot: prev.kind === 'connect' ? data.initialSlot : undefined,
+                      }
+                    : {
+                      masteryId:
+                        isOrbitMemberKind(resolvedKind) && !isMasteryKind(prev.kind)
+                          ? data.masteryId ?? null
+                          : null,
+                      orbitTier: normalizeOrbitTier(
+                        data.orbitTier,
+                        data.masteryId
+                          ? normalizeOrbitTierCount(
+                              (nodes.find((n) => n.id === data.masteryId)?.data as PassiveNodeData)
+                                ?.orbitTierCount,
+                            )
+                          : 1,
+                      ),
+                    }),
+            }
+            if (resolvedKind === 'shard') {
+              nextData.stages = []
+              if (data.markdown) nextData.markdown = data.markdown
+              if (data.referenceId) nextData.referenceId = data.referenceId
+            } else if (resolvedKind === 'notable') {
+              if (data.markdown) nextData.markdown = data.markdown
+              delete nextData.referenceId
+            } else {
+              delete nextData.markdown
+              delete nextData.referenceId
+            }
+            return { ...node, data: nextData }
+          }
+
+          if (isMasteryKind(prev.kind) && !isMasteryKind(kind) && data.masteryId === nodeId) {
+            return { ...node, data: { ...data, masteryId: null }, draggable: true }
+          }
+
+          if (
+            prev.masteryId &&
+            node.id === prev.masteryId &&
+            isMasteryKind(data.kind) &&
+            !isOrbitMemberKind(kind)
+          ) {
+            return {
+              ...node,
+              data: removeSatelliteFromOrbitOrders(data, nodeId),
+            }
+          }
+
+          return node
+        })
+
+        for (const masteryId of affectedMasteries) {
+          if (isMasteryKind(prev.kind) && !isMasteryKind(kind) && masteryId === nodeId) continue
+          next = layoutMasteryOrbit(next, masteryId)
+        }
+        return stack(next)
+      })
+
+      setEdges((eds) =>
+        eds.filter((e) => {
+          const sourceNode = nodes.find((n) => n.id === e.source)
+          const targetNode = nodes.find((n) => n.id === e.target)
+          if (!sourceNode || !targetNode) return false
+
+          const sourceData: PassiveNodeData =
+            e.source === nodeId
+              ? { ...(sourceNode.data as PassiveNodeData), kind }
+              : (sourceNode.data as PassiveNodeData)
+          const targetData: PassiveNodeData =
+            e.target === nodeId
+              ? { ...(targetNode.data as PassiveNodeData), kind }
+              : (targetNode.data as PassiveNodeData)
+
+          const linkKind = classifyPassiveConnection(
+            { ...sourceNode, data: sourceData },
+            { ...targetNode, data: targetData },
+            nodes,
+          )
+
+          if (e.type === 'orbit') return linkKind === 'orbit'
+          return linkKind === 'center'
+        }),
+      )
+
+      const resolvedKind = kind === 'voidMastery' ? 'mastery' : kind
+      setPinnedViewers((cur) => {
+        const next = prunePinnedViewersByKindMismatch(cur, [{ id: nodeId, kind: resolvedKind }])
+        if (next !== cur) {
+          const closed = new Set(cur.map((e) => e.nodeId).filter((id) => !next.some((e) => e.nodeId === id)))
+          if (closed.size) {
+            setPinnedViewerBounds((bounds) => {
+              const copy = { ...bounds }
+              for (const id of closed) delete copy[id]
+              return copy
+            })
+          }
+        }
+        return next
+      })
+    },
+    [commit, nodes, setEdges, setNodes, customSymbols, stack],
+  )
+
+  const handleImportSvg = useCallback(async (file: File, kind: SymbolEditorKind) => {
+    const result = await importSymbolFile(file)
+    if (!result.ok) {
+      setSymbolImportError(result.message)
+      return
+    }
+    setSymbolImportError(null)
+    setCustomSymbols((prev) => [...prev, { ...result.symbol, kind }])
+  }, [])
+
+  const handleDeleteSymbol = useCallback(
+    (symbolId: string) => {
+      setCustomSymbols((prev) => prev.filter((s) => s.id !== symbolId))
+      commit()
+      setNodes((nds) =>
+        stack(
+          nds.map((node) => {
+            const data = node.data as PassiveNodeData
+            if (data.symbolId !== symbolId) return node
+            return { ...node, data: { ...data, symbolId: DEFAULT_SYMBOL_ID } }
+          }),
+        ),
+      )
+    },
+    [commit, setNodes, stack],
+  )
+
+  const handleDefaultSymbolColor = useCallback((kind: SymbolEditorKind, color: string) => {
+    setDefaultSymbolColors((prev) => ({ ...prev, [kind]: color }))
+  }, [])
+
+  const handleCustomSymbolColor = useCallback((symbolId: string, color: string) => {
+    setCustomSymbols((prev) =>
+      prev.map((symbol) => (symbol.id === symbolId ? { ...symbol, color } : symbol)),
+    )
+  }, [])
+
+  const handleCustomSymbolScale = useCallback((symbolId: string, scale: number) => {
+    setCustomSymbols((prev) =>
+      prev.map((symbol) => (symbol.id === symbolId ? { ...symbol, scale } : symbol)),
+    )
+  }, [])
+
+  const handleCustomSymbolRename = useCallback((symbolId: string, name: string) => {
+    setCustomSymbols((prev) =>
+      prev.map((symbol) =>
+        symbol.id === symbolId ? { ...symbol, name: name.length > 0 ? name : 'Symbol' } : symbol,
+      ),
+    )
+  }, [])
+
+  const createFromTemplate = useCallback(
+    (template: NodeTemplatePayload, flowPosition: { x: number; y: number }) => {
+      const kind = template.kind
+      let position = flowPosition
+      if (gridSnapEnabled) position = snapNodeCenter(position, NODE_SIZE[kind], gridSnapScale)
+      commit()
+      const id = createNodeId()
+      const data = createPassiveData(kind, `New ${PASSIVE_KIND_LABEL[kind]}`, {
+        symbolId: template.symbolId,
+      })
+      const newNode: PassiveFlowNode = {
+        id,
+        type: 'passive',
+        position,
+        dragHandle: '.node-drag-handle',
+        draggable: true,
+        data,
+      }
+      setNodes((nds) => stack([...nds, newNode]))
+      setSelectedId(id)
+    },
+    [commit, gridSnapEnabled, gridSnapScale, setNodes, stack],
+  )
+
+  const serializeCurrentGraph = useCallback(() => {
+    const document = buildGraphDocument({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: {
+        gridSnapEnabled,
+        gridSnapScale,
+        voidHighlightEnabled,
+        defaultSymbolColors,
+      },
+    })
+    return serializeGraphDocument(stripWorldReferenceLinksForPortableExport(document))
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    voidHighlightEnabled])
+
+  const applyImportedSnapshot = useCallback(
+    (imported: {
+      nodes: PassiveFlowNode[]
+      edges: Edge[]
+      customSymbols: typeof customSymbols
+      settings: {
+        gridSnapEnabled?: boolean
+        gridSnapScale?: number
+        voidHighlightEnabled?: boolean
+        defaultSymbolColors?: typeof defaultSymbolColors
+      }
+    }) => {
+      resetHistory()
+      setCustomSymbols(imported.customSymbols)
+      setDefaultSymbolColors(imported.settings.defaultSymbolColors ?? {})
+      setNodes(stack(imported.nodes))
+      setEdges(imported.edges)
+      if (imported.settings.gridSnapEnabled != null) {
+        setGridSnapEnabled(imported.settings.gridSnapEnabled)
+      }
+      if (imported.settings.gridSnapScale != null) {
+        setGridSnapScale(normalizeGridSnapScale(imported.settings.gridSnapScale))
+      }
+      if (imported.settings.voidHighlightEnabled != null) {
+        setVoidHighlightEnabled(imported.settings.voidHighlightEnabled)
+      }
+      setSelectedId(imported.nodes[0]?.id ?? null)
+      setImportError(null)
+      setStorageCorrupt(false)
+      setContextMenu(null)
+      setPinnedViewers([])
+      setPinnedViewerBounds({})
+      setFloatingVideoNodeIds([])
+    },
+    [resetHistory, setEdges, setNodes, stack],
+  )
+
+  const handleSaveJson = useCallback(async () => {
+    if (isDesktopGraphExportSupported()) {
+      const json = serializeCurrentGraph()
+      const result = activeJsonPath
+        ? await saveGraphJsonToPathDesktop(activeJsonPath, json)
+        : await saveGraphJsonAsDesktop(json)
+      if (result.status === 'cancelled') return
+      if (result.status === 'error') {
+        setImportError(result.message)
+        return
+      }
+      setActiveJsonPath(result.path)
+      writeActiveJsonPath(result.path)
+      setImportError(null)
+      return
+    }
+    const document = buildGraphDocument({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    downloadGraphDocument(stripWorldReferenceLinksForPortableExport(document))
+    setImportError(null)
+  }, [
+    activeJsonPath,
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    serializeCurrentGraph,
+    voidHighlightEnabled])
+
+  const handleSaveJsonAs = useCallback(async () => {
+    if (isDesktopGraphExportSupported()) {
+      const json = serializeCurrentGraph()
+      const result = await saveGraphJsonAsDesktop(json)
+      if (result.status === 'cancelled') return
+      if (result.status === 'error') {
+        setImportError(result.message)
+        return
+      }
+      setActiveJsonPath(result.path)
+      writeActiveJsonPath(result.path)
+      setImportError(null)
+      return
+    }
+    const document = buildGraphDocument({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    })
+    downloadGraphDocument(stripWorldReferenceLinksForPortableExport(document))
+    setImportError(null)
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    serializeCurrentGraph,
+    voidHighlightEnabled])
+
+  const handleImportJson = useCallback(
+    async (file: File) => {
+      const result = await importGraphJsonFile(file, {
+        nodes: stateRef.current.nodes,
+        edges: stateRef.current.edges,
+        customSymbols,
+        settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+      }, worldState)
+      if (!result.ok) {
+        setImportError(result.message)
+        return
+      }
+      setWorldState(result.worldState)
+      applyImportedSnapshot(result.snapshot)
+    },
+    [
+      applyImportedSnapshot,
+      customSymbols,
+      defaultSymbolColors,
+      gridSnapEnabled,
+      gridSnapScale,
+      voidHighlightEnabled,
+      worldState,
+    ],
+  )
+
+  const handleOpenJson = useCallback(async () => {
+    if (!isDesktopGraphExportSupported()) {
+      importInputRef.current?.click()
+      return
+    }
+    const opened = await openGraphJsonDesktop()
+    if (opened.status === 'cancelled') return
+    if (opened.status === 'error') {
+      setImportError(opened.message)
+      return
+    }
+    const result = await importGraphJsonText(opened.text, {
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    }, worldState)
+    if (!result.ok) {
+      setImportError(result.message)
+      return
+    }
+    setWorldState(result.worldState)
+    applyImportedSnapshot(result.snapshot)
+    setActiveJsonPath(opened.path)
+    writeActiveJsonPath(opened.path)
+  }, [
+    applyImportedSnapshot,
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    voidHighlightEnabled,
+    worldState,
+  ])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey
+      if (!mod) return
+
+      const key = event.key.toLowerCase()
+
+      // Document save: works even when input/textarea is focused.
+      if (!event.altKey && !event.shiftKey && key === 's') {
+        event.preventDefault()
+        void handleSaveJson()
+        return
+      }
+
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) return
+
+      if (key === 'c') {
+        if (copySelectedNode()) event.preventDefault()
+        return
+      }
+      if (key === 'v') {
+        if (pasteClipboardNode()) event.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [copySelectedNode, handleSaveJson, pasteClipboardNode])
+
+  const handleNewSheet = useCallback(() => {
+    const confirmed = window.confirm(
+      '새 시트를 만들까요?\n현재 작업 내용은 지워지고 빈 시트로 바뀝니다.\n이전 문서는 백업으로 보관됩니다.',
+    )
+    if (!confirmed) return
+    void createNewSheet({
+      nodes: stateRef.current.nodes,
+      edges: stateRef.current.edges,
+      customSymbols,
+      settings: { gridSnapEnabled, gridSnapScale, voidHighlightEnabled, defaultSymbolColors },
+    }, worldState).then((result) => {
+      if (!result.ok) {
+        setImportError(result.message)
+        return
+      }
+      const snapshot = result.snapshot
+      setWorldState(result.worldState)
+      resetHistory()
+      setCustomSymbols(snapshot.customSymbols)
+      setDefaultSymbolColors(snapshot.settings.defaultSymbolColors ?? {})
+      setNodes(stack(snapshot.nodes))
+      setEdges(snapshot.edges)
+      setGridSnapEnabled(snapshot.settings.gridSnapEnabled ?? false)
+      setGridSnapScale(normalizeGridSnapScale(snapshot.settings.gridSnapScale))
+      setVoidHighlightEnabled(snapshot.settings.voidHighlightEnabled ?? false)
+      setSelectedId(snapshot.nodes[0]?.id ?? null)
+      setStorageCorrupt(false)
+      setImportError(null)
+      setSaveStatus('saved')
+      setSaveFailureReason(null)
+      setContextMenu(null)
+      setPinnedViewers([])
+      setPinnedViewerBounds({})
+      setFloatingVideoNodeIds([])
+      setActiveJsonPath(null)
+      clearActiveJsonPath()
+    })
+  }, [
+    customSymbols,
+    defaultSymbolColors,
+    gridSnapEnabled,
+    gridSnapScale,
+    resetHistory,
+    setEdges,
+    setNodes,
+    stack,
+    voidHighlightEnabled,
+    worldState,
+  ])
+
+
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      if (nodeId === INITIAL_NODE_ID) return
+      commit()
+      setFloatingVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
+      setPinnedViewers((cur) => closePinnedViewer(cur, nodeId))
+      setPinnedViewerBounds((cur) => {
+        if (!(nodeId in cur)) return cur
+        const next = { ...cur }
+        delete next[nodeId]
+        return next
+      })
+      setNodes((nds) =>
+        removeNodesAndRelayout(nds, [nodeId], selectedIdRef.current),
+      )
+      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
+      setSelectedId((cur) => (cur === nodeId ? null : cur))
+    },
+    [commit, setEdges, setNodes],
+  )
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedId) return
+    deleteNode(selectedId)
+  }, [deleteNode, selectedId])
+
+  const onPaneClick = useCallback(() => {
+    if (shouldSuppressOrbitSelectionClear()) return
+    setContextMenu(null)
+    setSelectedId(null)
+  }, [])
+
+  const onNodeClick = useCallback((_: ReactMouseEvent, node: Node) => {
+    setContextMenu(null)
+    setSelectedId(node.id)
+  }, [])
+
+  const onNodeDoubleClick = useCallback(
+    (_: ReactMouseEvent, node: Node) => {
+      const data = node.data as PassiveNodeData
+      if (data.kind !== 'connect') return
+      changeConnectEnabled(node.id, data.connectEnabled === false)
+    },
+    [changeConnectEnabled],
+  )
+
+  const nextPinnedZ = useCallback(() => {
+    pinnedZCounterRef.current += 1
+    return pinnedZCounterRef.current
+  }, [])
+
+  const handlePinViewer = useCallback(
+    (nodeId: string, kind: PinnedViewerKind, position: { x: number; y: number }) => {
+      const z = nextPinnedZ()
+      setPinnedViewers((cur) =>
+        pinOrFocusViewer(cur, { nodeId, kind, x: position.x, y: position.y }, z),
+      )
+      setContextMenu(null)
+    },
+    [nextPinnedZ],
+  )
+
+  const handleClosePinnedViewer = useCallback((nodeId: string) => {
+    setPinnedViewers((cur) => closePinnedViewer(cur, nodeId))
+    setPinnedViewerBounds((cur) => {
+      if (!(nodeId in cur)) return cur
+      const next = { ...cur }
+      delete next[nodeId]
+      return next
+    })
+  }, [])
+
+  const handleActivatePinnedViewer = useCallback(
+    (nodeId: string) => {
+      const z = nextPinnedZ()
+      setPinnedViewers((cur) => bringPinnedViewerToFront(cur, nodeId, z))
+    },
+    [nextPinnedZ],
+  )
+
+  const handlePinnedBoundsChange = useCallback((nodeId: string, bounds: ViewerPanelBounds) => {
+    setPinnedViewerBounds((cur) => {
+      const prev = cur[nodeId]
+      if (
+        prev &&
+        prev.x === bounds.x &&
+        prev.y === bounds.y &&
+        prev.width === bounds.width &&
+        prev.height === bounds.height
+      ) {
+        return cur
+      }
+      return { ...cur, [nodeId]: bounds }
+    })
+  }, [])
+
+  const onNodeContextMenu = useCallback(
+    (event: ReactMouseEvent, node: Node) => {
+      event.preventDefault()
+      setSelectedId(node.id)
+      const data = node.data as PassiveNodeData
+      if (data.kind === 'shard' || data.kind === 'notable') {
+        if (findPinnedViewer(pinnedViewers, node.id)) {
+          const z = nextPinnedZ()
+          setPinnedViewers((cur) => bringPinnedViewerToFront(cur, node.id, z))
+          setContextMenu(null)
+          return
+        }
+      }
+      setContextMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
+    },
+    [nextPinnedZ, pinnedViewers],
+  )
+
+  const contextMenuNode = useMemo(() => {
+    if (!contextMenu) return null
+    return nodes.find((n) => n.id === contextMenu.nodeId) ?? null
+  }, [contextMenu, nodes])
+
+  /**
+   * Single render list for Shard/Notable viewers.
+   * Preview and Pin must share the same React instance (stable key per nodeId).
+   */
+  const viewerEntries = useMemo(() => {
+    type ViewerRenderEntry = {
+      nodeId: string
+      kind: PinnedViewerKind
+      x: number
+      y: number
+      pinned: boolean
+      zIndex?: number
+    }
+    const pinnedIds = new Set(pinnedViewers.map((entry) => entry.nodeId))
+    const entries: ViewerRenderEntry[] = pinnedViewers.map((entry) => ({
+      nodeId: entry.nodeId,
+      kind: entry.kind,
+      x: entry.x,
+      y: entry.y,
+      pinned: true,
+      zIndex: entry.zIndex,
+    }))
+    if (contextMenu && contextMenuNode) {
+      const data = contextMenuNode.data as PassiveNodeData
+      if (
+        (data.kind === 'shard' || data.kind === 'notable') &&
+        !pinnedIds.has(contextMenu.nodeId)
+      ) {
+        entries.push({
+          nodeId: contextMenu.nodeId,
+          kind: data.kind,
+          x: contextMenu.x,
+          y: contextMenu.y,
+          pinned: false,
+        })
+      }
+    }
+    return entries
+  }, [pinnedViewers, contextMenu, contextMenuNode])
+
+  const handlePinnedLogSelect = useCallback((nodeId: string, logId: string) => {
+    setSelectedId(nodeId)
+    setFocusLogId(logId)
+  }, [])
+
+  const handleViewerEditLog = useCallback((nodeId: string, logId: string) => {
+    setSelectedId(nodeId)
+    setFocusLogId(logId)
+  }, [])
+
+  const handleToggleContextFloatingVideo = useCallback(() => {
+    if (!contextMenu) return
+    const nodeId = contextMenu.nodeId
+    setFloatingVideoNodeIds((cur) =>
+      cur.includes(nodeId) ? cur.filter((id) => id !== nodeId) : [...cur, nodeId],
+    )
+    setContextMenu(null)
+  }, [contextMenu])
+
+  const onCloseFloatingVideo = useCallback((nodeId: string) => {
+    setFloatingVideoNodeIds((cur) => cur.filter((id) => id !== nodeId))
+  }, [])
+
+  const onNodeDragStart = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      commit()
+      const data = node.data as PassiveNodeData
+      if (isOrbitMemberKind(data.kind)) {
+        const snapshotNodes = structuredClone(nodesRef.current)
+        const session: NonNullable<typeof orbitDragSessionRef.current> = {
+          nodeId: node.id,
+          originPosition: { ...node.position },
+          snapshotNodes,
+        }
+        if (data.masteryId) {
+          session.orbitOrigin = {
+            masteryId: data.masteryId,
+            tier: getSatelliteOrbitTier(snapshotNodes, data.masteryId, node.id),
+            slot: getSatelliteOrbitSlot(snapshotNodes, data.masteryId, node.id),
+          }
+        }
+        orbitDragSessionRef.current = session
+        setDragPreviewNodes(null)
+      } else {
+        orbitDragSessionRef.current = null
+        setDragPreviewNodes(null)
+      }
+    },
+    [commit],
+  )
+
+  const onEdgeDoubleClick = useCallback(
+    (_event: ReactMouseEvent, edge: Edge) => {
+      commit()
+      const edgeId = edge.id.replace(/-hit$/, '')
+      const removed = edges.find((e) => e.id === edgeId)
+      setEdges((eds) => eds.filter((e) => e.id !== edgeId))
+      if (removed) {
+        const s = nodes.find((n) => n.id === removed.source)
+        const t = nodes.find((n) => n.id === removed.target)
+        const sd = s?.data as PassiveNodeData | undefined
+        const td = t?.data as PassiveNodeData | undefined
+        let connectId: string | null = null
+        if (sd?.kind === 'initial' && td?.kind === 'connect') connectId = t!.id
+        if (td?.kind === 'initial' && sd?.kind === 'connect') connectId = s!.id
+        if (connectId) {
+          setNodes((nds) =>
+            nds.map((node) => {
+              if (node.id !== connectId) return node
+              const data = node.data as PassiveNodeData
+              if (data.initialSlot == null) return node
+              const { initialSlot: _slot, ...rest } = data
+              return { ...node, data: rest }
+            }),
+          )
+        }
+      }
+    },
+    [commit, edges, nodes, setEdges, setNodes],
+  )
+
+  const onNodeDrag = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      const data = node.data as PassiveNodeData
+
+      if (isMasteryKind(data.kind)) {
+        const position = gridSnapEnabled
+          ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+          : node.position
+        setNodes((nds) => {
+          const synced = nds.map((n) =>
+            n.id === node.id ? { ...n, position } : n,
+          )
+          return stack(layoutMasteryOrbit(synced, node.id))
+        })
+        return
+      }
+
+      if (!isOrbitMemberKind(data.kind)) return
+
+      if (data.masteryId && isMasteryOrbitLocked(nodes, data.masteryId)) return
+
+      const session = orbitDragSessionRef.current
+      if (session?.nodeId !== node.id) return
+
+      const origin: SatelliteDragOrigin = session.orbitOrigin
+        ? { kind: 'orbit', ...session.orbitOrigin }
+        : { kind: 'external', position: session.originPosition }
+
+      // Preview only — committed nodes/edges stay until drop.
+      if (data.kind === 'notable' || data.kind === 'shard') {
+        const rootResult = placeNotableFromRootOrbitDrag(
+          session.snapshotNodes,
+          node.id,
+          node.position,
+        )
+        if (rootResult?.kind === 'root') {
+          setDragPreviewNodes(stack(ensureRootFixed(rootResult.nodes)))
+          return
+        }
+        const baseNodes =
+          rootResult?.kind === 'detached' ? rootResult.nodes : session.snapshotNodes
+        const dragOrigin: SatelliteDragOrigin =
+          rootResult?.kind === 'detached'
+            ? { kind: 'external', position: session.originPosition }
+            : origin
+        setDragPreviewNodes(
+          stack(
+            stripRootOrbitWhenMasteryBound(
+              placeSatelliteFromDrag(baseNodes, node.id, node.position, dragOrigin),
+            ),
+          ),
+        )
+        return
+      }
+
+      setDragPreviewNodes(
+        stack(
+          placeSatelliteFromDrag(
+            session.snapshotNodes,
+            node.id,
+            node.position,
+            origin,
+          ),
+        ),
+      )
+    },
+    [gridSnapEnabled, gridSnapScale, nodes, setNodes, stack],
+  )
+
+  const onNodeDragStop = useCallback(
+    (_event: MouseEvent | TouchEvent, node: Node) => {
+      const data = node.data as PassiveNodeData
+      const dragSession = orbitDragSessionRef.current
+      orbitDragSessionRef.current = null
+      setDragPreviewNodes(null)
+
+      if (isMasteryKind(data.kind)) {
+        setNodes((nds) => {
+          const position = gridSnapEnabled
+            ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+            : node.position
+          const synced = nds.map((n) => (n.id === node.id ? { ...n, position } : n))
+          const laid = layoutMasteryOrbit(synced, node.id)
+          return stack(applyRootBoundaryEject(laid, node.id))
+        })
+        return
+      }
+
+      if (!isOrbitMemberKind(data.kind)) {
+        setNodes((nds) => {
+          let next = nds.map((n) => {
+            if (n.id !== node.id) return n
+            const position = gridSnapEnabled
+              ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+              : node.position
+            return { ...n, position }
+          })
+          return stack(applyRootBoundaryEject(next, node.id))
+        })
+        return
+      }
+
+      if (!dragSession || dragSession.nodeId !== node.id) {
+        setNodes((nds) => {
+          let next = nds.map((n) => {
+            if (n.id !== node.id) return n
+            const position = gridSnapEnabled
+              ? snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+              : node.position
+            return { ...n, position }
+          })
+          return stack(applyRootBoundaryEject(next, node.id))
+        })
+        return
+      }
+
+      if (
+        dragSession.orbitOrigin &&
+        isMasteryOrbitLocked(dragSession.snapshotNodes, dragSession.orbitOrigin.masteryId)
+      ) {
+        setNodes(() =>
+          stack(layoutMasteryOrbit(dragSession.snapshotNodes, dragSession.orbitOrigin!.masteryId)),
+        )
+        return
+      }
+
+      const origin: SatelliteDragOrigin = dragSession.orbitOrigin
+        ? { kind: 'orbit', ...dragSession.orbitOrigin }
+        : { kind: 'external', position: dragSession.originPosition }
+
+      let finalPosition = node.position
+      if (gridSnapEnabled) {
+        const dragged = {
+          ...(dragSession.snapshotNodes.find((n) => n.id === node.id) ?? node),
+          position: node.position,
+        } as PassiveFlowNode
+        const atPointer = dragSession.snapshotNodes.map((n) =>
+          n.id === node.id ? dragged : n,
+        )
+        const attach = findOrbitAttachTarget(atPointer, dragged)
+        if (!attach) {
+          finalPosition = snapNodeCenter(node.position, NODE_SIZE[data.kind], gridSnapScale)
+        }
+      }
+
+      if (data.kind === 'notable' || data.kind === 'shard') {
+        const rootResult = placeNotableFromRootOrbitDrag(
+          dragSession.snapshotNodes,
+          node.id,
+          finalPosition,
+        )
+        if (rootResult?.kind === 'root') {
+          setNodes(() => stack(ensureRootFixed(rootResult.nodes)))
+          return
+        }
+        const baseNodes =
+          rootResult?.kind === 'detached' ? rootResult.nodes : dragSession.snapshotNodes
+        let dropPosition = finalPosition
+        if (rootResult?.kind === 'detached') {
+          const ejectedNode = rootResult.nodes.find((n) => n.id === node.id)
+          if (ejectedNode) dropPosition = ejectedNode.position
+        }
+        const dragOrigin: SatelliteDragOrigin =
+          rootResult?.kind === 'detached'
+            ? { kind: 'external', position: dragSession.originPosition }
+            : origin
+        setNodes(() =>
+          stack(
+            applyRootBoundaryEject(
+              layoutRootOrbit(
+                stripRootOrbitWhenMasteryBound(
+                  placeSatelliteFromDrag(baseNodes, node.id, dropPosition, dragOrigin),
+                ),
+              ),
+              node.id,
+            ),
+          ),
+        )
+        return
+      }
+
+      setNodes(() =>
+        stack(
+          applyRootBoundaryEject(
+            placeSatelliteFromDrag(
+              dragSession.snapshotNodes,
+              node.id,
+              finalPosition,
+              origin,
+            ),
+            node.id,
+          ),
+        ),
+      )
+    },
+    [gridSnapEnabled, gridSnapScale, setNodes, stack],
+  )
+
+  const onRenameNode = useCallback(
+    (nodeId: string, label: string) => {
+      updateNodeData(nodeId, (d) => ({ ...d, label }))
+    },
+    [updateNodeData],
+  )
+
+  const onChangeSymbolId = useCallback(
+    (nodeId: string, symbolId: string) => updateNodeData(nodeId, (d) => ({ ...d, symbolId })),
+    [updateNodeData],
+  )
+
+  const onChangeStages = useCallback(
+    (nodeId: string, stages: StageData[]) => updateNodeData(nodeId, (d) => ({ ...d, stages })),
+    [updateNodeData],
+  )
+
+  const onChangeMarkdown = useCallback(
+    (nodeId: string, markdown: string) =>
+      updateNodeData(nodeId, (d) => {
+        const next = { ...d }
+        if (markdown.trim()) next.markdown = markdown
+        else delete next.markdown
+        return next
+      }),
+    [updateNodeData],
+  )
+
+  const onChangeReferenceId = useCallback(
+    (nodeId: string, referenceId: string | null) =>
+      updateNodeData(nodeId, (d) => {
+        if (d.kind !== 'shard') {
+          const next = { ...d }
+          delete next.referenceId
+          return next
+        }
+        return { ...d, referenceId }
+      }),
+    [updateNodeData],
+  )
+
+  return (
+    <CustomSymbolProvider customSymbols={customSymbols} defaultSymbolColors={defaultSymbolColors}>
+      <ReactFlowProvider>
+        <div className="app-shell">
+            {bootstrapPending && <FirstRunDialog onChoose={handleBootstrap} />}
+            <header className="topbar">
+              <div className="topbar__brand">
+                <span className="topbar__mark" aria-hidden />
+                <div>
+                  <p className="topbar__eyebrow">로컬 우선 · 컨텍스트 트래커</p>
+                  <h1>Passive Tree v0.1</h1>
+                </div>
+              </div>
+
+              <div className="topbar__actions">
+                {nav.mode === 'galaxy' ? (
+                  <>
+                    <label className="topbar__toggle">
+                      <input
+                        type="checkbox"
+                        checked={gridSnapEnabled}
+                        onChange={(e) => setGridSnapEnabled(e.target.checked)}
+                      />
+                      <span>그리드 스냅</span>
+                    </label>
+                    {gridSnapEnabled ? (
+                      <label className="topbar__scale">
+                        <span>Scale</span>
+                        <select
+                          value={gridSnapScale}
+                          onChange={(e) =>
+                            setGridSnapScale(normalizeGridSnapScale(Number(e.target.value)))
+                          }
+                          aria-label="그리드 스냅 Scale"
+                        >
+                          {GRID_SNAP_SCALE_OPTIONS.map((scale) => (
+                            <option key={scale} value={scale}>
+                              {scale}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <label className="topbar__toggle">
+                      <input
+                        type="checkbox"
+                        checked={voidHighlightEnabled}
+                        onChange={(e) => setVoidHighlightEnabled(e.target.checked)}
+                      />
+                      <span>빈 슬롯 표시</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--danger"
+                      onClick={deleteSelected}
+                      disabled={!selectedId}
+                    >
+                      Delete Selected
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="open-reference-library"
+                  onClick={() => worldShell.setReferenceLibraryOpen(true)}
+                >
+                  Reference Library
+                </button>
+                {nav.mode === 'galaxy' ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    data-testid="return-to-universe"
+                    onClick={() => void requestReturnToUniverse()}
+                    disabled={sheetTransitionLock}
+                  >
+                    ↑ Universe
+                  </button>
+                ) : null}
+                {nav.mode === 'galaxy' ? (
+                  <>
+                    <button type="button" className="btn" onClick={handleNewSheet}>
+                      새 시트
+                    </button>
+                    <div className="topbar__file-actions">
+                      <button
+                        type="button"
+                        className="topbar__file-btn"
+                        data-testid="topbar-save-json"
+                        onClick={() => void handleSaveJson()}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="topbar__file-btn"
+                        data-testid="topbar-save-json-as"
+                        onClick={() => void handleSaveJsonAs()}
+                      >
+                        Save As
+                      </button>
+                      <button
+                        type="button"
+                        className="topbar__file-btn"
+                        data-testid="topbar-open-json"
+                        onClick={() => void handleOpenJson()}
+                      >
+                        Load
+                      </button>
+                      {isDesktopGraphExportSupported() ? (
+                        <span className="topbar__active-json" title={activeJsonPath ?? undefined}>
+                          Active:{' '}
+                          {activeJsonPath
+                            ? activeJsonPath.replace(/^.*[/\\]/, '') || activeJsonPath
+                            : 'none'}
+                        </span>
+                      ) : null}
+                    </div>
+                    {saveStatus === 'failed' && (
+                      <span
+                        className="topbar__save-status topbar__save-status--failed"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {saveFailureReason === 'too_large'
+                          ? '저장 실패 (용량 초과)'
+                          : saveFailureReason === 'io'
+                            ? '저장 실패 (디스크 I/O)'
+                            : '저장 실패'}
+                      </span>
+                    )}
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (file) void handleImportJson(file)
+                      }}
+                    />
+                  </>
+                ) : null}
+              </div>
+            </header>
+
+            {importError && (
+              <p className="import-error" role="alert">
+                {importError}
+              </p>
+            )}
+
+            {storageCorrupt && (
+              <p className="import-error" role="alert">
+                저장소 초기화 또는 데이터 이전에 실패했습니다. 앱을 다시 시작하거나 JSON을 불러와 주세요.
+              </p>
+            )}
+
+            {worldError ? (
+              <p className="import-error" role="alert">
+                {worldError}
+              </p>
+            ) : null}
+
+            {(() => {
+              const showUniverse =
+                !!worldState && shouldShowUniverseLayer(nav.mode, sheetTransition.phase)
+              const showGalaxy = shouldShowGalaxyLayer(nav.mode, sheetTransition.phase)
+              const originPct =
+                sheetTransition.phase === 'idle'
+                  ? { x: 50, y: 50 }
+                  : sheetTransition.originPct
+              const universeLayerClass = [
+                'sheet-layer',
+                'sheet-layer--universe',
+                sheetTransition.phase === 'entering-galaxy' ? 'sheet-layer--universe-leaving' : '',
+                sheetTransition.phase === 'leaving-galaxy' ? 'sheet-layer--universe-entering' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              const galaxyLayerClass = [
+                'sheet-layer',
+                'sheet-layer--galaxy',
+                sheetTransition.phase === 'entering-galaxy' ? 'sheet-layer--galaxy-entering' : '',
+                sheetTransition.phase === 'leaving-galaxy' ? 'sheet-layer--galaxy-leaving' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
+                <div
+                  className={[
+                    'sheet-stage',
+                    sheetTransitionLock ? 'sheet-stage--locked' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {showUniverse && worldState ? (
+                    <div
+                      className={universeLayerClass}
+                      style={{
+                        transformOrigin: `${originPct.x}% ${originPct.y}%`,
+                      }}
+                    >
+                      <UniverseSheet
+                        width={worldState.world.universe.width}
+                        height={worldState.world.universe.height}
+                        galaxies={worldState.world.galaxies}
+                        selectedGalaxyId={worldShell.selectedUniverseGalaxyId}
+                        highlightGalaxyId={
+                          sheetTransition.phase === 'leaving-galaxy' ||
+                          sheetTransition.phase === 'entering-galaxy'
+                            ? null
+                            : worldShell.highlightGalaxyId
+                        }
+                        editing={universeEditing}
+                        onEditingChange={setUniverseEditing}
+                        navigationLocked={sheetTransitionLock}
+                        onSelectGalaxy={worldShell.setSelectedUniverseGalaxyId}
+                        onEnterGalaxy={(id, origin) => void requestEnterGalaxy(id, origin)}
+                        onMoveGalaxy={(id, pos) => void worldShell.handleMoveGalaxy(id, pos)}
+                        onCreateGalaxy={() => void worldShell.handleCreateGalaxy()}
+                        onRenameGalaxy={(id) => void worldShell.handleRenameGalaxy(id)}
+                        onDeleteGalaxy={(id) => void worldShell.handleDeleteGalaxy(id)}
+                        onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
+                      />
+                    </div>
+                  ) : null}
+                  {showGalaxy ? (
+                    <div className={galaxyLayerClass}>
+                      <TreeWorkspace
+                        inspectorWidth={inspectorWidth}
+                        onOpenSymbolEditor={setSymbolEditorKind}
+                        flowNodes={flowNodes}
+                        edges={flowEdges}
+                        poweredIds={poweredIds}
+                        powerFlowMeta={powerFlowMeta}
+                        voidHighlightEnabled={voidHighlightEnabled}
+                        gridSnapEnabled={gridSnapEnabled}
+                        gridSnapScale={gridSnapScale}
+                        selectedNode={selectedNode}
+                        selectedData={selectedData}
+                        masteryLabel={selectedMasteryLabel}
+                        masteryTierCount={selectedMasteryTierCount}
+                        orbitMembers={orbitMembers}
+                        focusLogId={focusLogId}
+                        onFocusLogConsumed={() => setFocusLogId(null)}
+                        onCreateFromTemplate={createFromTemplate}
+                        onNodesChange={handleNodesChange}
+                        onEdgesChange={handleEdgesChange}
+                        onConnect={onConnect}
+                        isValidConnection={isValidConnection}
+                        onSelectionChange={onSelectionChange}
+                        onPaneClick={onPaneClick}
+                        onNodeClick={onNodeClick}
+                        onNodeDoubleClick={onNodeDoubleClick}
+                        onNodeContextMenu={onNodeContextMenu}
+                        floatingVideoNodeIds={floatingVideoNodeIds}
+                        onCloseFloatingVideo={onCloseFloatingVideo}
+                        onPinnedLogSelect={handlePinnedLogSelect}
+                        onNodeDragStart={onNodeDragStart}
+                        onNodeDrag={onNodeDrag}
+                        onNodeDragStop={onNodeDragStop}
+                        onEdgeDoubleClick={onEdgeDoubleClick}
+                        onInspectorResizeStart={onInspectorResizeStart}
+                        commit={commit}
+                        selectedIdRef={selectedIdRef}
+                        setNodes={setNodes}
+                        stack={stack}
+                        restoreFlowSelection={restoreFlowSelection}
+                        onRename={onRenameNode}
+                        onChangeKind={changeKind}
+                        onChangeSymbolId={onChangeSymbolId}
+                        onChangeStages={onChangeStages}
+                        onChangeMarkdown={onChangeMarkdown}
+                        references={worldState?.world.references ?? []}
+                        onChangeReferenceId={onChangeReferenceId}
+                        onOpenReferenceLibrary={() => worldShell.setReferenceLibraryOpen(true)}
+                        onChangeConnectEnabled={changeConnectEnabled}
+                        onChangeOrbitTierCount={changeOrbitTierCount}
+                        onChangeSatelliteOrbitTier={changeSatelliteOrbitTier}
+                        onChangeOrbitStartAngle={changeOrbitStartAngle}
+                        onChangeOrbitOrder={changeOrbitOrder}
+                        onChangeOrbitLocked={changeOrbitLocked}
+                        onChangeOrbitCapacity={changeOrbitCapacity}
+                        onChangeRootOrbitCapacity={changeRootOrbitCapacity}
+                        onChangeRootOrbitStartAngle={changeRootOrbitStartAngle}
+                        onDetachFromMastery={detachFromMastery}
+                        onDeleteNode={deleteNode}
+                        centerOnRootToken={centerOnRootToken}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })()}
+
+            <ReferenceLibrary
+              open={worldShell.referenceLibraryOpen}
+              world={
+                worldState?.world ?? {
+                  schemaVersion: '0.3',
+                  universe: { width: 1600, height: 1000 },
+                  galaxies: [],
+                  references: [],
+                }
+              }
+              onClose={() => worldShell.setReferenceLibraryOpen(false)}
+              onCreate={worldShell.handleCreateReference}
+              onUpdate={worldShell.handleUpdateReference}
+              onDelete={worldShell.handleDeleteReference}
+            />
+
+            <PinnedViewerTetherOverlay
+              entries={pinnedViewers}
+              boundsByNodeId={pinnedViewerBounds}
+              nodes={flowNodes}
+            />
+
+            {viewerEntries.map((entry) => {
+              const node = nodes.find((n) => n.id === entry.nodeId)
+              if (!node) return null
+              const data = node.data as PassiveNodeData
+              const viewerKey = `viewer:${entry.nodeId}`
+              if (entry.kind === 'shard') {
+                return (
+                  <ShardMarkdownPreview
+                    key={viewerKey}
+                    open
+                    pinned={entry.pinned}
+                    modal={!entry.pinned}
+                    closeOnEscape={!entry.pinned}
+                    x={entry.x}
+                    y={entry.y}
+                    zIndex={entry.zIndex}
+                    nodeLabel={data.label}
+                    markdown={data.markdown}
+                    onClose={() =>
+                      entry.pinned
+                        ? handleClosePinnedViewer(entry.nodeId)
+                        : setContextMenu(null)
+                    }
+                    onPin={
+                      entry.pinned
+                        ? undefined
+                        : (position) => handlePinViewer(entry.nodeId, 'shard', position)
+                    }
+                    onActivate={
+                      entry.pinned
+                        ? () => handleActivatePinnedViewer(entry.nodeId)
+                        : undefined
+                    }
+                    onBoundsChange={
+                      entry.pinned
+                        ? (bounds) => handlePinnedBoundsChange(entry.nodeId, bounds)
+                        : undefined
+                    }
+                  />
+                )
+              }
+              return (
+                <NotableLogViewer
+                  key={viewerKey}
+                  open
+                  pinned={entry.pinned}
+                  modal={!entry.pinned}
+                  closeOnEscape={!entry.pinned}
+                  x={entry.x}
+                  y={entry.y}
+                  zIndex={entry.zIndex}
+                  nodeLabel={data.label}
+                  markdown={data.markdown}
+                  logs={dailyLogsForNode(data)}
+                  onClose={() =>
+                    entry.pinned
+                      ? handleClosePinnedViewer(entry.nodeId)
+                      : setContextMenu(null)
+                  }
+                  onPin={
+                    entry.pinned
+                      ? undefined
+                      : (position) => handlePinViewer(entry.nodeId, 'notable', position)
+                  }
+                  onActivate={
+                    entry.pinned
+                      ? () => handleActivatePinnedViewer(entry.nodeId)
+                      : undefined
+                  }
+                  onBoundsChange={
+                    entry.pinned
+                      ? (bounds) => handlePinnedBoundsChange(entry.nodeId, bounds)
+                      : undefined
+                  }
+                  onEditLog={(logId) => handleViewerEditLog(entry.nodeId, logId)}
+                />
+              )
+            })}
+
+            {contextMenu && contextMenuNode
+              ? (() => {
+                  const data = contextMenuNode.data as PassiveNodeData
+                  if (data.kind === 'shard' || data.kind === 'notable') return null
+                  return (
+                    <NodeContextPopup
+                      open
+                      x={contextMenu.x}
+                      y={contextMenu.y}
+                      nodeLabel={data.label}
+                      canFloatVideos={canFloatNodeVideos(data.kind)}
+                      isFloatingVideo={floatingVideoNodeIds.includes(contextMenu.nodeId)}
+                      onClose={() => setContextMenu(null)}
+                      onToggleFloatingVideo={handleToggleContextFloatingVideo}
+                    />
+                  )
+                })()
+              : null}
+
+            <SymbolKindEditor
+              kind={symbolEditorKind ?? 'mastery'}
+              open={symbolEditorKind != null}
+              customSymbols={customSymbols}
+              defaultSymbolColors={defaultSymbolColors}
+              importError={symbolImportError}
+              onClose={() => {
+                setSymbolEditorKind(null)
+                setSymbolImportError(null)
+              }}
+              onImportSvg={(file, kind) => void handleImportSvg(file, kind)}
+              onDeleteSymbol={handleDeleteSymbol}
+              onDefaultColorChange={handleDefaultSymbolColor}
+              onCustomSymbolColorChange={handleCustomSymbolColor}
+              onCustomSymbolScaleChange={handleCustomSymbolScale}
+              onCustomSymbolRename={handleCustomSymbolRename}
+            />
+          </div>
+        </ReactFlowProvider>
+      </CustomSymbolProvider>
+  )
+}
