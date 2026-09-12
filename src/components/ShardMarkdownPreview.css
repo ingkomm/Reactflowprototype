@@ -1,0 +1,126 @@
+.shard-markdown-preview__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.shard-markdown-preview {
+  position: fixed;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #121820 96%, transparent);
+  border: 1px solid color-mix(in srgb, #9eb0c2 28%, transparent);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 35%, transparent);
+  box-sizing: border-box;
+  min-width: 0;
+  /* Shared Preview/Pin window geometry (Pin must not force a new size). */
+  width: min(800px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+}
+
+/* Temporary right-click preview: centered placement only. */
+.shard-markdown-preview:not(.is-pinned) {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+}
+
+.shard-markdown-preview:not(.is-pinned) .shard-markdown-preview__head {
+  cursor: default;
+  flex: 0 0 auto;
+}
+
+.shard-markdown-preview:not(.is-pinned) .shard-markdown-preview__head:active {
+  cursor: default;
+}
+
+.shard-markdown-preview:not(.is-pinned) .shard-markdown-preview__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.shard-markdown-preview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #eef3f7;
+  user-select: none;
+  touch-action: none;
+}
+
+.shard-markdown-preview__head .btn {
+  cursor: pointer;
+  user-select: auto;
+  touch-action: manipulation;
+}
+
+.shard-markdown-preview__kind {
+  margin: 0 0 2px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9eb0bf;
+}
+
+.shard-markdown-preview__body {
+  overflow: auto;
+  min-height: 120px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f151c;
+  border: 1px solid color-mix(in srgb, #8fa0b0 18%, transparent);
+}
+
+.shard-markdown-preview__empty {
+  margin: 0;
+  color: #9aa8b5;
+  font-size: 0.88rem;
+}
+
+.shard-markdown-preview__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.shard-markdown-preview.is-pinned {
+  z-index: 45;
+  left: auto;
+  top: auto;
+  transform: none;
+  /* Pin = move/tether only (not user-resizable). */
+  overflow: auto;
+  min-width: 280px;
+  min-height: 180px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+}
+
+.shard-markdown-preview.is-pinned .shard-markdown-preview__head {
+  cursor: grab;
+}
+
+.shard-markdown-preview.is-pinned .shard-markdown-preview__head:active {
+  cursor: grabbing;
+}
+
+.shard-markdown-preview.is-pinned .shard-markdown-preview__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}

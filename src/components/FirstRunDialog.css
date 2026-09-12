@@ -1,0 +1,48 @@
+.first-run {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 5, 8, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.first-run__card {
+  width: min(420px, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(165deg, #0a0f14 0%, #070b10 100%);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+.first-run__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  color: var(--teal);
+  letter-spacing: 0.04em;
+}
+
+.first-run h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.first-run__desc {
+  margin: 0 0 1.25rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.first-run__actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: flex-end;
+}
+
+.btn--primary {
+  background: color-mix(in srgb, var(--teal) 28%, #0d141c);
+  border-color: color-mix(in srgb, var(--teal) 45%, transparent);
+}

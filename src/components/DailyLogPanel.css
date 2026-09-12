@@ -1,0 +1,85 @@
+.daily-log-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.daily-log-panel__summary {
+  font-size: 0.82rem;
+  color: #9eb0bf;
+}
+
+.daily-log-panel__add {
+  align-self: flex-start;
+}
+
+.daily-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: min(420px, 50vh);
+}
+
+.daily-log-list > li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.daily-log-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #1a2430 84%, transparent);
+  border: 1px solid color-mix(in srgb, #8fa0b0 20%, transparent);
+}
+
+.daily-log-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.daily-log-card__date {
+  font-size: 0.88rem;
+  color: #eef5fa;
+  min-width: 0;
+}
+
+.daily-log-card__preview {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  font-size: 0.82rem;
+  color: #b7c4d0;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-log-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}

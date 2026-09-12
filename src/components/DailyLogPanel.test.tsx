@@ -1,0 +1,292 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { DailyLogPanel } from './DailyLogPanel'
+import {
+  DailyLogEditorModal,
+  isDailyLogDraftDirty,
+} from './DailyLogEditorModal'
+import { createDailyLog } from '../dailyLog'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+
+function mount(ui: React.ReactNode) {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  act(() => {
+    root.render(ui)
+  })
+  return {
+    host,
+    unmount() {
+      act(() => {
+        root.unmount()
+      })
+      host.remove()
+    },
+  }
+}
+
+describe('DailyLogPanel compact + editor modal', () => {
+  afterEach(() => {
+    document.body.querySelectorAll('[data-testid="daily-log-editor-modal"]').forEach((el) => el.remove())
+  })
+
+  it('keeps inspector compact without inline memo textarea', () => {
+    const logs = [
+      createDailyLog('2026-09-10', '```svg\n<svg xmlns="http://www.w3.org/2000/svg"/>\n```'),
+      createDailyLog('2026-09-09', '# Title\n\nbody'),
+      createDailyLog('2026-09-08', 'L'.repeat(200)),
+    ]
+    const view = mount(
+      <DailyLogPanel logs={logs} onChangeLogs={() => undefined} />,
+    )
+
+    expect(view.host.querySelector('[data-testid="daily-log-open-add"]')).toBeTruthy()
+    expect(view.host.querySelector('textarea')).toBeNull()
+    expect(document.body.querySelector('[data-testid="daily-log-editor-modal"]')).toBeNull()
+
+    const previews = [...view.host.querySelectorAll('.daily-log-card__preview')].map(
+      (el) => el.textContent,
+    )
+    expect(previews[0]).toBe('SVG')
+    expect(previews[1]).toBe('Title')
+    expect(previews[2]).toBe('L'.repeat(200))
+    expect(view.host.textContent).not.toContain('<svg')
+
+    view.unmount()
+  })
+
+  it('opens add modal, cancel leaves data unchanged; save adds log', () => {
+    let logs = [createDailyLog('2026-09-01', 'keep')]
+    const view = mount(
+      <DailyLogPanel
+        logs={logs}
+        onChangeLogs={(next) => {
+          logs = next
+        }}
+      />,
+    )
+
+    act(() => {
+      ;(view.host.querySelector('[data-testid="daily-log-open-add"]') as HTMLButtonElement).click()
+    })
+    expect(document.body.querySelector('[data-testid="daily-log-editor-modal"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-testid="daily-log-editor-memo"]')).toBeTruthy()
+
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(document.body.querySelector('[data-testid="daily-log-editor-modal"]')).toBeNull()
+    expect(logs).toHaveLength(1)
+
+    act(() => {
+      ;(view.host.querySelector('[data-testid="daily-log-open-add"]') as HTMLButtonElement).click()
+    })
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-save"]') as HTMLButtonElement).click()
+    })
+    expect(logs.length).toBe(2)
+    expect(logs.some((log) => log.note === 'keep')).toBe(true)
+    expect(document.body.querySelector('[data-testid="daily-log-editor-modal"]')).toBeNull()
+
+    view.unmount()
+  })
+
+  it('opens edit modal with existing values', () => {
+    const log = createDailyLog('2026-09-05', 'existing note', [
+      { id: 'v1', url: 'https://youtu.be/aaaaaaaaaaa', title: 'Clip' },
+    ])
+    const view = mount(<DailyLogPanel logs={[log]} onChangeLogs={() => undefined} />)
+
+    act(() => {
+      ;(view.host.querySelector(`[data-testid="daily-log-edit-${log.id}"]`) as HTMLButtonElement).click()
+    })
+    const modal = document.body.querySelector('[data-testid="daily-log-editor-modal"]')
+    expect(modal).toBeTruthy()
+    expect(
+      (document.body.querySelector('[data-testid="daily-log-editor-date"]') as HTMLInputElement).value,
+    ).toBe('2026-09-05')
+    expect(
+      (document.body.querySelector('[data-testid="daily-log-editor-memo"]') as HTMLTextAreaElement)
+        .value,
+    ).toBe('existing note')
+    expect(
+      (document.body.querySelector('[data-testid="daily-log-editor-video"]') as HTMLInputElement)
+        .value,
+    ).toBe('https://youtu.be/aaaaaaaaaaa')
+
+    view.unmount()
+  })
+
+  it('list CSS prevents horizontal overflow and uses single-line ellipsis', () => {
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'DailyLogPanel.css'),
+      'utf8',
+    )
+    expect(css).toMatch(/\.daily-log-list\s*\{[^}]*overflow-x:\s*hidden/s)
+    expect(css).toMatch(/\.daily-log-card__preview\s*\{[^}]*white-space:\s*nowrap/s)
+    expect(css).toMatch(/\.daily-log-card__preview\s*\{[^}]*text-overflow:\s*ellipsis/s)
+  })
+
+  it('SvgLightbox panel CSS uses near-fullscreen viewport size', () => {
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'SvgLightbox.css'),
+      'utf8',
+    )
+    expect(css).toMatch(/width:\s*calc\(100vw - 32px\)/)
+    expect(css).toMatch(/height:\s*calc\(100vh - 32px\)/)
+    expect(css).toMatch(/max-width:\s*none/)
+    expect(css).toMatch(/max-height:\s*none/)
+  })
+
+  it('uses Daily Log user-facing labels without 연습 기록', () => {
+    const view = mount(<DailyLogPanel logs={[]} onChangeLogs={() => undefined} />)
+    expect(view.host.textContent).toContain('Daily Log')
+    expect(view.host.textContent).toContain('총 0개')
+    expect(view.host.textContent).not.toContain('연습 기록')
+    expect(view.host.textContent).not.toMatch(/총 \d+회/)
+    view.unmount()
+  })
+
+  it('dirty-close asks confirmation; clean close and save do not', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const onClose = vi.fn()
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{ date: '2026-09-10', note: '', videoUrl: '', localVideoPath: '' }}
+        onClose={onClose}
+        onSave={() => null}
+      />,
+    )
+
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    view.unmount()
+    onClose.mockClear()
+    confirmSpy.mockClear()
+
+    const dirty = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{ date: '2026-09-10', note: '', videoUrl: '', localVideoPath: '' }}
+        onClose={onClose}
+        onSave={() => null}
+      />,
+    )
+    const memo = document.body.querySelector(
+      '[data-testid="daily-log-editor-memo"]',
+    ) as HTMLTextAreaElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(memo, 'draft text')
+      memo.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    confirmSpy.mockReturnValue(true)
+    act(() => {
+      ;(document.body.querySelector('[data-testid="daily-log-editor-close"]') as HTMLButtonElement).click()
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    dirty.unmount()
+    confirmSpy.mockRestore()
+  })
+
+  it('isDailyLogDraftDirty compares date/note/videoUrl/localVideoPath', () => {
+    const base = { date: '2026-01-01', note: 'a', videoUrl: '', localVideoPath: '' }
+    expect(isDailyLogDraftDirty(base, base)).toBe(false)
+    expect(isDailyLogDraftDirty({ ...base, note: 'b' }, base)).toBe(true)
+    expect(isDailyLogDraftDirty({ ...base, date: '2026-01-02' }, base)).toBe(true)
+    expect(isDailyLogDraftDirty({ ...base, videoUrl: 'https://x' }, base)).toBe(true)
+    expect(isDailyLogDraftDirty({ ...base, localVideoPath: '/videos/a.mp4' }, base)).toBe(true)
+  })
+
+  it('edit mode: cancel is plain btn (gray), primary is btn--ghost (green) labeled 수정', () => {
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="edit"
+        initial={{
+          date: '2026-09-05',
+          note: 'n',
+          videoUrl: '',
+          localVideoPath: '',
+        }}
+        onClose={() => undefined}
+        onSave={() => null}
+      />,
+    )
+    const footer = document.body.querySelector('.daily-log-editor-modal__footer') as HTMLElement
+    const buttons = [...footer.querySelectorAll('button')]
+    const cancel = buttons.find((b) => b.textContent === '취소')!
+    const primary = document.body.querySelector(
+      '[data-testid="daily-log-editor-save"]',
+    ) as HTMLButtonElement
+    expect(cancel.className.split(/\s+/)).toContain('btn')
+    expect(cancel.className.split(/\s+/)).not.toContain('btn--ghost')
+    expect(primary.className.split(/\s+/)).toEqual(expect.arrayContaining(['btn', 'btn--ghost']))
+    expect(primary.textContent).toBe('수정')
+    view.unmount()
+  })
+
+  it('add mode: primary is btn--ghost labeled 저장', () => {
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{
+          date: '2026-09-05',
+          note: '',
+          videoUrl: '',
+          localVideoPath: '',
+        }}
+        onClose={() => undefined}
+        onSave={() => null}
+      />,
+    )
+    const primary = document.body.querySelector(
+      '[data-testid="daily-log-editor-save"]',
+    ) as HTMLButtonElement
+    expect(primary.className.split(/\s+/)).toEqual(expect.arrayContaining(['btn', 'btn--ghost']))
+    expect(primary.textContent).toBe('저장')
+    view.unmount()
+  })
+
+  it('browser shows desktop-only hint and no crash for local draft fields', () => {
+    const view = mount(
+      <DailyLogEditorModal
+        open
+        mode="add"
+        initial={{
+          date: '2026-09-10',
+          note: '',
+          videoUrl: '',
+          localVideoPath: '/home/user/clip.mp4',
+        }}
+        onClose={() => undefined}
+        onSave={() => null}
+      />,
+    )
+    expect(document.body.querySelector('[data-testid="daily-log-editor-local-web-hint"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-testid="daily-log-editor-pick-local"]')).toBeNull()
+    view.unmount()
+  })
+})
